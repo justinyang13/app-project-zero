@@ -41,7 +41,7 @@ jobs:
         run: npm run build
 
   hello-world-backend-build-test:
-    name: Hello World backend build & test
+    name: Backend build & test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -71,7 +71,7 @@ jobs:
           path: app-hello-world/server/tests/**/TestResults/**/*.trx
 
   hello-world-frontend-build-test:
-    name: Hello World frontend build & test
+    name: Frontend build & test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -100,7 +100,7 @@ jobs:
         run: npm run build
 
   hello-world-e2e:
-    name: Hello World end-to-end tests
+    name: End-to-end tests
     needs: [hello-world-backend-build-test, hello-world-frontend-build-test]
     runs-on: ubuntu-latest
     steps:
