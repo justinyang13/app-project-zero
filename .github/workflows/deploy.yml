@@ -63,10 +63,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Trigger Render deploy hook
+        # The Render web service has its own GitHub integration with
+        # autoDeploy enabled, so it already redeploys on every push to
+        # main independently of this workflow. RENDER_DEPLOY_HOOK_URL is
+        # only needed as a fallback if autoDeploy is ever turned off for
+        # that service (Render dashboard → Settings → Auto-Deploy) —
+        # in that case, set the secret and this step will trigger it.
         run: |
           if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
-            echo "::error::RENDER_DEPLOY_HOOK_URL secret is not set. Create the Render web service and add its deploy hook URL as a repository secret."
-            exit 1
+            echo "RENDER_DEPLOY_HOOK_URL is not set — skipping. Render's own auto-deploy handles this unless it has been disabled."
+            exit 0
           fi
           curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
         env:
