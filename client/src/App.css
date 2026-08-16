@@ -1,7 +1,0 @@
-main.greeting {
-  display: flex;
-  min-height: 100vh;
-  align-items: center;
-  justify-content: center;
-  font-family: system-ui, sans-serif;
-}

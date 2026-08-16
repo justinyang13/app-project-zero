@@ -13,7 +13,7 @@ concurrency:
 
 jobs:
   deploy-pages:
-    name: Deploy client to GitHub Pages
+    name: Deploy hub + apps to GitHub Pages
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     permissions:
@@ -33,32 +33,50 @@ jobs:
         with:
           node-version: "22.x"
           cache: npm
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: |
+            app-project-zero-hub/package-lock.json
+            app-hello-world/client/package-lock.json
 
-      - name: Install dependencies
-        working-directory: client
-        run: npm ci
+      - name: Install and build hub
+        working-directory: app-project-zero-hub
+        run: |
+          npm ci
+          npm run build
 
-      - name: Build
-        working-directory: client
+      - name: Install and build Hello World client
+        working-directory: app-hello-world/client
         # VITE_GRAPHQL_URL is baked in at build time — set the RENDER_API_URL
         # repository variable (Settings > Secrets and variables > Actions >
         # Variables) to the deployed Render API's https URL + /graphql.
-        run: npm run build
+        run: |
+          npm ci
+          npm run build
         env:
           VITE_GRAPHQL_URL: ${{ vars.RENDER_API_URL }}
+
+      # Each app is a standalone project that only knows how to build
+      # itself — this step is what actually composes them into one site,
+      # with the hub at the root linking out to each app's subpath.
+      - name: Assemble combined site
+        run: |
+          mkdir -p site
+          cp -r app-project-zero-hub/dist/. site/
+          mkdir -p site/app-hello-world
+          cp -r app-hello-world/client/dist/. site/app-hello-world/
+          mkdir -p site/app-note-ninja
+          cp app-note-ninja/index.html app-note-ninja/game.js app-note-ninja/style.css site/app-note-ninja/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: client/dist
+          path: site
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
 
   deploy-render:
-    name: Deploy Api to Render
+    name: Deploy Hello World Api to Render
     if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     steps:
