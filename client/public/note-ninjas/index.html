@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Note Ninjas 🐱🎹</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;700;800&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<div class="app">
+
+  <!-- ===================== MENU SCREEN ===================== -->
+  <section id="screen-menu" class="screen">
+    <div class="card">
+      <h1 class="logo">🎹 Note Ninjas <span class="mascot" id="menu-mascot">🐱</span></h1>
+      <p class="tagline">Listen closely... which note do you hear?</p>
+
+      <div class="field-group">
+        <label class="field-label">Who's playing?</label>
+        <div class="pill-toggle" id="mode-toggle">
+          <button type="button" class="pill active" data-mode="1">🙋 1 Player</button>
+          <button type="button" class="pill" data-mode="2">🙋‍♀️🙋‍♂️ 2 Players</button>
+        </div>
+      </div>
+
+      <div class="field-group" id="names-group">
+        <label class="field-label" for="p1-name">Player 1 name</label>
+        <input type="text" id="p1-name" maxlength="12" placeholder="Player 1" />
+        <label class="field-label" id="p2-label" for="p2-name">Player 2 name</label>
+        <input type="text" id="p2-name" maxlength="12" placeholder="Player 2" />
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Difficulty</label>
+        <div class="pill-toggle" id="difficulty-toggle">
+          <button type="button" class="pill active" data-difficulty="easy">🌱 Easy</button>
+          <button type="button" class="pill" data-difficulty="medium">🌟 Medium</button>
+          <button type="button" class="pill" data-difficulty="hard">🔥 Hard</button>
+        </div>
+        <p class="hint" id="difficulty-hint">Natural notes only, one comfortable octave.</p>
+      </div>
+
+      <div class="field-group">
+        <label class="field-label">Rounds per player</label>
+        <div class="pill-toggle" id="rounds-toggle">
+          <button type="button" class="pill" data-rounds="5">5</button>
+          <button type="button" class="pill active" data-rounds="10">10</button>
+          <button type="button" class="pill" data-rounds="15">15</button>
+        </div>
+      </div>
+
+      <button class="btn-primary" id="start-btn">Start Game ▶</button>
+    </div>
+  </section>
+
+  <!-- ===================== GAME SCREEN ===================== -->
+  <section id="screen-game" class="screen hidden">
+    <div class="game-header">
+      <div class="scoreboard" id="scoreboard"></div>
+      <div class="round-counter" id="round-counter">Round 1 / 10</div>
+    </div>
+
+    <div class="turn-banner" id="turn-banner">Your turn, Player 1!</div>
+
+    <div class="card game-card">
+      <div class="mascot-big" id="game-mascot">🐱</div>
+
+      <div class="listen-controls">
+        <button class="btn-round" id="replay-btn" title="Play the note again">🔊 Play Note</button>
+        <button class="btn-round btn-secondary" id="anchor-btn" title="Play Middle C for reference">🎵 Reference (Middle C)</button>
+      </div>
+
+      <div class="feedback" id="feedback"></div>
+
+      <div class="piano" id="piano"></div>
+
+      <button class="btn-primary hidden" id="next-btn">Next ▶</button>
+    </div>
+  </section>
+
+  <!-- ===================== RESULTS SCREEN ===================== -->
+  <section id="screen-results" class="screen hidden">
+    <div class="card">
+      <h1 class="logo" id="results-title">🎉 Great Job! 🎉</h1>
+      <div id="results-body" class="results-body"></div>
+      <button class="btn-primary" id="play-again-btn">Play Again ▶</button>
+    </div>
+  </section>
+
+  <div class="confetti-layer" id="confetti-layer"></div>
+</div>
+
+<script src="game.js"></script>
+</body>
+</html>
