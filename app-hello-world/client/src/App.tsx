@@ -1,9 +1,9 @@
 import { Provider } from "urql";
-import { urqlClient } from "../graphqlClient";
-import { Greeting } from "../Greeting";
-import { SpaceBackground } from "../components/SpaceBackground";
-import { AstronautKitten, type AstronautKittenProps } from "../components/AstronautKitten";
-import "../App.css";
+import { urqlClient } from "./graphqlClient";
+import { Greeting } from "./Greeting";
+import { SpaceBackground } from "./components/SpaceBackground";
+import { AstronautKitten, type AstronautKittenProps } from "./components/AstronautKitten";
+import "./App.css";
 
 const KITTENS: AstronautKittenProps[] = [
   { top: "10%", left: "8%", size: 92, duration: 7, delay: 0 },
@@ -13,7 +13,7 @@ const KITTENS: AstronautKittenProps[] = [
   { top: "42%", left: "88%", size: 52, duration: 6.5, delay: 0.3, flip: true },
 ];
 
-export function ProjectZero() {
+function App() {
   return (
     <Provider value={urqlClient}>
       <main className="greeting">
@@ -28,3 +28,5 @@ export function ProjectZero() {
     </Provider>
   );
 }
+
+export default App;

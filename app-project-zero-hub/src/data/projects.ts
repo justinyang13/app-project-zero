@@ -4,32 +4,30 @@ export interface Project {
   tagline: string;
   description: string;
   tags: string[];
-  /** Internal route within this app, if the project is embedded here. */
-  internalPath?: string;
-  /** External link (deployed site, static asset, or repo), if not embedded. */
-  externalHref?: string;
+  /** Relative link to the standalone app's own deployed page. */
+  href: string;
   linkLabel: string;
 }
 
 export const projects: Project[] = [
   {
-    id: "project-zero",
-    name: "Project Zero",
-    tagline: "Full-stack Hello World reference app",
+    id: "hello-world",
+    name: "Hello World",
+    tagline: "Full-stack GraphQL reference app",
     description:
       "React + TypeScript client talking to a .NET GraphQL API, built as a Clean Architecture template for future projects.",
     tags: ["React", "TypeScript", ".NET", "GraphQL"],
-    internalPath: "/project-zero",
+    href: "app-hello-world/",
     linkLabel: "Open demo",
   },
   {
-    id: "note-ninjas",
-    name: "Note Ninjas",
+    id: "note-ninja",
+    name: "Note Ninja",
     tagline: "Ear-training game for piano-playing kids",
     description:
       "Listen to a note and guess which one it is, solo or head-to-head with two players. Three difficulty levels.",
     tags: ["JavaScript", "Web Audio"],
-    externalHref: `${import.meta.env.BASE_URL}note-ninjas/index.html`,
+    href: "app-note-ninja/",
     linkLabel: "Play game",
   },
 ];

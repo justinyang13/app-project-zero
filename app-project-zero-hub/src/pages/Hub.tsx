@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { projects } from "../data/projects";
 import "./Hub.css";
 
@@ -18,20 +17,9 @@ export function Hub() {
                 <li key={tag}>{tag}</li>
               ))}
             </ul>
-            {project.internalPath ? (
-              <Link className="project-card__link" to={project.internalPath}>
-                {project.linkLabel} →
-              </Link>
-            ) : (
-              <a
-                className="project-card__link"
-                href={project.externalHref}
-                target="_blank"
-                rel="noreferrer"
-              >
-                {project.linkLabel} →
-              </a>
-            )}
+            <a className="project-card__link" href={project.href} target="_blank" rel="noreferrer">
+              {project.linkLabel} →
+            </a>
           </article>
         ))}
       </div>

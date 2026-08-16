@@ -1,118 +1,49 @@
 # app-project-zero
 
-A personal project hub with a "Hello World" full-stack demo included. The
-client is a small React app (react-router-dom) with a nav bar: the home page
-lists all projects as cards, and `/project-zero` shows the original demo —
-the frontend queries a GraphQL API and renders the string it returns — kept
-deliberately trivial so the surrounding engineering (Clean Architecture,
-tests, CI/CD) can serve as a template for real projects.
+A small monorepo of standalone personal projects, fronted by a hub page.
 
-## Architecture
+| Folder | What it is |
+|---|---|
+| [`app-project-zero-hub/`](app-project-zero-hub/README.md) | Landing page — cards linking out to every app below |
+| [`app-hello-world/`](app-hello-world/README.md) | Full-stack Hello World reference app (React + .NET GraphQL), Clean Architecture template |
+| [`app-note-ninja/`](app-note-ninja/README.md) | Ear-training game for piano-playing kids |
 
-```
-client/   React + TypeScript (Vite), react-router-dom, urql GraphQL client
-  src/pages/Hub.tsx          Home page — cards linking to each project
-  src/pages/ProjectZero.tsx  The Hello World GraphQL demo, at /project-zero
-  src/data/projects.ts       Project list shown on the hub
-  public/note-ninjas/        Static copy of the Note Ninjas game, linked
-                              from the hub (see ../note-ninjas for source)
-server/   .NET Core Web API (GraphQL.NET), Clean Architecture
-e2e/      Playwright end-to-end suite driving the real running stack
-```
+Each folder is a fully standalone app: its own dependencies, its own
+README, runnable and testable on its own without the others present. The
+hub links out to every app one way — none of the apps link back to the
+hub or to each other. New projects get their own top-level `app-*` folder
+and a card in [`app-project-zero-hub/src/data/projects.ts`](app-project-zero-hub/src/data/projects.ts).
 
-### Backend — Clean Architecture
-
-```
-server/src/Domain          Greeting value object. No dependencies.
-server/src/Application     GetGreetingQuery / GetGreetingHandler use case,
-                            IGreetingProvider interface. Depends on Domain only.
-server/src/Infrastructure  GreetingProvider (implements IGreetingProvider).
-                            Depends on Application + Domain.
-server/src/Api             ASP.NET Core host, GraphQL.NET schema, DI wiring.
-                            Depends on all inner layers.
-```
-
-Dependencies point inward only (enforced via project references): `Api` →
-`Infrastructure`/`Application` → `Domain`. `Domain` and `Application` have no
-knowledge of GraphQL, ASP.NET Core, or how the greeting is actually produced.
-
-The GraphQL schema exposes a single field: `Query { hello: String! }`.
-
-## Prerequisites
-
-- [.NET SDK 10](https://dotnet.microsoft.com/download) (LTS)
-- [Node.js 22+](https://nodejs.org/) and npm
-
-## Running locally
-
-**Backend** (serves GraphQL at `http://localhost:5043/graphql`):
-
-```bash
-cd server
-dotnet run --project src/Api
-```
-
-**Frontend** (serves the app at `http://localhost:5173`):
-
-```bash
-cd client
-npm install
-npm run dev
-```
-
-The client reads its GraphQL endpoint from `VITE_GRAPHQL_URL` (see
-[`client/.env.example`](client/.env.example)); it defaults to
-`http://localhost:5043/graphql` when unset, matching the backend's default
-local port. Copy `.env.example` to `.env` to override it.
-
-## Running tests
-
-**Backend unit tests** (xUnit, Application layer, isolated from
-Infrastructure/Api):
-
-```bash
-cd server
-dotnet test
-```
-
-**Frontend unit tests** (Testing Library, mocks the GraphQL response):
-
-```bash
-cd client
-npm test
-```
-
-**End-to-end tests** (Playwright — starts the real API and client and
-asserts the greeting renders from a live, unmocked GraphQL call):
-
-```bash
-cd e2e
-npm install
-npx playwright install --with-deps chromium
-npm test
-```
+See each app's own README for how to run and test it locally.
 
 ## CI/CD
 
 - [`.github/workflows/ci.yml`](.github/workflows/ci.yml) runs on every push
-  and PR to `main`: backend build + xUnit tests, frontend build + lint +
-  unit tests, then the Playwright e2e suite against the real stack. Any
-  failure fails the workflow.
+  and PR to `main`, with one job per app: the hub's lint/test/build, Hello
+  World's backend build + xUnit tests, Hello World's frontend build/lint/
+  unit tests, then the Playwright e2e suite against the real Hello World
+  stack. `app-note-ninja` is a plain static app with no build step, so it
+  has no CI job. Any failure fails the workflow.
 - [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs after
-  CI succeeds on `main`: builds and publishes `client/dist` to GitHub Pages,
-  and triggers a Render deploy of the `Api` project via a deploy hook.
+  CI succeeds on `main`: builds the hub and the Hello World client, copies
+  in Note Ninja's static files, and assembles all three into one GitHub
+  Pages site — the hub at the site root, `app-hello-world/` and
+  `app-note-ninja/` as subpaths — matching the relative links the hub's
+  cards use. It also triggers a Render deploy of the Hello World `Api`
+  project via a deploy hook.
 
 ### Deployment configuration
 
 | Where | What | Purpose |
 |---|---|---|
 | Repo Settings → Pages | Source: **GitHub Actions** | Required for `deploy-pages` job to publish |
-| Repo Settings → Secrets → Actions | `RENDER_DEPLOY_HOOK_URL` | Render's deploy hook URL for the `Api` web service |
-| Repo Settings → Variables → Actions | `RENDER_API_URL` | The deployed Render API's GraphQL URL (e.g. `https://app-project-zero-api.onrender.com/graphql`), baked into the Pages build |
+| Repo Settings → Secrets → Actions | `RENDER_DEPLOY_HOOK_URL` | Render's deploy hook URL for the Hello World `Api` web service |
+| Repo Settings → Variables → Actions | `RENDER_API_URL` | The deployed Render API's GraphQL URL (e.g. `https://app-project-zero-api.onrender.com/graphql`), baked into the Hello World client's Pages build |
 
 **Known limitation:** Render's free tier spins down after inactivity, so the
 first request after idle time can take 30+ seconds while the instance cold
-starts. This only affects the deployed demo, not local development.
+starts. This only affects the deployed Hello World demo, not local
+development.
 
 **Follow-up (not automatable from here):** enable branch protection on
 `main` requiring the `CI` workflow to pass before merging (Settings →
@@ -120,10 +51,10 @@ Branches → Branch protection rules).
 
 ## Docker
 
-The `Api` project can run standalone in a container (used for Render
-deploys). The `Dockerfile` lives at the repo root — build with the repo
-root as context, not `server/` — because that's what Render's Docker web
-services expect by default:
+The Hello World `Api` project can run standalone in a container (used for
+Render deploys). The `Dockerfile` lives at this repo root — build with the
+repo root as context, not `app-hello-world/` — because that's what
+Render's Docker web service expects by default:
 
 ```bash
 docker build -t app-project-zero-api .

@@ -1,5 +1,5 @@
 {
-  "name": "client",
+  "name": "app-hello-world-client",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -15,7 +15,6 @@
     "graphql": "^16.14.2",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
-    "react-router-dom": "^7.18.2",
     "urql": "^5.0.3"
   },
   "devDependencies": {

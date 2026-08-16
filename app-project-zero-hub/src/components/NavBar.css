@@ -1,0 +1,11 @@
+.nav-bar {
+  display: flex;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid light-dark(#e2e2e2, #333);
+  font-family: system-ui, sans-serif;
+}
+
+.nav-bar__brand {
+  font-weight: 600;
+}

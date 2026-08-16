@@ -1,21 +1,22 @@
 # syntax=docker/dockerfile:1
 #
-# Lives at the repo root (not server/) because Render's Docker web service
-# builds with the repo root as context and expects ./Dockerfile there.
+# Lives at the repo root (not app-hello-world/server/) because Render's
+# Docker web service builds with the repo root as context and expects
+# ./Dockerfile there.
 
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
 WORKDIR /src
 
-COPY server/Server.slnx .
-COPY server/src/Domain/Domain.csproj server/src/Domain/
-COPY server/src/Application/Application.csproj server/src/Application/
-COPY server/src/Infrastructure/Infrastructure.csproj server/src/Infrastructure/
-COPY server/src/Api/Api.csproj server/src/Api/
-COPY server/tests/Application.Tests/Application.Tests.csproj server/tests/Application.Tests/
-RUN dotnet restore server/src/Api/Api.csproj
+COPY app-hello-world/server/Server.slnx .
+COPY app-hello-world/server/src/Domain/Domain.csproj app-hello-world/server/src/Domain/
+COPY app-hello-world/server/src/Application/Application.csproj app-hello-world/server/src/Application/
+COPY app-hello-world/server/src/Infrastructure/Infrastructure.csproj app-hello-world/server/src/Infrastructure/
+COPY app-hello-world/server/src/Api/Api.csproj app-hello-world/server/src/Api/
+COPY app-hello-world/server/tests/Application.Tests/Application.Tests.csproj app-hello-world/server/tests/Application.Tests/
+RUN dotnet restore app-hello-world/server/src/Api/Api.csproj
 
-COPY server/. server/
-RUN dotnet publish server/src/Api/Api.csproj -c Release -o /app/publish --no-restore
+COPY app-hello-world/server/. app-hello-world/server/
+RUN dotnet publish app-hello-world/server/src/Api/Api.csproj -c Release -o /app/publish --no-restore
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
