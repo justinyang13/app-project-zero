@@ -1,14 +1,21 @@
 # app-project-zero
 
-A minimal "Hello World" full-stack reference project. The feature is trivial
-on purpose — the frontend queries a GraphQL API and renders the string it
-returns — so that the surrounding engineering (Clean Architecture, tests,
-CI/CD) can serve as a template for real projects.
+A personal project hub with a "Hello World" full-stack demo included. The
+client is a small React app (react-router-dom) with a nav bar: the home page
+lists all projects as cards, and `/project-zero` shows the original demo —
+the frontend queries a GraphQL API and renders the string it returns — kept
+deliberately trivial so the surrounding engineering (Clean Architecture,
+tests, CI/CD) can serve as a template for real projects.
 
 ## Architecture
 
 ```
-client/   React + TypeScript (Vite), urql GraphQL client
+client/   React + TypeScript (Vite), react-router-dom, urql GraphQL client
+  src/pages/Hub.tsx          Home page — cards linking to each project
+  src/pages/ProjectZero.tsx  The Hello World GraphQL demo, at /project-zero
+  src/data/projects.ts       Project list shown on the hub
+  public/note-ninjas/        Static copy of the Note Ninjas game, linked
+                              from the hub (see ../note-ninjas for source)
 server/   .NET Core Web API (GraphQL.NET), Clean Architecture
 e2e/      Playwright end-to-end suite driving the real running stack
 ```
