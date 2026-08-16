@@ -1,0 +1,32 @@
+# ---- Node / client ----
+node_modules/
+dist/
+dist-ssr/
+*.local
+.vite/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+
+# ---- .NET / server ----
+bin/
+obj/
+out/
+*.user
+*.suo
+.vs/
+artifacts/
+
+# ---- Editors / OS ----
+.vscode/
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# ---- Logs ----
+*.log
+npm-debug.log*
