@@ -113,11 +113,12 @@ Branches → Branch protection rules).
 
 ## Docker
 
-The `Api` project can run standalone in a container (used for local e2e /
-Render deploys):
+The `Api` project can run standalone in a container (used for Render
+deploys). The `Dockerfile` lives at the repo root — build with the repo
+root as context, not `server/` — because that's what Render's Docker web
+services expect by default:
 
 ```bash
-cd server
 docker build -t app-project-zero-api .
 docker run -p 8080:8080 app-project-zero-api
 ```
