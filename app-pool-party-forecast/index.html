@@ -232,6 +232,69 @@
     border-radius:12px;
     padding:14px;
   }
+
+  /* Month calendar */
+  .calendar-card{display:none;}
+  .calendar-card.show{display:block;}
+  .calendar-header{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:12px;
+  }
+  .calendar-header h2{
+    margin:0;
+    font-size:1.05rem;
+    color:var(--blue-deep);
+  }
+  .calendar-weekdays{
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    text-align:center;
+    font-size:0.7rem;
+    font-weight:700;
+    color:#789;
+    margin-bottom:6px;
+  }
+  .calendar-grid{
+    display:grid;
+    grid-template-columns:repeat(7,1fr);
+    gap:6px;
+  }
+  .calendar-day{
+    aspect-ratio:1;
+    border-radius:10px;
+    border:1.5px solid #e3edf3;
+    background:#f8fbfd;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:2px;
+    padding:2px;
+    font-family:inherit;
+    font-size:0.72rem;
+    font-weight:700;
+    color:#345;
+    cursor:pointer;
+    transition:transform .1s, box-shadow .1s;
+  }
+  .calendar-day:hover:not(:disabled){transform:translateY(-1px);box-shadow:0 4px 10px rgba(0,0,0,0.12);}
+  .calendar-day:disabled{cursor:default;}
+  .calendar-day.empty{visibility:hidden;}
+  .calendar-day.today{border-color:var(--blue-mid);border-width:2px;}
+  .calendar-day.selected{outline:2px solid var(--blue-deep);outline-offset:1px;}
+  .calendar-day .cal-icon{font-size:1.05rem;line-height:1;}
+  .calendar-day.green{background:#eafbf1;}
+  .calendar-day.yellow{background:#fff9e0;}
+  .calendar-day.red{background:#fdeceb;}
+  .calendar-day.loading .cal-icon{opacity:0.35;}
+  .calendar-legend{
+    margin:12px 0 0;
+    text-align:center;
+    font-size:0.78rem;
+    color:#678;
+  }
   footer{
     text-align:center;
     color:rgba(255,255,255,0.75);
@@ -263,6 +326,17 @@
       <button type="button" id="unitF" class="active">°F</button>
       <button type="button" id="unitC">°C</button>
     </div>
+  </div>
+
+  <div class="card calendar-card" id="calendarCard">
+    <div class="calendar-header">
+      <h2 id="calendarMonthLabel"></h2>
+    </div>
+    <div class="calendar-weekdays">
+      <span>S</span><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span>
+    </div>
+    <div class="calendar-grid" id="calendarGrid"></div>
+    <p class="calendar-legend">☀️ Pool day&nbsp;&nbsp;&nbsp;⛅ Maybe&nbsp;&nbsp;&nbsp;🌧️ Skip it — tap a day for details</p>
   </div>
 
   <div class="status" id="status"></div>
@@ -305,11 +379,15 @@
   var resultEl = document.getElementById('result');
   var unitFBtn = document.getElementById('unitF');
   var unitCBtn = document.getElementById('unitC');
+  var calendarCard = document.getElementById('calendarCard');
+  var calendarMonthLabel = document.getElementById('calendarMonthLabel');
+  var calendarGrid = document.getElementById('calendarGrid');
 
   var selectedPlace = null; // {name, admin1, country, latitude, longitude}
   var geocodeTimer = null;
   var lastData = null; // stores last computed result in Celsius for unit toggling
   var unit = 'F';
+  var calendarToken = 0; // guards against a stale month-calendar fetch resolving after a newer one starts
 
   // ---------- Date setup ----------
   var today = new Date();
@@ -361,6 +439,7 @@
         selectedPlace = place;
         locInput.value = place.name + (region ? ', ' + region : '');
         hideSuggestions();
+        loadMonthCalendar(place);
       });
       suggestionsBox.appendChild(item);
     });
@@ -390,6 +469,7 @@
       };
       locInput.value = 'Your current location';
       setStatus('');
+      loadMonthCalendar(selectedPlace);
     }, function(){
       setStatus('Could not get your location. Try searching instead.', true);
     }, {timeout:8000});
@@ -436,8 +516,15 @@
     var diff = daysFromToday(dateStr);
 
     if(diff < 0){
-      setStatus('Pick a date today or later.', true);
-      checkBtn.disabled = false;
+      setStatus('Looking up what actually happened that day…');
+      fetchPastActual(place, dateStr).then(function(data){
+        lastData = data;
+        renderResult(data);
+        setStatus('');
+      }).catch(function(err){
+        console.error(err);
+        setStatus('Could not fetch historical weather for that date. Please try again.', true);
+      }).finally(function(){ checkBtn.disabled = false; });
       return;
     }
 
@@ -485,6 +572,33 @@
         precipMm: d.precipitation_sum ? d.precipitation_sum[0] : null,
         weathercode: d.weathercode ? d.weathercode[0] : null,
         windKmh: d.windspeed_10m_max ? d.windspeed_10m_max[0] : null
+      };
+    });
+  }
+
+  function fetchPastActual(place, dateStr){
+    var url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + place.latitude +
+      '&longitude=' + place.longitude +
+      '&start_date=' + dateStr + '&end_date=' + dateStr +
+      '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode' +
+      '&timezone=auto';
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('archive fetch failed');
+      return r.json();
+    }).then(function(json){
+      var d = json.daily;
+      if(!d || !d.time || !d.time.length || d.temperature_2m_max[0] == null) throw new Error('no data for that date yet');
+      var p = d.precipitation_sum ? d.precipitation_sum[0] : null;
+      return {
+        place: place,
+        dateStr: dateStr,
+        source: 'past',
+        highC: d.temperature_2m_max[0],
+        lowC: d.temperature_2m_min[0],
+        rainChance: p == null ? null : (p >= 1 ? 100 : 0),
+        precipMm: p,
+        weathercode: d.weathercode ? d.weathercode[0] : null,
+        windKmh: null
       };
     });
   }
@@ -544,6 +658,181 @@
         windKmh: null
       };
     });
+  }
+
+  // ---------- Month calendar ----------
+  function addDays(d, n){
+    var r = new Date(d);
+    r.setDate(r.getDate() + n);
+    return r;
+  }
+
+  // Shifts a yyyy-mm-dd string by whole years, clamping Feb 29 to Feb 28
+  // on a target year that isn't a leap year.
+  function shiftYear(dateStr, deltaYears){
+    var parts = dateStr.split('-').map(Number);
+    var y = parts[0] + deltaYears, m = parts[1], d = parts[2];
+    var isLeap = (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+    if(m === 2 && d === 29 && !isLeap){ d = 28; }
+    return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+
+  // Builds a { 'yyyy-mm-dd': {highC, lowC, rainChance, weathercode} } map from
+  // an Open-Meteo `daily` block, skipping any day missing a high/low.
+  function dailyToMap(daily, build){
+    var map = {};
+    if(!daily || !daily.time) return map;
+    daily.time.forEach(function(dateStr, i){
+      var entry = build(daily, i);
+      if(entry.highC != null && entry.lowC != null){ map[dateStr] = entry; }
+    });
+    return map;
+  }
+
+  function fetchRangeForecast(place, startDate, endDate){
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + place.latitude +
+      '&longitude=' + place.longitude +
+      '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weathercode' +
+      '&timezone=auto&start_date=' + startDate + '&end_date=' + endDate;
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('range forecast fetch failed');
+      return r.json();
+    }).then(function(json){
+      return dailyToMap(json.daily, function(d, i){
+        return {
+          highC: d.temperature_2m_max[i],
+          lowC: d.temperature_2m_min[i],
+          rainChance: d.precipitation_probability_max ? d.precipitation_probability_max[i] : null,
+          weathercode: d.weathercode ? d.weathercode[i] : null
+        };
+      });
+    });
+  }
+
+  function fetchRangeArchive(place, startDate, endDate){
+    var url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + place.latitude +
+      '&longitude=' + place.longitude +
+      '&start_date=' + startDate + '&end_date=' + endDate +
+      '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode' +
+      '&timezone=auto';
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('range archive fetch failed');
+      return r.json();
+    }).then(function(json){
+      return dailyToMap(json.daily, function(d, i){
+        var p = d.precipitation_sum ? d.precipitation_sum[i] : null;
+        return {
+          highC: d.temperature_2m_max[i],
+          lowC: d.temperature_2m_min[i],
+          rainChance: p == null ? null : (p >= 1 ? 100 : 0),
+          weathercode: d.weathercode ? d.weathercode[i] : null
+        };
+      });
+    });
+  }
+
+  // Loads the icon for every day of the current month in as few requests as
+  // possible: one bulk forecast call for today..+15 days, one bulk archive
+  // call for any already-passed days this month, and one bulk archive call
+  // (on last year's matching dates) as a lightweight estimate for any days
+  // beyond the 16-day forecast horizon. Clicking a day still runs the full
+  // per-day calculation (8-year average for far-future dates) for the detail view.
+  function loadMonthCalendar(place){
+    var token = ++calendarToken;
+    var monthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    var monthEnd = new Date(today.getFullYear(), today.getMonth() + 1, 0);
+
+    renderCalendarSkeleton(monthStart, monthEnd);
+
+    var forecastEnd = new Date(Math.min(monthEnd.getTime(), addDays(today, 15).getTime()));
+    var jobs = [fetchRangeForecast(place, ymd(today), ymd(forecastEnd)).catch(function(){ return {}; })];
+
+    if(ymd(monthStart) < ymd(today)){
+      jobs.push(fetchRangeArchive(place, ymd(monthStart), ymd(addDays(today, -1))).catch(function(){ return {}; }));
+    } else {
+      jobs.push(Promise.resolve({}));
+    }
+
+    if(forecastEnd < monthEnd){
+      var futureStart = addDays(forecastEnd, 1);
+      jobs.push(
+        fetchRangeArchive(place, shiftYear(ymd(futureStart), -1), shiftYear(ymd(monthEnd), -1))
+          .then(function(map){
+            var shifted = {};
+            Object.keys(map).forEach(function(k){ shifted[shiftYear(k, 1)] = map[k]; });
+            return shifted;
+          })
+          .catch(function(){ return {}; })
+      );
+    } else {
+      jobs.push(Promise.resolve({}));
+    }
+
+    Promise.all(jobs).then(function(results){
+      if(token !== calendarToken) return; // a newer location was picked meanwhile
+      var merged = {};
+      results.forEach(function(map){ Object.assign(merged, map); });
+      renderCalendarDays(merged);
+    });
+  }
+
+  function renderCalendarSkeleton(monthStart, monthEnd){
+    calendarMonthLabel.textContent = monthStart.toLocaleDateString(undefined, {month: 'long', year: 'numeric'});
+    calendarGrid.innerHTML = '';
+
+    var leading = monthStart.getDay();
+    for(var i = 0; i < leading; i++){
+      var blank = document.createElement('div');
+      blank.className = 'calendar-day empty';
+      calendarGrid.appendChild(blank);
+    }
+
+    var totalDays = monthEnd.getDate();
+    for(var day = 1; day <= totalDays; day++){
+      var cellDate = new Date(monthStart.getFullYear(), monthStart.getMonth(), day);
+      var dateStr = ymd(cellDate);
+      var cell = document.createElement('button');
+      cell.type = 'button';
+      cell.className = 'calendar-day loading' + (dateStr === ymd(today) ? ' today' : '');
+      cell.disabled = true;
+      cell.dataset.date = dateStr;
+      cell.innerHTML = '<span class="cal-daynum">' + day + '</span><span class="cal-icon">⋯</span>';
+      calendarGrid.appendChild(cell);
+    }
+
+    calendarCard.classList.add('show');
+  }
+
+  function renderCalendarDays(dataMap){
+    var cells = calendarGrid.querySelectorAll('.calendar-day:not(.empty)');
+    cells.forEach(function(cell){
+      var dateStr = cell.dataset.date;
+      var entry = dataMap[dateStr];
+      var iconSpan = cell.querySelector('.cal-icon');
+      cell.classList.remove('loading');
+      cell.disabled = false;
+
+      if(!entry){
+        iconSpan.textContent = '–';
+        cell.title = 'No data available for this day yet';
+      } else {
+        var level = computeVerdict(entry);
+        cell.classList.add(level);
+        iconSpan.textContent = level === 'green' ? '☀️' : (level === 'yellow' ? '⛅' : '🌧️');
+        cell.title = Math.round(cToF(entry.highC)) + '°F · ' + (entry.rainChance == null ? '?' : entry.rainChance) + '% rain — tap for details';
+      }
+
+      cell.addEventListener('click', function(){ selectCalendarDay(dateStr); });
+    });
+  }
+
+  function selectCalendarDay(dateStr){
+    dateInput.value = dateStr;
+    calendarGrid.querySelectorAll('.calendar-day.selected').forEach(function(c){ c.classList.remove('selected'); });
+    var target = calendarGrid.querySelector('.calendar-day[data-date="' + dateStr + '"]');
+    if(target){ target.classList.add('selected'); }
+    if(!selectedPlace) return;
+    runForecast(selectedPlace, dateStr);
   }
 
   // ---------- Verdict logic ----------
@@ -620,6 +909,8 @@
     var noteBox = document.getElementById('noteBox');
     if(data.source === 'historical'){
       noteBox.innerHTML = '<div class="note">📊 This date is more than 16 days away, so actual forecasts aren\'t out yet. We estimated conditions from ' + data.yearsUsed + ' years of historical weather on this date. Check back closer to the day for a real forecast!</div>';
+    } else if(data.source === 'past'){
+      noteBox.innerHTML = '<div class="note">📅 This date has already passed — showing the actual recorded weather, not a forecast.</div>';
     } else {
       noteBox.innerHTML = '';
     }
