@@ -61,6 +61,12 @@ The client reads its GraphQL endpoint from `VITE_GRAPHQL_URL` (see
 `http://localhost:5043/graphql` when unset, matching the backend's default
 local port. Copy `.env.example` to `.env` to override it.
 
+The homepage background is today's photo from NASA's Astronomy Picture of
+the Day (APOD) API, fetched client-side. `VITE_NASA_API_KEY` defaults to
+the shared `DEMO_KEY`, which works instantly with no signup but has a low
+rate limit; get a free personal key at [api.nasa.gov](https://api.nasa.gov)
+if you hit it.
+
 ## Running tests
 
 **Backend unit tests** (xUnit, Application layer, isolated from
