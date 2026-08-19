@@ -30,4 +30,14 @@ export const projects: Project[] = [
     href: "app-note-ninja/",
     linkLabel: "Play game",
   },
+  {
+    id: "pool-party-forecast",
+    name: "Pool Party Forecast",
+    tagline: "Is it pool weather? Just ask.",
+    description:
+      "Search a location and date and get a green/yellow/red verdict from live or historical weather data — no signup, no API key.",
+    tags: ["JavaScript", "Open-Meteo API"],
+    href: "app-pool-party-forecast/",
+    linkLabel: "Check forecast",
+  },
 ];

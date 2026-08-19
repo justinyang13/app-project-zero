@@ -7,6 +7,7 @@ A small monorepo of standalone personal projects, fronted by a hub page.
 | [`app-project-zero-hub/`](app-project-zero-hub/README.md) | Landing page — cards linking out to every app below |
 | [`app-hello-world/`](app-hello-world/README.md) | Full-stack Hello World reference app (React + .NET GraphQL), Clean Architecture template |
 | [`app-note-ninja/`](app-note-ninja/README.md) | Ear-training game for piano-playing kids |
+| [`app-pool-party-forecast/`](app-pool-party-forecast/README.md) | Green/yellow/red pool-weather verdict for a place and date |
 
 Each folder is a fully standalone app: its own dependencies, its own
 README, runnable and testable on its own without the others present. The
@@ -22,15 +23,17 @@ See each app's own README for how to run and test it locally.
   and PR to `main`, with one job per app: the hub's lint/test/build, Hello
   World's backend build + xUnit tests, Hello World's frontend build/lint/
   unit tests, then the Playwright e2e suite against the real Hello World
-  stack. `app-note-ninja` is a plain static app with no build step, so it
-  has no CI job. Any failure fails the workflow.
+  stack. `app-note-ninja` and `app-pool-party-forecast` are plain static
+  apps with no build step, so they have no CI job. Any failure fails the
+  workflow.
 - [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs after
   CI succeeds on `main`: builds the hub and the Hello World client, copies
-  in Note Ninja's static files, and assembles all three into one GitHub
-  Pages site — the hub at the site root, `app-hello-world/` and
-  `app-note-ninja/` as subpaths — matching the relative links the hub's
-  cards use. It also triggers a Render deploy of the Hello World `Api`
-  project via a deploy hook.
+  in Note Ninja's and Pool Party Forecast's static files, and assembles all
+  four into one GitHub Pages site — the hub at the site root,
+  `app-hello-world/`, `app-note-ninja/`, and `app-pool-party-forecast/` as
+  subpaths — matching the relative links the hub's cards use. It also
+  triggers a Render deploy of the Hello World `Api` project via a deploy
+  hook.
 
 ### Deployment configuration
 

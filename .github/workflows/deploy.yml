@@ -65,6 +65,8 @@ jobs:
           cp -r app-hello-world/client/dist/. site/app-hello-world/
           mkdir -p site/app-note-ninja
           cp app-note-ninja/index.html app-note-ninja/game.js app-note-ninja/style.css site/app-note-ninja/
+          mkdir -p site/app-pool-party-forecast
+          cp app-pool-party-forecast/index.html site/app-pool-party-forecast/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
