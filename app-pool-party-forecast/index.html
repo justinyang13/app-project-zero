@@ -1,0 +1,698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🏊 Pool Party Forecast</title>
+<style>
+  :root{
+    --blue-deep:#0b4f6c;
+    --blue-mid:#1a8fe3;
+    --teal:#2ec4b6;
+    --sand:#fff3cd;
+    --green:#2ecc71;
+    --green-dark:#1e8449;
+    --yellow:#f5c518;
+    --yellow-dark:#9c7a00;
+    --red:#e74c3c;
+    --red-dark:#a93226;
+    --card-bg:rgba(255,255,255,0.95);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    min-height:100vh;
+    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;
+    background:linear-gradient(160deg,var(--blue-deep),var(--blue-mid) 45%,var(--teal) 100%);
+    background-attachment:fixed;
+    color:#123;
+    display:flex;
+    justify-content:center;
+    padding:24px 14px 60px;
+  }
+  .wrap{width:100%;max-width:560px;}
+  h1{
+    text-align:center;
+    color:#fff;
+    font-size:1.7rem;
+    margin:6px 0 2px;
+    text-shadow:0 2px 8px rgba(0,0,0,0.25);
+  }
+  .subtitle{
+    text-align:center;
+    color:rgba(255,255,255,0.85);
+    margin:0 0 20px;
+    font-size:0.95rem;
+  }
+  .card{
+    background:var(--card-bg);
+    border-radius:20px;
+    padding:22px;
+    box-shadow:0 12px 40px rgba(0,0,0,0.25);
+    margin-bottom:18px;
+  }
+  label{
+    display:block;
+    font-weight:600;
+    font-size:0.85rem;
+    color:#345;
+    margin-bottom:6px;
+  }
+  .field{position:relative;margin-bottom:14px;}
+  input[type="text"], input[type="date"]{
+    width:100%;
+    padding:12px 14px;
+    border-radius:12px;
+    border:1.5px solid #cfe0ea;
+    font-size:1rem;
+    outline:none;
+    transition:border-color .15s;
+    background:#f8fbfd;
+  }
+  input[type="text"]:focus, input[type="date"]:focus{border-color:var(--blue-mid);}
+  .row{display:flex;gap:10px;}
+  .row .field{flex:1;}
+  .loc-btn{
+    margin-top:6px;
+    background:none;
+    border:none;
+    color:var(--blue-mid);
+    font-size:0.85rem;
+    font-weight:600;
+    cursor:pointer;
+    padding:2px 0;
+  }
+  .loc-btn:hover{text-decoration:underline;}
+  .suggestions{
+    position:absolute;
+    top:100%;
+    left:0;right:0;
+    background:#fff;
+    border:1px solid #dde8ee;
+    border-radius:12px;
+    margin-top:4px;
+    max-height:220px;
+    overflow-y:auto;
+    box-shadow:0 8px 24px rgba(0,0,0,0.15);
+    z-index:20;
+    display:none;
+  }
+  .suggestions.show{display:block;}
+  .suggestion-item{
+    padding:10px 14px;
+    cursor:pointer;
+    font-size:0.92rem;
+    border-bottom:1px solid #f0f4f7;
+  }
+  .suggestion-item:last-child{border-bottom:none;}
+  .suggestion-item:hover, .suggestion-item.active{background:#eaf6ff;}
+  .suggestion-item small{display:block;color:#789;font-size:0.78rem;}
+  button.primary{
+    width:100%;
+    padding:14px;
+    border:none;
+    border-radius:14px;
+    background:linear-gradient(135deg,var(--blue-mid),var(--teal));
+    color:#fff;
+    font-size:1.05rem;
+    font-weight:700;
+    cursor:pointer;
+    letter-spacing:0.3px;
+    box-shadow:0 6px 18px rgba(26,143,227,0.35);
+    transition:transform .1s, box-shadow .1s;
+  }
+  button.primary:hover{transform:translateY(-1px);box-shadow:0 9px 22px rgba(26,143,227,0.45);}
+  button.primary:active{transform:translateY(0);}
+  button.primary:disabled{opacity:0.6;cursor:default;transform:none;}
+  .unit-toggle{
+    display:flex;
+    justify-content:center;
+    gap:6px;
+    margin-top:14px;
+  }
+  .unit-toggle button{
+    border:1.5px solid #cfe0ea;
+    background:#f8fbfd;
+    padding:6px 14px;
+    border-radius:999px;
+    font-size:0.8rem;
+    font-weight:600;
+    cursor:pointer;
+    color:#456;
+  }
+  .unit-toggle button.active{
+    background:var(--blue-mid);
+    border-color:var(--blue-mid);
+    color:#fff;
+  }
+  .status{
+    text-align:center;
+    color:#fff;
+    font-size:0.9rem;
+    margin:10px 0;
+    min-height:1.2em;
+  }
+  .status.error{color:#ffd6d6;font-weight:600;}
+
+  /* Result card */
+  .result{display:none;}
+  .result.show{display:block;}
+  .verdict-banner{
+    border-radius:16px;
+    padding:20px;
+    text-align:center;
+    color:#fff;
+    margin-bottom:16px;
+    position:relative;
+    overflow:hidden;
+  }
+  .verdict-banner.green{background:linear-gradient(135deg,#27ae60,#2ecc71);}
+  .verdict-banner.yellow{background:linear-gradient(135deg,#e6b800,#f5c518);}
+  .verdict-banner.red{background:linear-gradient(135deg,#c0392b,#e74c3c);}
+  .verdict-title{font-size:1.4rem;font-weight:800;margin:8px 0 2px;text-shadow:0 2px 6px rgba(0,0,0,0.2);}
+  .verdict-sub{font-size:0.92rem;opacity:0.95;}
+  .place-date{font-size:0.85rem;opacity:0.9;margin-top:4px;}
+
+  .mascot-wrap{
+    width:110px;height:110px;
+    margin:0 auto 6px;
+    position:relative;
+  }
+  .mascot-wrap svg{width:100%;height:100%;display:block;}
+
+  @keyframes bob{
+    0%,100%{transform:translateY(0);}
+    50%{transform:translateY(-6px);}
+  }
+  @keyframes rayspin{
+    from{transform:rotate(0deg);}
+    to{transform:rotate(360deg);}
+  }
+  @keyframes dropfall{
+    0%{transform:translateY(-6px);opacity:0;}
+    30%{opacity:1;}
+    100%{transform:translateY(14px);opacity:0;}
+  }
+  .mascot-bob{animation:bob 2.2s ease-in-out infinite;}
+  .mascot-rays{transform-origin:60px 60px;animation:rayspin 18s linear infinite;}
+  .drop{animation:dropfall 1.1s ease-in infinite;}
+  .drop:nth-child(2){animation-delay:.35s;}
+  .drop:nth-child(3){animation-delay:.7s;}
+
+  .stats-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:10px;
+    margin-bottom:14px;
+  }
+  .stat{
+    background:#f4f9fb;
+    border-radius:14px;
+    padding:12px 8px;
+    text-align:center;
+  }
+  .stat .val{font-size:1.25rem;font-weight:800;color:var(--blue-deep);}
+  .stat .lbl{font-size:0.72rem;color:#678;text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;}
+
+  .note{
+    background:#fff8e1;
+    border:1px solid #f3e0a3;
+    border-radius:12px;
+    padding:10px 14px;
+    font-size:0.82rem;
+    color:#7a5c00;
+    margin-bottom:14px;
+    line-height:1.4;
+  }
+  .tip{
+    font-size:0.92rem;
+    color:#345;
+    line-height:1.5;
+    background:#f4f9fb;
+    border-radius:12px;
+    padding:14px;
+  }
+  footer{
+    text-align:center;
+    color:rgba(255,255,255,0.75);
+    font-size:0.75rem;
+    margin-top:10px;
+    line-height:1.5;
+  }
+  footer a{color:#fff;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>🏊 Pool Party Forecast</h1>
+  <p class="subtitle">Pick a place and a date — we'll tell you if it's pool weather.</p>
+
+  <div class="card">
+    <div class="field">
+      <label for="locInput">Location</label>
+      <input type="text" id="locInput" placeholder="Search a city (e.g. Austin, TX)" autocomplete="off">
+      <div class="suggestions" id="suggestions"></div>
+      <button type="button" class="loc-btn" id="useLocBtn">📍 Use my current location</button>
+    </div>
+    <div class="field">
+      <label for="dateInput">Date</label>
+      <input type="date" id="dateInput">
+    </div>
+    <button type="button" class="primary" id="checkBtn">Check the Forecast</button>
+    <div class="unit-toggle">
+      <button type="button" id="unitF" class="active">°F</button>
+      <button type="button" id="unitC">°C</button>
+    </div>
+  </div>
+
+  <div class="status" id="status"></div>
+
+  <div class="result" id="result">
+    <div class="verdict-banner" id="verdictBanner">
+      <div class="mascot-wrap" id="mascot"></div>
+      <div class="verdict-title" id="verdictTitle"></div>
+      <div class="verdict-sub" id="verdictSub"></div>
+      <div class="place-date" id="placeDate"></div>
+    </div>
+
+    <div id="noteBox"></div>
+
+    <div class="card">
+      <div class="stats-grid">
+        <div class="stat"><div class="val" id="statHigh">--</div><div class="lbl">High</div></div>
+        <div class="stat"><div class="val" id="statLow">--</div><div class="lbl">Low</div></div>
+        <div class="stat"><div class="val" id="statRain">--</div><div class="lbl">Rain Chance</div></div>
+      </div>
+      <div class="tip" id="tipText"></div>
+    </div>
+  </div>
+
+  <footer>
+    Weather data by <a href="https://open-meteo.com" target="_blank" rel="noopener">Open-Meteo.com</a> — free, no API key required.
+  </footer>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var locInput = document.getElementById('locInput');
+  var suggestionsBox = document.getElementById('suggestions');
+  var dateInput = document.getElementById('dateInput');
+  var checkBtn = document.getElementById('checkBtn');
+  var useLocBtn = document.getElementById('useLocBtn');
+  var statusEl = document.getElementById('status');
+  var resultEl = document.getElementById('result');
+  var unitFBtn = document.getElementById('unitF');
+  var unitCBtn = document.getElementById('unitC');
+
+  var selectedPlace = null; // {name, admin1, country, latitude, longitude}
+  var geocodeTimer = null;
+  var lastData = null; // stores last computed result in Celsius for unit toggling
+  var unit = 'F';
+
+  // ---------- Date setup ----------
+  var today = new Date();
+  function ymd(d){
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  dateInput.min = ymd(today);
+  var maxDate = new Date(today); maxDate.setFullYear(maxDate.getFullYear()+1);
+  dateInput.max = ymd(maxDate);
+  dateInput.value = ymd(today);
+
+  // ---------- Location autocomplete ----------
+  locInput.addEventListener('input', function(){
+    selectedPlace = null;
+    var q = locInput.value.trim();
+    clearTimeout(geocodeTimer);
+    if(q.length < 2){ hideSuggestions(); return; }
+    geocodeTimer = setTimeout(function(){ searchPlaces(q); }, 350);
+  });
+
+  document.addEventListener('click', function(e){
+    if(!suggestionsBox.contains(e.target) && e.target !== locInput){
+      hideSuggestions();
+    }
+  });
+
+  function hideSuggestions(){
+    suggestionsBox.classList.remove('show');
+    suggestionsBox.innerHTML = '';
+  }
+
+  function searchPlaces(q){
+    var url = 'https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(q) + '&count=6&language=en&format=json';
+    fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      var results = data && data.results ? data.results : [];
+      renderSuggestions(results);
+    }).catch(function(){ hideSuggestions(); });
+  }
+
+  function renderSuggestions(results){
+    if(!results.length){ hideSuggestions(); return; }
+    suggestionsBox.innerHTML = '';
+    results.forEach(function(place){
+      var item = document.createElement('div');
+      item.className = 'suggestion-item';
+      var region = [place.admin1, place.country].filter(Boolean).join(', ');
+      item.innerHTML = '<div>' + escapeHtml(place.name) + '</div><small>' + escapeHtml(region) + '</small>';
+      item.addEventListener('click', function(){
+        selectedPlace = place;
+        locInput.value = place.name + (region ? ', ' + region : '');
+        hideSuggestions();
+      });
+      suggestionsBox.appendChild(item);
+    });
+    suggestionsBox.classList.add('show');
+  }
+
+  function escapeHtml(str){
+    return String(str).replace(/[&<>"']/g, function(c){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+    });
+  }
+
+  // ---------- Use my location ----------
+  useLocBtn.addEventListener('click', function(){
+    if(!navigator.geolocation){
+      setStatus('Geolocation is not supported by your browser.', true);
+      return;
+    }
+    setStatus('Locating you…');
+    navigator.geolocation.getCurrentPosition(function(pos){
+      selectedPlace = {
+        name: 'Your location',
+        admin1: '',
+        country: '',
+        latitude: pos.coords.latitude,
+        longitude: pos.coords.longitude
+      };
+      locInput.value = 'Your current location';
+      setStatus('');
+    }, function(){
+      setStatus('Could not get your location. Try searching instead.', true);
+    }, {timeout:8000});
+  });
+
+  // ---------- Unit toggle ----------
+  unitFBtn.addEventListener('click', function(){ setUnit('F'); });
+  unitCBtn.addEventListener('click', function(){ setUnit('C'); });
+  function setUnit(u){
+    unit = u;
+    unitFBtn.classList.toggle('active', u==='F');
+    unitCBtn.classList.toggle('active', u==='C');
+    if(lastData){ renderResult(lastData); }
+  }
+
+  // ---------- Main check ----------
+  checkBtn.addEventListener('click', function(){
+    if(!selectedPlace){
+      setStatus('Please pick a location from the search suggestions, or use your current location.', true);
+      return;
+    }
+    var dateStr = dateInput.value;
+    if(!dateStr){
+      setStatus('Please choose a date.', true);
+      return;
+    }
+    runForecast(selectedPlace, dateStr);
+  });
+
+  function setStatus(msg, isError){
+    statusEl.textContent = msg;
+    statusEl.className = 'status' + (isError ? ' error' : '');
+  }
+
+  function daysFromToday(dateStr){
+    var d = new Date(dateStr + 'T00:00:00');
+    var t = new Date(ymd(today) + 'T00:00:00');
+    return Math.round((d - t) / 86400000);
+  }
+
+  function runForecast(place, dateStr){
+    checkBtn.disabled = true;
+    resultEl.classList.remove('show');
+    var diff = daysFromToday(dateStr);
+
+    if(diff < 0){
+      setStatus('Pick a date today or later.', true);
+      checkBtn.disabled = false;
+      return;
+    }
+
+    if(diff <= 15){
+      setStatus('Fetching the forecast…');
+      fetchForecast(place, dateStr).then(function(data){
+        lastData = data;
+        renderResult(data);
+        setStatus('');
+      }).catch(function(err){
+        console.error(err);
+        setStatus('Could not fetch the forecast. Please try again.', true);
+      }).finally(function(){ checkBtn.disabled = false; });
+    } else {
+      setStatus('That date is more than 16 days out, so we\'re estimating from historical weather patterns…');
+      fetchHistoricalEstimate(place, dateStr).then(function(data){
+        lastData = data;
+        renderResult(data);
+        setStatus('');
+      }).catch(function(err){
+        console.error(err);
+        setStatus('Could not fetch historical data. Please try again.', true);
+      }).finally(function(){ checkBtn.disabled = false; });
+    }
+  }
+
+  function fetchForecast(place, dateStr){
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + place.latitude +
+      '&longitude=' + place.longitude +
+      '&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,weathercode,windspeed_10m_max' +
+      '&timezone=auto&start_date=' + dateStr + '&end_date=' + dateStr;
+    return fetch(url).then(function(r){
+      if(!r.ok) throw new Error('forecast fetch failed');
+      return r.json();
+    }).then(function(json){
+      var d = json.daily;
+      if(!d || !d.time || !d.time.length) throw new Error('no data');
+      return {
+        place: place,
+        dateStr: dateStr,
+        source: 'forecast',
+        highC: d.temperature_2m_max[0],
+        lowC: d.temperature_2m_min[0],
+        rainChance: d.precipitation_probability_max ? d.precipitation_probability_max[0] : null,
+        precipMm: d.precipitation_sum ? d.precipitation_sum[0] : null,
+        weathercode: d.weathercode ? d.weathercode[0] : null,
+        windKmh: d.windspeed_10m_max ? d.windspeed_10m_max[0] : null
+      };
+    });
+  }
+
+  function fetchHistoricalEstimate(place, dateStr){
+    var parts = dateStr.split('-').map(Number);
+    var month = parts[1], day = parts[2];
+    var thisYear = today.getFullYear();
+    var years = [];
+    for(var y = thisYear - 1; y >= thisYear - 8; y--){ years.push(y); }
+
+    var requests = years.map(function(y){
+      var mm = String(month).padStart(2,'0');
+      var dd = String(day).padStart(2,'0');
+      // handle Feb 29 for non-leap years
+      var isLeap = (y%4===0 && y%100!==0) || y%400===0;
+      if(month===2 && day===29 && !isLeap){ dd = '28'; }
+      var dstr = y + '-' + mm + '-' + dd;
+      var url = 'https://archive-api.open-meteo.com/v1/archive?latitude=' + place.latitude +
+        '&longitude=' + place.longitude +
+        '&start_date=' + dstr + '&end_date=' + dstr +
+        '&daily=temperature_2m_max,temperature_2m_min,precipitation_sum,weathercode' +
+        '&timezone=auto';
+      return fetch(url).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; });
+    });
+
+    return Promise.all(requests).then(function(results){
+      var highs=[], lows=[], rainyCount=0, valid=0, codes=[];
+      results.forEach(function(json){
+        if(!json || !json.daily || !json.daily.time || !json.daily.time.length) return;
+        var d = json.daily;
+        var h = d.temperature_2m_max[0], l = d.temperature_2m_min[0], p = d.precipitation_sum[0];
+        if(h==null || l==null) return;
+        valid++;
+        highs.push(h); lows.push(l);
+        if(p!=null && p >= 1) rainyCount++;
+        if(d.weathercode && d.weathercode[0]!=null) codes.push(d.weathercode[0]);
+      });
+      if(valid === 0) throw new Error('no historical data');
+      var avg = function(arr){ return arr.reduce(function(a,b){return a+b;},0)/arr.length; };
+      // most common weathercode as representative
+      var codeCounts = {};
+      codes.forEach(function(c){ codeCounts[c] = (codeCounts[c]||0)+1; });
+      var repCode = null, best = -1;
+      Object.keys(codeCounts).forEach(function(c){ if(codeCounts[c] > best){ best = codeCounts[c]; repCode = Number(c); } });
+
+      return {
+        place: place,
+        dateStr: dateStr,
+        source: 'historical',
+        yearsUsed: valid,
+        highC: avg(highs),
+        lowC: avg(lows),
+        rainChance: Math.round((rainyCount/valid)*100),
+        precipMm: null,
+        weathercode: repCode,
+        windKmh: null
+      };
+    });
+  }
+
+  // ---------- Verdict logic ----------
+  var THUNDER_CODES = [95,96,99];
+  function cToF(c){ return c*9/5+32; }
+
+  function computeVerdict(data){
+    var highF = cToF(data.highC);
+    var rain = data.rainChance == null ? 30 : data.rainChance; // assume moderate if unknown
+    var thunder = THUNDER_CODES.indexOf(data.weathercode) !== -1;
+
+    var tempLevel = highF >= 80 ? 'green' : (highF >= 70 ? 'yellow' : 'red');
+    var rainLevel = rain < 20 ? 'green' : (rain <= 50 ? 'yellow' : 'red');
+
+    var order = {green:0, yellow:1, red:2};
+    var level = order[tempLevel] > order[rainLevel] ? tempLevel : rainLevel;
+    if(thunder) level = 'red';
+
+    return level;
+  }
+
+  function weatherDesc(code){
+    var map = {
+      0:'Clear sky', 1:'Mostly clear', 2:'Partly cloudy', 3:'Overcast',
+      45:'Foggy', 48:'Foggy',
+      51:'Light drizzle', 53:'Drizzle', 55:'Heavy drizzle',
+      56:'Freezing drizzle', 57:'Freezing drizzle',
+      61:'Light rain', 63:'Rain', 65:'Heavy rain',
+      66:'Freezing rain', 67:'Freezing rain',
+      71:'Light snow', 73:'Snow', 75:'Heavy snow', 77:'Snow grains',
+      80:'Rain showers', 81:'Rain showers', 82:'Heavy rain showers',
+      85:'Snow showers', 86:'Snow showers',
+      95:'Thunderstorms', 96:'Thunderstorms w/ hail', 99:'Severe thunderstorms'
+    };
+    return map[code] || 'Mixed conditions';
+  }
+
+  // ---------- Render ----------
+  var VERDICTS = {
+    green: {
+      title: 'Pool Day! 🎉',
+      sub: "Conditions look great — grab your suit and go.",
+      tip: 'Warm and dry: this is about as good as pool weather gets. Sunscreen, plenty of water, and maybe some snacks by the deck.'
+    },
+    yellow: {
+      title: 'Maybe... 🤔',
+      sub: 'Borderline conditions — could go either way.',
+      tip: 'It might be a little cool or there\'s a real chance of rain. Consider a backup indoor plan, or just keep an eye on the sky and go for it anyway.'
+    },
+    red: {
+      title: 'Skip the Pool 🌧️',
+      sub: 'Not looking good for swimming.',
+      tip: 'Cold, wet, or stormy conditions expected. Better to reschedule the pool party — maybe plan a game night instead!'
+    }
+  };
+
+  function renderResult(data){
+    var level = computeVerdict(data);
+    var v = VERDICTS[level];
+    var banner = document.getElementById('verdictBanner');
+    banner.className = 'verdict-banner ' + level;
+    document.getElementById('verdictTitle').textContent = v.title;
+    document.getElementById('verdictSub').textContent = v.sub;
+
+    var place = data.place;
+    var region = [place.admin1, place.country].filter(Boolean).join(', ');
+    var placeLabel = region ? place.name + ', ' + region : place.name;
+    var dObj = new Date(data.dateStr + 'T00:00:00');
+    var dateLabel = dObj.toLocaleDateString(undefined, {weekday:'long', month:'long', day:'numeric', year:'numeric'});
+    document.getElementById('placeDate').textContent = placeLabel + ' • ' + dateLabel;
+
+    document.getElementById('mascot').innerHTML = mascotSvg(level);
+
+    var noteBox = document.getElementById('noteBox');
+    if(data.source === 'historical'){
+      noteBox.innerHTML = '<div class="note">📊 This date is more than 16 days away, so actual forecasts aren\'t out yet. We estimated conditions from ' + data.yearsUsed + ' years of historical weather on this date. Check back closer to the day for a real forecast!</div>';
+    } else {
+      noteBox.innerHTML = '';
+    }
+
+    var highDisp, lowDisp, unitLabel;
+    if(unit === 'F'){
+      highDisp = Math.round(cToF(data.highC)) + '°F';
+      lowDisp = Math.round(cToF(data.lowC)) + '°F';
+    } else {
+      highDisp = Math.round(data.highC) + '°C';
+      lowDisp = Math.round(data.lowC) + '°C';
+    }
+    document.getElementById('statHigh').textContent = highDisp;
+    document.getElementById('statLow').textContent = lowDisp;
+    document.getElementById('statRain').textContent = (data.rainChance==null ? '?' : data.rainChance) + '%';
+
+    var desc = data.weathercode != null ? weatherDesc(data.weathercode) : '';
+    document.getElementById('tipText').innerHTML = '<strong>' + (desc ? desc + '. ' : '') + '</strong>' + v.tip;
+
+    resultEl.classList.add('show');
+    resultEl.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }
+
+  function mascotSvg(level){
+    if(level === 'green'){
+      return '' +
+      '<svg viewBox="0 0 120 120" class="mascot-bob">' +
+        '<g class="mascot-rays" stroke="#ffd23f" stroke-width="6" stroke-linecap="round">' +
+          '<line x1="60" y1="8" x2="60" y2="22"/>' +
+          '<line x1="60" y1="98" x2="60" y2="112"/>' +
+          '<line x1="8" y1="60" x2="22" y2="60"/>' +
+          '<line x1="98" y1="60" x2="112" y2="60"/>' +
+          '<line x1="22" y1="22" x2="31" y2="31"/>' +
+          '<line x1="89" y1="89" x2="98" y2="98"/>' +
+          '<line x1="98" y1="22" x2="89" y2="31"/>' +
+          '<line x1="31" y1="89" x2="22" y2="98"/>' +
+        '</g>' +
+        '<circle cx="60" cy="60" r="34" fill="#ffd23f"/>' +
+        '<path d="M34 55 Q45 44 56 55" stroke="#7a5200" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+        '<path d="M64 55 Q75 44 86 55" stroke="#7a5200" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+        '<path d="M42 72 Q60 88 78 72" stroke="#7a5200" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+      '</svg>';
+    }
+    if(level === 'yellow'){
+      return '' +
+      '<svg viewBox="0 0 120 120" class="mascot-bob">' +
+        '<ellipse cx="62" cy="55" rx="38" ry="26" fill="#e8eef2"/>' +
+        '<ellipse cx="40" cy="65" rx="24" ry="18" fill="#e8eef2"/>' +
+        '<ellipse cx="86" cy="65" rx="22" ry="17" fill="#e8eef2"/>' +
+        '<circle cx="46" cy="58" r="4.5" fill="#4a5a66"/>' +
+        '<circle cx="76" cy="58" r="4.5" fill="#4a5a66"/>' +
+        '<path d="M48 74 Q62 78 76 74" stroke="#4a5a66" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+      '</svg>';
+    }
+    return '' +
+    '<svg viewBox="0 0 120 120">' +
+      '<g class="mascot-bob">' +
+        '<ellipse cx="62" cy="45" rx="38" ry="26" fill="#93a3ad"/>' +
+        '<ellipse cx="40" cy="55" rx="24" ry="18" fill="#93a3ad"/>' +
+        '<ellipse cx="86" cy="55" rx="22" ry="17" fill="#93a3ad"/>' +
+        '<circle cx="46" cy="48" r="4.5" fill="#2c3a42"/>' +
+        '<circle cx="76" cy="48" r="4.5" fill="#2c3a42"/>' +
+        '<path d="M48 66 Q62 60 76 66" stroke="#2c3a42" stroke-width="4" fill="none" stroke-linecap="round"/>' +
+      '</g>' +
+      '<g fill="#5aa7e0">' +
+        '<path class="drop" d="M40 78 q4 8 0 12 q-4 -4 0 -12" />' +
+        '<path class="drop" d="M62 82 q4 8 0 12 q-4 -4 0 -12" />' +
+        '<path class="drop" d="M84 78 q4 8 0 12 q-4 -4 0 -12" />' +
+      '</g>' +
+    '</svg>';
+  }
+
+})();
+</script>
+</body>
+</html>

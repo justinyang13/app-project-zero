@@ -13,5 +13,9 @@ describe("Hub", () => {
     const noteNinjaLink = screen.getByRole("link", { name: /play game/i });
     expect(noteNinjaLink).toHaveAttribute("href", "app-note-ninja/");
     expect(noteNinjaLink).toHaveAttribute("target", "_blank");
+
+    const poolPartyLink = screen.getByRole("link", { name: /check forecast/i });
+    expect(poolPartyLink).toHaveAttribute("href", "app-pool-party-forecast/");
+    expect(poolPartyLink).toHaveAttribute("target", "_blank");
   });
 });
