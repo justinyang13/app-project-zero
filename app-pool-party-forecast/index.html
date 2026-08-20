@@ -61,6 +61,8 @@
   .field{position:relative;margin-bottom:14px;}
   input[type="text"], input[type="date"]{
     width:100%;
+    max-width:100%;
+    min-width:0;
     padding:12px 14px;
     border-radius:12px;
     border:1.5px solid #cfe0ea;
@@ -68,6 +70,10 @@
     outline:none;
     transition:border-color .15s;
     background:#f8fbfd;
+  }
+  input[type="date"]{
+    -webkit-appearance:none;
+    appearance:none;
   }
   input[type="text"]:focus, input[type="date"]:focus{border-color:var(--blue-mid);}
   .row{display:flex;gap:10px;}
