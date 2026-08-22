@@ -6,6 +6,7 @@ import { VENUES_NEAR_QUERY } from "../api/queries";
 import type { CollectibleItem, VenueSummary } from "../api/types";
 import type { Coordinates } from "../hooks/useGeolocation";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
+import { findNearestVenue } from "../utils/nearestVenue";
 import { DEFAULT_TIME_RANGE_HOURS, isWithinTimeRange, type TimeRangeHours } from "../utils/timeRange";
 import { CollectibleCatalogPanel } from "./CollectibleCatalogPanel";
 import { SearchBar } from "./SearchBar";
@@ -30,6 +31,8 @@ interface MapViewProps {
   chainName: string;
   catalog: CollectibleItem[];
   initialCenter: Coordinates;
+  /** Real geolocation, distinct from initialCenter's NYC fallback — auto-opens the nearest venue's popup on load only when this is set. */
+  userCoords: Coordinates | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -105,18 +108,27 @@ interface VenueMarkerProps {
   promotionId: string;
   catalog: CollectibleItem[];
   onCheckInAdded: () => void;
+  autoOpen: boolean;
 }
 
-function VenueMarker({ venue, promotionId, catalog, onCheckInAdded }: VenueMarkerProps) {
+function VenueMarker({ venue, promotionId, catalog, onCheckInAdded, autoOpen }: VenueMarkerProps) {
   const [hasOpened, setHasOpened] = useState(false);
+  const markerRef = useRef<L.Marker>(null);
 
   const icon = useMemo(
     () => buildPinIcon(isRecentActivity(venue.lastCheckInAtUtc), venue.checkInCount),
     [venue.lastCheckInAtUtc, venue.checkInCount],
   );
 
+  useEffect(() => {
+    if (autoOpen) {
+      markerRef.current?.openPopup();
+    }
+  }, [autoOpen]);
+
   return (
     <Marker
+      ref={markerRef}
       position={[venue.latitude, venue.longitude]}
       icon={icon}
       eventHandlers={{ popupopen: () => setHasOpened(true) }}
@@ -144,7 +156,7 @@ function VenueMarker({ venue, promotionId, catalog, onCheckInAdded }: VenueMarke
   );
 }
 
-export function MapView({ promotionId, chainName, catalog, initialCenter }: MapViewProps) {
+export function MapView({ promotionId, chainName, catalog, initialCenter, userCoords }: MapViewProps) {
   const [viewport, setViewport] = useState<Viewport>({
     lat: initialCenter.lat,
     lng: initialCenter.lng,
@@ -153,6 +165,8 @@ export function MapView({ promotionId, chainName, catalog, initialCenter }: MapV
   const [flyToCenter, setFlyToCenter] = useState<Coordinates | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [timeRangeHours, setTimeRangeHours] = useState<TimeRangeHours>(DEFAULT_TIME_RANGE_HOURS);
+  const [autoOpenVenueId, setAutoOpenVenueId] = useState<string | null>(null);
+  const [hasAutoOpened, setHasAutoOpened] = useState(false);
 
   const handleViewportChange = useDebouncedCallback(setViewport, VIEWPORT_DEBOUNCE_MS);
 
@@ -172,6 +186,18 @@ export function MapView({ promotionId, chainName, catalog, initialCenter }: MapV
 
   function refetchVenues() {
     reexecuteVenuesQuery({ requestPolicy: "network-only" });
+  }
+
+  // UC-1/UC-5: once, when the visitor's real location and the first batch of
+  // nearby venues are both in, auto-open the closest one's popup. Adjusting
+  // state during render (guarded by hasAutoOpened so it only fires once)
+  // rather than in an effect, per React's pattern for deriving state from
+  // changing props/data — a ref wouldn't do here since it can't be read
+  // during render.
+  if (!hasAutoOpened && userCoords && venues.length > 0) {
+    setHasAutoOpened(true);
+    const nearest = findNearestVenue(userCoords, venues);
+    setAutoOpenVenueId(nearest?.id ?? null);
   }
 
   return (
@@ -205,6 +231,7 @@ export function MapView({ promotionId, chainName, catalog, initialCenter }: MapV
             promotionId={promotionId}
             catalog={catalog}
             onCheckInAdded={refetchVenues}
+            autoOpen={venue.id === autoOpenVenueId}
           />
         ))}
       </MapContainer>

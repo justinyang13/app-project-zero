@@ -53,6 +53,7 @@ function LootRaiderApp() {
         chainName={promotion.chainName}
         catalog={catalog}
         initialCenter={center}
+        userCoords={geolocation.coords}
       />
     </div>
   );
