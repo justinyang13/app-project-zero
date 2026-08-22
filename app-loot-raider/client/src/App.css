@@ -1,7 +1,16 @@
 .app {
   display: flex;
   flex-direction: column;
+  /* iOS Safari's address/tab bar collapses on scroll, so 100vh (the
+   * viewport height with the bar expanded) is taller than what's actually
+   * visible — a bottom-anchored child like the Filter panel ends up
+   * positioned below the real fold. 100dvh tracks the bar's real state;
+   * -webkit-fill-available is the older iOS fallback for browsers that
+   * don't support dvh yet. Plain 100vh stays first so unsupporting
+   * browsers still get a value instead of falling through to auto. */
   height: 100vh;
+  height: -webkit-fill-available;
+  height: 100dvh;
   background: var(--bg);
 }
 
@@ -11,6 +20,7 @@
   gap: 0.75rem;
   padding: 0.9rem 1.5rem;
   background: color-mix(in oklch, var(--surface) 90%, transparent);
+  -webkit-backdrop-filter: blur(8px);
   backdrop-filter: blur(8px);
   border-bottom: 1px solid var(--border);
   z-index: 10;

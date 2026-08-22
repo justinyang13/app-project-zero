@@ -7,7 +7,12 @@ import type { CollectibleItem, VenueSummary } from "../api/types";
 import type { Coordinates } from "../hooks/useGeolocation";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
 import { findNearestVenue } from "../utils/nearestVenue";
-import { DEFAULT_TIME_RANGE_HOURS, isWithinTimeRange, type TimeRangeHours } from "../utils/timeRange";
+import {
+  DEFAULT_TIME_RANGE_HOURS,
+  ITEM_FILTER_TIME_RANGE_HOURS,
+  isWithinTimeRange,
+  type TimeRangeHours,
+} from "../utils/timeRange";
 import { CollectibleCatalogPanel } from "./CollectibleCatalogPanel";
 import { SearchBar } from "./SearchBar";
 import { VenuePopupContent } from "./VenuePopupContent";
@@ -188,6 +193,15 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
     reexecuteVenuesQuery({ requestPolicy: "network-only" });
   }
 
+  // Time range defaults to "all" so every location shows on load. Picking a
+  // collectible switches the visitor into a "recent sightings of X" mode, so
+  // that's the one point where a 24h default is actually useful; clearing
+  // the item filter returns to the unfiltered "all" default.
+  function handleSelectItem(itemId: string | null) {
+    setSelectedItemId(itemId);
+    setTimeRangeHours(itemId ? ITEM_FILTER_TIME_RANGE_HOURS : DEFAULT_TIME_RANGE_HOURS);
+  }
+
   // UC-1/UC-5: once, when the visitor's real location and the first batch of
   // nearby venues are both in, auto-open the closest one's popup. Adjusting
   // state during render (guarded by hasAutoOpened so it only fires once)
@@ -206,7 +220,7 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
       <CollectibleCatalogPanel
         items={catalog}
         selectedItemId={selectedItemId}
-        onSelectItem={setSelectedItemId}
+        onSelectItem={handleSelectItem}
         timeRangeHours={timeRangeHours}
         onTimeRangeChange={setTimeRangeHours}
       />

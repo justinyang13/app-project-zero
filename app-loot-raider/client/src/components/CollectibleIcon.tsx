@@ -1,3 +1,4 @@
+import { getInitials } from "../utils/initials";
 import { itemTint } from "../utils/itemTint";
 
 interface CollectibleIconProps {
@@ -10,8 +11,8 @@ interface CollectibleIconProps {
 /**
  * Real per-item character art is deliberately out of scope (no licensed
  * character art, no user-uploaded photos — see the app README) so every
- * catalog item without an imageUrl falls back to a colored swatch, tinted
- * deterministically per item so items stay visually distinct.
+ * catalog item without an imageUrl falls back to a colored swatch showing
+ * its initials, tinted deterministically per item so items stay distinct.
  */
 export function CollectibleIcon({ imageUrl, name, itemId, size = 32 }: CollectibleIconProps) {
   if (imageUrl) {
@@ -43,9 +44,18 @@ export function CollectibleIcon({ imageUrl, name, itemId, size = 32 }: Collectib
         flexShrink: 0,
       }}
     >
-      <svg viewBox="0 0 24 24" width={size * 0.5} height={size * 0.5} fill="white">
-        <path d="M12 2 L15 8.5 L21 9.3 L16.5 13.6 L17.6 20 L12 17 L6.4 20 L7.5 13.6 L3 9.3 L9 8.5 Z" />
-      </svg>
+      <span
+        style={{
+          fontFamily: "var(--font-display)",
+          fontWeight: 700,
+          fontSize: size * 0.36,
+          color: "white",
+          letterSpacing: "-0.02em",
+          userSelect: "none",
+        }}
+      >
+        {getInitials(name)}
+      </span>
     </div>
   );
 }

@@ -9,7 +9,10 @@ export const TIME_RANGE_OPTIONS: { label: string; value: TimeRangeHours }[] = [
   { label: "All", value: "all" },
 ];
 
-export const DEFAULT_TIME_RANGE_HOURS: TimeRangeHours = 24;
+// Page load shows every location, unfiltered by recency — 24h only kicks in
+// once the visitor picks a specific collectible to filter by (see MapView).
+export const DEFAULT_TIME_RANGE_HOURS: TimeRangeHours = "all";
+export const ITEM_FILTER_TIME_RANGE_HOURS: TimeRangeHours = 24;
 
 /** Whether a venue's most recent check-in falls within the selected time range. */
 export function isWithinTimeRange(lastCheckInAtUtc: string | null, range: TimeRangeHours): boolean {

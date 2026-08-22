@@ -57,7 +57,7 @@ describe("CollectibleCatalogPanel", () => {
 
     expect(screen.getByText("Hello Kitty x Godzilla")).toBeInTheDocument();
     expect(screen.getByText("Kuromi x Mechagodzilla")).toBeInTheDocument();
-    expect(screen.getByRole("radio", { name: "24h" })).toHaveAttribute("aria-checked", "true");
+    expect(screen.getByRole("radio", { name: "All" })).toHaveAttribute("aria-checked", "true");
   });
 
   it("selects an item as the map filter when clicked, and clears it via the Clear control", async () => {
