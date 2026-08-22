@@ -1,25 +1,23 @@
 .search-bar {
-  position: absolute;
-  top: 0.85rem;
-  left: 0.85rem;
-  z-index: 1000;
+  position: relative;
   display: flex;
-  flex-wrap: wrap;
   gap: 0.5rem;
-  max-width: min(22rem, calc(100% - 1.7rem));
+  flex: 1;
+  min-width: 0;
+  max-width: 22rem;
+  justify-content: flex-end;
 }
 
 .search-bar input {
   flex: 1;
-  min-width: 10rem;
-  padding: 0.6rem 0.9rem;
+  min-width: 0;
+  padding: 0.5rem 0.8rem;
   font-family: var(--font-body);
   font-size: 0.85rem;
   color: var(--ink);
-  background: var(--surface);
+  background: var(--surface-muted);
   border: 1px solid var(--border);
   border-radius: 0.6rem;
-  box-shadow: var(--shadow-card);
 }
 
 .search-bar input::placeholder {
@@ -27,14 +25,14 @@
 }
 
 .search-bar button {
-  padding: 0.6rem 1rem;
+  flex-shrink: 0;
+  padding: 0.5rem 0.9rem;
   font-size: 0.85rem;
   font-weight: 600;
   color: var(--accent-ink);
   background: var(--accent);
   border-radius: 0.6rem;
   cursor: pointer;
-  box-shadow: var(--shadow-card);
 }
 
 .search-bar button:disabled {
@@ -43,7 +41,12 @@
 }
 
 .search-bar__error {
-  flex-basis: 100%;
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 1000;
+  width: max-content;
+  max-width: 16rem;
   margin: 0;
   padding: 0.5rem 0.7rem;
   font-size: 0.78rem;

@@ -1,10 +1,13 @@
+import { useState } from "react";
 import { Provider, useQuery } from "urql";
 import { ACTIVE_PROMOTION_QUERY, COLLECTIBLE_ITEMS_QUERY } from "./api/queries";
 import type { CollectibleItem, Promotion } from "./api/types";
 import logoUrl from "./assets/logo.png";
 import { HoldingState } from "./components/HoldingState";
 import { MapView } from "./components/MapView";
+import { SearchBar } from "./components/SearchBar";
 import { urqlClient } from "./graphqlClient";
+import type { Coordinates } from "./hooks/useGeolocation";
 import { useGeolocation } from "./hooks/useGeolocation";
 import "./App.css";
 
@@ -19,6 +22,7 @@ function LootRaiderApp() {
 
   const promotion = promotionData?.activePromotion;
   const geolocation = useGeolocation();
+  const [flyToCenter, setFlyToCenter] = useState<Coordinates | null>(null);
 
   const [{ data: catalogData }] = useQuery<{ collectibleItems: CollectibleItem[] }>({
     query: COLLECTIBLE_ITEMS_QUERY,
@@ -45,8 +49,11 @@ function LootRaiderApp() {
   return (
     <div className="app">
       <header className="app__header">
-        <img src={logoUrl} alt="" className="app__header-logo" />
-        <h1>Loot Raider</h1>
+        <div className="app__header-brand">
+          <img src={logoUrl} alt="" className="app__header-logo" />
+          <h1>Loot Raider</h1>
+        </div>
+        <SearchBar onLocationFound={setFlyToCenter} />
       </header>
       <MapView
         promotionId={promotion.id}
@@ -54,6 +61,7 @@ function LootRaiderApp() {
         catalog={catalog}
         initialCenter={center}
         userCoords={geolocation.coords}
+        flyToCenter={flyToCenter}
       />
     </div>
   );

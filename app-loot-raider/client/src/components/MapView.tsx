@@ -14,7 +14,6 @@ import {
   type TimeRangeHours,
 } from "../utils/timeRange";
 import { CollectibleCatalogPanel } from "./CollectibleCatalogPanel";
-import { SearchBar } from "./SearchBar";
 import { VenuePopupContent } from "./VenuePopupContent";
 import "leaflet/dist/leaflet.css";
 import "./MapView.css";
@@ -38,6 +37,8 @@ interface MapViewProps {
   initialCenter: Coordinates;
   /** Real geolocation, distinct from initialCenter's NYC fallback — auto-opens the nearest venue's popup on load only when this is set. */
   userCoords: Coordinates | null;
+  /** Set by the header's SearchBar (owned by App, since the search bar now lives in the header). */
+  flyToCenter: Coordinates | null;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -161,13 +162,12 @@ function VenueMarker({ venue, promotionId, catalog, onCheckInAdded, autoOpen }: 
   );
 }
 
-export function MapView({ promotionId, chainName, catalog, initialCenter, userCoords }: MapViewProps) {
+export function MapView({ promotionId, chainName, catalog, initialCenter, userCoords, flyToCenter }: MapViewProps) {
   const [viewport, setViewport] = useState<Viewport>({
     lat: initialCenter.lat,
     lng: initialCenter.lng,
     radiusMeters: DEFAULT_RADIUS_METERS,
   });
-  const [flyToCenter, setFlyToCenter] = useState<Coordinates | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [timeRangeHours, setTimeRangeHours] = useState<TimeRangeHours>(DEFAULT_TIME_RANGE_HOURS);
   const [autoOpenVenueId, setAutoOpenVenueId] = useState<string | null>(null);
@@ -216,7 +216,6 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
 
   return (
     <div className="map-view">
-      <SearchBar onLocationFound={setFlyToCenter} />
       <CollectibleCatalogPanel
         items={catalog}
         selectedItemId={selectedItemId}
