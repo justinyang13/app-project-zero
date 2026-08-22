@@ -1,4 +1,4 @@
-.astro-kitten {
+.astro-animal {
   position: absolute;
   z-index: 1;
   pointer-events: none;
@@ -7,7 +7,7 @@
   filter: drop-shadow(0 8px 10px rgba(0, 0, 0, 0.4));
 }
 
-.astro-kitten__flip {
+.astro-animal__flip {
   width: 100%;
   height: 100%;
 }
@@ -31,7 +31,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .astro-kitten {
+  .astro-animal {
     animation: none;
   }
 }
