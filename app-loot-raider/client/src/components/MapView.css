@@ -7,6 +7,7 @@
 .map-view__container {
   width: 100%;
   height: 100%;
+  background: var(--bg);
 }
 
 .map-view__banner {
@@ -16,60 +17,79 @@
   transform: translateX(-50%);
   z-index: 1000;
   margin: 0;
-  padding: 0.5rem 1rem;
-  font-size: 0.82rem;
+  padding: 0.55rem 1.1rem;
+  font-size: 0.8rem;
   color: var(--ink);
-  background: var(--parchment);
-  border: 1px solid var(--gold-deep);
+  background: var(--surface);
   border-radius: 999px;
-  box-shadow: 0 2px 0 -1px var(--gold-deep);
+  box-shadow: var(--shadow-card);
   text-align: center;
 }
 
-/* Gold teardrop pin markers, distinguished by recency of activity (UC-3). */
-.loot-pin__body {
-  stroke: var(--gold-deep);
-  stroke-width: 1;
+/* Circular pins, distinguished by recency of activity (UC-3), with a small
+ * count badge — matching the "Minimal — clean modern" mockup direction. */
+.loot-pin__dot-wrap {
+  position: relative;
+  width: 20px;
+  height: 20px;
 }
 
-.loot-pin__core {
-  stroke: var(--gold-deep);
-  stroke-width: 1;
+.loot-pin--recent .loot-pin__circle {
+  fill: var(--accent);
+  stroke: var(--surface);
+  stroke-width: 3;
+  filter: drop-shadow(0 2px 4px oklch(20% 0.01 250 / 0.25));
 }
 
-.loot-pin--recent .loot-pin__body {
-  fill: var(--gold-bright);
+.loot-pin--stale .loot-pin__circle {
+  fill: var(--surface);
+  stroke: var(--ink-faint);
+  stroke-width: 2;
 }
 
-.loot-pin--recent .loot-pin__core {
-  fill: var(--parchment);
-}
-
-.loot-pin--stale .loot-pin__body {
-  fill: var(--parchment-dark);
-  opacity: 0.85;
-}
-
-.loot-pin--stale .loot-pin__core {
-  fill: var(--gold-deep);
-  opacity: 0.6;
+.loot-pin__badge {
+  position: absolute;
+  top: -5px;
+  right: -9px;
+  min-width: 17px;
+  height: 17px;
+  padding: 0 4px;
+  border-radius: 9px;
+  background: var(--badge-bg);
+  color: var(--surface);
+  font-family: var(--font-body);
+  font-size: 10px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: var(--parchment);
-  border: 1px solid var(--gold-deep);
+  background: var(--surface);
   color: var(--ink);
+  box-shadow: var(--shadow-card);
 }
 
 .leaflet-popup-content-wrapper {
-  border-radius: 0.5rem;
+  border-radius: 0.9rem;
+}
+
+.leaflet-popup-content {
+  margin: 0;
 }
 
 .leaflet-tooltip {
-  background: var(--parchment);
-  border: 1px solid var(--gold-deep);
+  background: var(--surface);
+  border: none;
   color: var(--ink);
   font-family: var(--font-body);
   font-size: 0.78rem;
+  border-radius: 0.6rem;
+  box-shadow: var(--shadow-card);
+}
+
+.leaflet-tooltip-top::before {
+  border-top-color: var(--surface);
 }

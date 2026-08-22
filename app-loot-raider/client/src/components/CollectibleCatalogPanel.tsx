@@ -24,44 +24,57 @@ export function CollectibleCatalogPanel({ items, selectedItemId, onSelectItem }:
   const selectedItem = items.find((item) => item.id === selectedItemId) ?? null;
 
   return (
-    <div className={`catalog-panel ${isOpen ? "catalog-panel--open" : ""}`}>
+    <div className="catalog-panel">
       <button
         type="button"
         className="catalog-panel__toggle"
         onClick={() => setIsOpen((open) => !open)}
         aria-expanded={isOpen}
       >
-        {isOpen ? "Close catalog" : selectedItem ? `Filtering: ${selectedItem.name}` : "Collectible Catalog"}
+        <span>Collectible catalog</span>
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.2"
+          className={`catalog-panel__chevron ${isOpen ? "catalog-panel__chevron--open" : ""}`}
+          aria-hidden="true"
+        >
+          <path d="M6 15 L12 9 L18 15" />
+        </svg>
       </button>
 
       {isOpen && (
         <div className="catalog-panel__body">
-          <p className="catalog-panel__hint">Tap an item to show only venues with a sighting of it.</p>
-
           {selectedItem && (
-            <button type="button" className="catalog-panel__clear" onClick={() => onSelectItem(null)}>
-              Clear filter ✕
-            </button>
+            <div className="catalog-panel__filter-row">
+              <span>Filtering: {selectedItem.name}</span>
+              <button type="button" onClick={() => onSelectItem(null)}>
+                Clear
+              </button>
+            </div>
           )}
 
-          <ul className="catalog-panel__list">
+          <div className="catalog-panel__grid">
             {items.map((item) => {
               const isSelected = item.id === selectedItemId;
               return (
-                <li key={item.id}>
-                  <button
-                    type="button"
-                    className={`catalog-panel__item ${isSelected ? "catalog-panel__item--selected" : ""}`}
-                    aria-pressed={isSelected}
-                    onClick={() => onSelectItem(isSelected ? null : item.id)}
-                  >
-                    <CollectibleIcon imageUrl={item.imageUrl} name={item.name} size={36} />
-                    <span>{item.name}</span>
-                  </button>
-                </li>
+                <button
+                  key={item.id}
+                  type="button"
+                  className={`catalog-panel__item ${isSelected ? "catalog-panel__item--selected" : ""}`}
+                  aria-pressed={isSelected}
+                  title="Tap to filter the map to venues with a sighting of this item"
+                  onClick={() => onSelectItem(isSelected ? null : item.id)}
+                >
+                  <CollectibleIcon imageUrl={item.imageUrl} name={item.name} itemId={item.id} size={38} />
+                  <span>{item.name}</span>
+                </button>
               );
             })}
-          </ul>
+          </div>
         </div>
       )}
     </div>

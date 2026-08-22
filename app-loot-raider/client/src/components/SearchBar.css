@@ -12,14 +12,14 @@
 .search-bar input {
   flex: 1;
   min-width: 10rem;
-  padding: 0.55rem 0.75rem;
+  padding: 0.6rem 0.9rem;
   font-family: var(--font-body);
-  font-size: 0.9rem;
+  font-size: 0.85rem;
   color: var(--ink);
-  background: var(--parchment);
-  border: 1px solid var(--gold-deep);
-  border-radius: 0.35rem;
-  box-shadow: 0 2px 0 -1px var(--gold-deep);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 0.6rem;
+  box-shadow: var(--shadow-card);
 }
 
 .search-bar input::placeholder {
@@ -27,14 +27,14 @@
 }
 
 .search-bar button {
-  padding: 0.55rem 0.9rem;
-  font-size: 0.9rem;
+  padding: 0.6rem 1rem;
+  font-size: 0.85rem;
   font-weight: 600;
-  color: var(--parchment);
-  background: var(--gold-deep);
-  border: 1px solid var(--gold-deep);
-  border-radius: 0.35rem;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border-radius: 0.6rem;
   cursor: pointer;
+  box-shadow: var(--shadow-card);
 }
 
 .search-bar button:disabled {
@@ -45,9 +45,10 @@
 .search-bar__error {
   flex-basis: 100%;
   margin: 0;
-  padding: 0.4rem 0.6rem;
-  font-size: 0.8rem;
-  color: var(--parchment);
+  padding: 0.5rem 0.7rem;
+  font-size: 0.78rem;
+  color: var(--accent-ink);
   background: var(--danger);
-  border-radius: 0.3rem;
+  border-radius: 0.5rem;
+  box-shadow: var(--shadow-card);
 }

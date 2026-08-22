@@ -1,32 +1,51 @@
+import { itemTint } from "../utils/itemTint";
+
 interface CollectibleIconProps {
   imageUrl?: string;
   name: string;
+  itemId: string;
   size?: number;
 }
 
 /**
  * Real per-item character art is deliberately out of scope (no licensed
  * character art, no user-uploaded photos — see the app README) so every
- * catalog item without an imageUrl falls back to this shared placeholder.
+ * catalog item without an imageUrl falls back to a colored swatch, tinted
+ * deterministically per item so items stay visually distinct.
  */
-export function CollectibleIcon({ imageUrl, name, size = 32 }: CollectibleIconProps) {
+export function CollectibleIcon({ imageUrl, name, itemId, size = 32 }: CollectibleIconProps) {
   if (imageUrl) {
-    return <img src={imageUrl} alt={name} width={size} height={size} className="collectible-icon" />;
+    return (
+      <img
+        src={imageUrl}
+        alt={name}
+        width={size}
+        height={size}
+        className="collectible-icon"
+        style={{ borderRadius: size * 0.25, flexShrink: 0 }}
+      />
+    );
   }
 
   return (
-    <svg
-      viewBox="0 0 32 32"
-      width={size}
-      height={size}
+    <div
       className="collectible-icon collectible-icon--placeholder"
       role="img"
       aria-label={name}
+      style={{
+        width: size,
+        height: size,
+        background: itemTint(itemId),
+        borderRadius: size * 0.25,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flexShrink: 0,
+      }}
     >
-      <rect x="3" y="13" width="26" height="15" rx="2" fill="var(--gold-bright)" stroke="var(--gold-deep)" strokeWidth="1.5" />
-      <rect x="3" y="13" width="26" height="5" fill="var(--gold-deep)" opacity="0.35" />
-      <path d="M16 13 V28 M9.5 13c0-3.3 2.9-6 6.5-6s6.5 2.7 6.5 6" fill="none" stroke="var(--gold-deep)" strokeWidth="1.5" />
-      <circle cx="16" cy="7.5" r="2.2" fill="var(--parchment)" stroke="var(--gold-deep)" strokeWidth="1.2" />
-    </svg>
+      <svg viewBox="0 0 24 24" width={size * 0.5} height={size * 0.5} fill="white">
+        <path d="M12 2 L15 8.5 L21 9.3 L16.5 13.6 L17.6 20 L12 17 L6.4 20 L7.5 13.6 L3 9.3 L9 8.5 Z" />
+      </svg>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { useQuery } from "urql";
@@ -42,22 +42,24 @@ function isRecentActivity(lastCheckInAtUtc: string | null): boolean {
   return Date.now() - new Date(lastCheckInAtUtc).getTime() < RECENT_ACTIVITY_WINDOW_MS;
 }
 
-function buildPinIcon(recent: boolean): L.DivIcon {
+function buildPinIcon(recent: boolean, checkInCount: number): L.DivIcon {
+  const badge =
+    checkInCount > 0
+      ? `<div class="loot-pin__badge">${checkInCount > 99 ? "99+" : checkInCount}</div>`
+      : "";
+
   return L.divIcon({
     className: `loot-pin ${recent ? "loot-pin--recent" : "loot-pin--stale"}`,
-    html: `<svg viewBox="0 0 24 32" width="28" height="38">
-      <path d="M12 0C5.4 0 0 5.4 0 12c0 9 12 20 12 20s12-11 12-20c0-6.6-5.4-12-12-12z" class="loot-pin__body" />
-      <circle cx="12" cy="12" r="4.5" class="loot-pin__core" />
-    </svg>`,
-    iconSize: [28, 38],
-    iconAnchor: [14, 38],
-    popupAnchor: [0, -34],
-    tooltipAnchor: [0, -30],
+    html: `<div class="loot-pin__dot-wrap">
+      <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="loot-pin__circle" /></svg>
+      ${badge}
+    </div>`,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+    popupAnchor: [0, -12],
+    tooltipAnchor: [0, -12],
   });
 }
-
-const recentPinIcon = buildPinIcon(true);
-const stalePinIcon = buildPinIcon(false);
 
 function ViewportWatcher({ onViewportChange }: { onViewportChange: (viewport: Viewport) => void }) {
   const onViewportChangeRef = useRef(onViewportChange);
@@ -107,10 +109,15 @@ interface VenueMarkerProps {
 function VenueMarker({ venue, promotionId, catalog, onCheckInAdded }: VenueMarkerProps) {
   const [hasOpened, setHasOpened] = useState(false);
 
+  const icon = useMemo(
+    () => buildPinIcon(isRecentActivity(venue.lastCheckInAtUtc), venue.checkInCount),
+    [venue.lastCheckInAtUtc, venue.checkInCount],
+  );
+
   return (
     <Marker
       position={[venue.latitude, venue.longitude]}
-      icon={isRecentActivity(venue.lastCheckInAtUtc) ? recentPinIcon : stalePinIcon}
+      icon={icon}
       eventHandlers={{ popupopen: () => setHasOpened(true) }}
     >
       <Tooltip direction="top">

@@ -5,22 +5,32 @@
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 
-  --gold-deep: oklch(45% 0.13 40);
-  --gold-bright: oklch(63% 0.14 55);
-  --parchment: oklch(94% 0.03 80);
-  --parchment-dark: oklch(88% 0.035 75);
-  --ink: oklch(28% 0.03 50);
-  --ink-soft: oklch(42% 0.03 50);
-  --trail-line: oklch(55% 0.05 55);
+  /* "Minimal — clean modern" direction from the mockup review. */
+  --bg: oklch(98% 0.003 250);
+  --surface: oklch(100% 0 0);
+  --surface-muted: oklch(96% 0.004 250);
+  --surface-hover: oklch(95% 0.01 250);
+  --ink: oklch(22% 0.01 250);
+  --ink-soft: oklch(48% 0.01 250);
+  --ink-faint: oklch(75% 0.01 250);
+  --border: oklch(90% 0.006 250);
+  --border-soft: oklch(93% 0.005 250);
+  --accent: oklch(55% 0.16 255);
+  --accent-ink: oklch(100% 0 0);
+  --badge-bg: oklch(22% 0.01 250);
   --danger: oklch(50% 0.18 25);
 
-  --font-display: "Bitter", Georgia, serif;
-  --font-body: "Work Sans", system-ui, sans-serif;
+  --shadow-card:
+    0 2px 8px oklch(20% 0.01 250 / 0.06),
+    0 12px 28px oklch(20% 0.01 250 / 0.1);
+
+  --font-display: "Sora", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, sans-serif;
 }
 
 body {
   margin: 0;
-  background: var(--parchment);
+  background: var(--bg);
   color: var(--ink);
   font-family: var(--font-body);
 }

@@ -53,12 +53,14 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
 
   return (
     <div className="venue-popup">
-      <h3 className="venue-popup__title">{venue.name}</h3>
-      {venue.address && <p className="venue-popup__address">{venue.address}</p>}
+      <div className="venue-popup__header">
+        <h3 className="venue-popup__title">{venue.name}</h3>
+        {venue.address && <p className="venue-popup__address">{venue.address}</p>}
+      </div>
 
-      <div className="venue-popup__divider" />
+      <div className="venue-popup__section">
+        <p className="venue-popup__eyebrow">Recent check-ins</p>
 
-      <div className="venue-popup__checkins">
         {fetching && <p role="status">Loading check-ins…</p>}
 
         {error && (
@@ -80,7 +82,12 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
               const item = catalogById.get(checkIn.collectibleItemId);
               return (
                 <li key={checkIn.id} className="venue-popup__list-item">
-                  <CollectibleIcon imageUrl={item?.imageUrl} name={item?.name ?? "Unknown item"} size={28} />
+                  <CollectibleIcon
+                    imageUrl={item?.imageUrl}
+                    name={item?.name ?? "Unknown item"}
+                    itemId={checkIn.collectibleItemId}
+                    size={28}
+                  />
                   <div>
                     <span className="venue-popup__item-name">{item?.name ?? "Unknown item"}</span>
                     <span className="venue-popup__meta">
@@ -96,42 +103,53 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
       </div>
 
       {catalog.length > 0 && (
-        <>
-          <div className="venue-popup__divider" />
-          <form className="venue-popup__form" onSubmit={handleSubmit}>
-            <label htmlFor={`item-${venue.id}`}>I saw this:</label>
-            <select
-              id={`item-${venue.id}`}
-              value={selectedItemId}
-              onChange={(event) => setSelectedItemId(event.target.value)}
-            >
-              {catalog.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.name}
-                  {hasReportedToday(venue.id, item.id) ? " — already reported today" : ""}
-                </option>
-              ))}
-            </select>
+        <div className="venue-popup__section">
+          <p className="venue-popup__eyebrow">Report a sighting</p>
 
-            <input
-              type="text"
-              value={nickname}
-              onChange={(event) => setNickname(event.target.value)}
-              placeholder="Nickname (optional)"
-              maxLength={40}
-            />
+          <form onSubmit={handleSubmit}>
+            <div className="venue-popup__swatches" role="radiogroup" aria-label="I saw this">
+              {catalog.map((item) => {
+                const isSelected = item.id === selectedItemId;
+                const reportedToday = hasReportedToday(venue.id, item.id);
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    aria-label={item.name + (reportedToday ? " (already reported today)" : "")}
+                    title={item.name + (reportedToday ? " — already reported today" : "")}
+                    className={`venue-popup__swatch ${isSelected ? "venue-popup__swatch--selected" : ""} ${
+                      reportedToday ? "venue-popup__swatch--reported" : ""
+                    }`}
+                    onClick={() => setSelectedItemId(item.id)}
+                  >
+                    <CollectibleIcon imageUrl={item.imageUrl} name={item.name} itemId={item.id} size={32} />
+                  </button>
+                );
+              })}
+            </div>
 
             {alreadyReportedSelected && (
               <p className="venue-popup__hint">You already reported this today — you can still submit if you're sure.</p>
             )}
 
-            <button type="submit" disabled={submitting}>
-              {submitting ? "Reporting…" : "I saw this"}
-            </button>
+            <div className="venue-popup__form-row">
+              <input
+                type="text"
+                value={nickname}
+                onChange={(event) => setNickname(event.target.value)}
+                placeholder="Nickname (optional)"
+                maxLength={40}
+              />
+              <button type="submit" disabled={submitting}>
+                {submitting ? "Logging…" : "Log it"}
+              </button>
+            </div>
 
             {submitError && <p role="alert" className="venue-popup__error">Couldn't submit — try again.</p>}
           </form>
-        </>
+        </div>
       )}
     </div>
   );

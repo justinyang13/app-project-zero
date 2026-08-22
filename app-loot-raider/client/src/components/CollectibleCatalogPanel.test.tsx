@@ -25,36 +25,31 @@ describe("CollectibleCatalogPanel", () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it("hides the catalog list until the toggle is opened", async () => {
+  it("hides the catalog grid until the toggle is opened", async () => {
     const user = userEvent.setup();
     render(<CollectibleCatalogPanel items={items} selectedItemId={null} onSelectItem={vi.fn()} />);
 
     expect(screen.queryByText("Hello Kitty x Godzilla")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Collectible Catalog" }));
+    await user.click(screen.getByRole("button", { name: "Collectible catalog" }));
 
     expect(screen.getByText("Hello Kitty x Godzilla")).toBeInTheDocument();
     expect(screen.getByText("Kuromi x Mechagodzilla")).toBeInTheDocument();
   });
 
-  it("selects an item as the map filter when clicked, and clears it via the Clear filter control", async () => {
+  it("selects an item as the map filter when clicked, and clears it via the Clear control", async () => {
     const user = userEvent.setup();
     render(<ControlledPanel />);
 
-    await user.click(screen.getByRole("button", { name: "Collectible Catalog" }));
+    await user.click(screen.getByRole("button", { name: "Collectible catalog" }));
     await user.click(screen.getByRole("button", { name: /Hello Kitty x Godzilla/ }));
 
     expect(screen.getByRole("button", { name: /Hello Kitty x Godzilla/ })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "Clear filter ✕" })).toBeInTheDocument();
+    expect(screen.getByText("Filtering: Hello Kitty x Godzilla")).toBeInTheDocument();
 
-    // Closing the panel surfaces the active filter in the toggle's own label.
-    await user.click(screen.getByRole("button", { name: "Close catalog" }));
-    expect(screen.getByRole("button", { name: "Filtering: Hello Kitty x Godzilla" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Clear" }));
 
-    await user.click(screen.getByRole("button", { name: "Filtering: Hello Kitty x Godzilla" }));
-    await user.click(screen.getByRole("button", { name: "Clear filter ✕" }));
-
-    expect(screen.queryByRole("button", { name: "Clear filter ✕" })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Filtering:/)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Hello Kitty x Godzilla/ })).toHaveAttribute("aria-pressed", "false");
   });
 });
