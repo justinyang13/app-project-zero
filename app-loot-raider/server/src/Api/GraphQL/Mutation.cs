@@ -1,5 +1,6 @@
 using Api.GraphQL.Types;
 using Application;
+using GraphQL;
 using GraphQL.Types;
 
 namespace Api.GraphQL;
