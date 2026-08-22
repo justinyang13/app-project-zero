@@ -44,7 +44,8 @@ function LootRaiderApp() {
   return (
     <div className="app">
       <header className="app__header">
-        <h1>{promotion.name}</h1>
+        <h1>Loot Raider</h1>
+        <p className="app__header-subtitle">{promotion.name}</p>
       </header>
       <MapView
         promotionId={promotion.id}

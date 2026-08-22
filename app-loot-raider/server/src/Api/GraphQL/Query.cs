@@ -32,16 +32,20 @@ public sealed class Query : ObjectGraphType
                 new GetCollectibleItemsQuery(ctx.GetArgument<string>("promotionId"))));
 
         Field<ListGraphType<VenueSummaryType>>("venuesNear")
-            .Description("Venues near a point for the given promotion's chain, with pre-aggregated check-in summaries.")
+            .Description(
+                "Venues near a point for the given promotion's chain, with pre-aggregated check-in summaries. " +
+                "When collectibleItemId is given, only venues with a check-in for that item are returned.")
             .Argument<NonNullGraphType<FloatGraphType>>("lat")
             .Argument<NonNullGraphType<FloatGraphType>>("lng")
             .Argument<NonNullGraphType<IntGraphType>>("radiusMeters")
             .Argument<NonNullGraphType<IdGraphType>>("promotionId")
+            .Argument<IdGraphType>("collectibleItemId")
             .ResolveAsync(async ctx => await getVenuesNearHandler.Handle(new GetVenuesNearQuery(
                 ctx.GetArgument<double>("lat"),
                 ctx.GetArgument<double>("lng"),
                 ctx.GetArgument<int>("radiusMeters"),
-                ctx.GetArgument<string>("promotionId"))));
+                ctx.GetArgument<string>("promotionId"),
+                ctx.GetArgument<string?>("collectibleItemId"))));
 
         Field<ListGraphType<CheckInType>>("checkInsForVenue")
             .Description("Full check-in history for one venue, newest first.")

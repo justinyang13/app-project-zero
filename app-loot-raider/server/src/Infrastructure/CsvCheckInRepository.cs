@@ -61,6 +61,23 @@ public sealed class CsvCheckInRepository : ICheckInRepository
                     LastCheckInAtUtc: group.Max(row => row.ReportedAtUtc)));
     }
 
+    public async Task<IReadOnlySet<string>> GetVenueIdsWithCheckInAsync(
+        string collectibleItemId,
+        string promotionId,
+        IEnumerable<string> candidateVenueIds)
+    {
+        var candidateSet = candidateVenueIds.ToHashSet();
+        var rows = await _checkIns.ReadAllAsync();
+
+        return rows
+            .Where(row =>
+                row.PromotionId == promotionId &&
+                row.CollectibleItemId == collectibleItemId &&
+                candidateSet.Contains(row.VenueId))
+            .Select(row => row.VenueId)
+            .ToHashSet();
+    }
+
     private static CheckInRow ToRow(CheckIn checkIn) => new()
     {
         Id = checkIn.Id,

@@ -66,6 +66,19 @@ public sealed class GetVenuesNearHandler
             return [];
         }
 
+        if (!string.IsNullOrWhiteSpace(query.CollectibleItemId))
+        {
+            var matchingVenueIds = await _checkInRepository.GetVenueIdsWithCheckInAsync(
+                query.CollectibleItemId, promotion.Id, venues.Select(v => v.Id));
+
+            venues = venues.Where(v => matchingVenueIds.Contains(v.Id)).ToList();
+
+            if (venues.Count == 0)
+            {
+                return [];
+            }
+        }
+
         var catalog = await _promotionRepository.GetCollectibleItemsAsync(promotion.Id);
         var catalogById = catalog.ToDictionary(item => item.Id);
 

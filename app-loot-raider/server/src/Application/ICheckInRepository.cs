@@ -19,6 +19,17 @@ public interface ICheckInRepository
     Task<IReadOnlyDictionary<string, VenueCheckInSummary>> GetSummaryByVenueIdsAsync(
         IEnumerable<string> venueIds,
         string promotionId);
+
+    /// <summary>
+    /// Of the given candidate venue ids, returns the subset that have at
+    /// least one check-in for the given item — a real filter, unlike
+    /// <see cref="VenueCheckInSummary.RecentCollectibleItemIds"/> which is
+    /// truncated to the most recent few and so isn't safe to filter on.
+    /// </summary>
+    Task<IReadOnlySet<string>> GetVenueIdsWithCheckInAsync(
+        string collectibleItemId,
+        string promotionId,
+        IEnumerable<string> candidateVenueIds);
 }
 
 public sealed record VenueCheckInSummary(

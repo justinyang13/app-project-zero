@@ -20,8 +20,14 @@ export const COLLECTIBLE_ITEMS_QUERY = `
 `;
 
 export const VENUES_NEAR_QUERY = `
-  query VenuesNear($lat: Float!, $lng: Float!, $radiusMeters: Int!, $promotionId: ID!) {
-    venuesNear(lat: $lat, lng: $lng, radiusMeters: $radiusMeters, promotionId: $promotionId) {
+  query VenuesNear($lat: Float!, $lng: Float!, $radiusMeters: Int!, $promotionId: ID!, $collectibleItemId: ID) {
+    venuesNear(
+      lat: $lat
+      lng: $lng
+      radiusMeters: $radiusMeters
+      promotionId: $promotionId
+      collectibleItemId: $collectibleItemId
+    ) {
       id
       chainName
       name

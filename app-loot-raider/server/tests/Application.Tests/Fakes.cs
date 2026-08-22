@@ -93,4 +93,20 @@ internal sealed class FakeCheckInRepository : ICheckInRepository
 
         return Task.FromResult<IReadOnlyDictionary<string, VenueCheckInSummary>>(summary);
     }
+
+    public Task<IReadOnlySet<string>> GetVenueIdsWithCheckInAsync(
+        string collectibleItemId, string promotionId, IEnumerable<string> candidateVenueIds)
+    {
+        var candidateSet = candidateVenueIds.ToHashSet();
+
+        var matches = CheckIns
+            .Where(c =>
+                c.PromotionId == promotionId &&
+                c.CollectibleItemId == collectibleItemId &&
+                candidateSet.Contains(c.VenueId))
+            .Select(c => c.VenueId)
+            .ToHashSet();
+
+        return Task.FromResult<IReadOnlySet<string>>(matches);
+    }
 }
