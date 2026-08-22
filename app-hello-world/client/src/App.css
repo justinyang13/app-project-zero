@@ -33,12 +33,17 @@ main.greeting {
 .hello-stage h1 {
   position: relative;
   margin: 0;
-  font-family: "Bubblegum Sans", "Comic Sans MS", cursive;
+  font-family: var(--hello-font, "Bubblegum Sans", "Comic Sans MS", cursive);
   font-size: clamp(3.5rem, 14vw, 10rem);
-  line-height: 1;
+  line-height: 1.15;
   text-align: center;
   letter-spacing: 0.01em;
-  background: linear-gradient(180deg, #ff9ecb 0%, #ffd66b 50%, #8ee6ff 100%);
+  background: linear-gradient(
+    var(--hello-angle, 180deg),
+    var(--hello-c1, #ff9ecb) 0%,
+    var(--hello-c2, #ffd66b) 50%,
+    var(--hello-c3, #8ee6ff) 100%
+  );
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -54,13 +59,13 @@ main.greeting {
   height: 0.6em;
   background-repeat: no-repeat;
   background-image:
-    radial-gradient(circle, #ff9ecb 40%, transparent 42%),
-    radial-gradient(circle, #ffd66b 40%, transparent 42%),
-    radial-gradient(circle, #8ee6ff 40%, transparent 42%),
-    radial-gradient(circle, #ff9ecb 40%, transparent 42%),
-    radial-gradient(circle, #ffd66b 40%, transparent 42%),
-    radial-gradient(circle, #8ee6ff 40%, transparent 42%),
-    radial-gradient(circle, #ff9ecb 40%, transparent 42%);
+    radial-gradient(circle, var(--hello-c1, #ff9ecb) 40%, transparent 42%),
+    radial-gradient(circle, var(--hello-c2, #ffd66b) 40%, transparent 42%),
+    radial-gradient(circle, var(--hello-c3, #8ee6ff) 40%, transparent 42%),
+    radial-gradient(circle, var(--hello-c1, #ff9ecb) 40%, transparent 42%),
+    radial-gradient(circle, var(--hello-c2, #ffd66b) 40%, transparent 42%),
+    radial-gradient(circle, var(--hello-c3, #8ee6ff) 40%, transparent 42%),
+    radial-gradient(circle, var(--hello-c1, #ff9ecb) 40%, transparent 42%);
   background-size:
     9% 55%,
     8% 95%,

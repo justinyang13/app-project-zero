@@ -1,8 +1,10 @@
+import { useMemo } from "react";
 import { Provider } from "urql";
 import { urqlClient } from "./graphqlClient";
 import { Greeting } from "./Greeting";
 import { SpaceBackground } from "./components/SpaceBackground";
 import { AstronautKitten, type AstronautKittenProps } from "./components/AstronautKitten";
+import { pickRandomHelloStyle } from "./randomHelloStyle";
 import "./App.css";
 
 const KITTENS: AstronautKittenProps[] = [
@@ -14,6 +16,16 @@ const KITTENS: AstronautKittenProps[] = [
 ];
 
 function App() {
+  // Re-picked on every mount (i.e. every page load), not on every render.
+  const helloStyle = useMemo(() => pickRandomHelloStyle(), []);
+  const heroVars = {
+    "--hello-font": helloStyle.fontFamily,
+    "--hello-angle": `${helloStyle.gradientAngle}deg`,
+    "--hello-c1": helloStyle.colors[0],
+    "--hello-c2": helloStyle.colors[1],
+    "--hello-c3": helloStyle.colors[2],
+  } as React.CSSProperties;
+
   return (
     <Provider value={urqlClient}>
       <main className="greeting">
@@ -21,7 +33,7 @@ function App() {
         {KITTENS.map((kitten, index) => (
           <AstronautKitten key={index} {...kitten} />
         ))}
-        <div className="hello-stage">
+        <div className="hello-stage" style={heroVars}>
           <Greeting />
         </div>
       </main>

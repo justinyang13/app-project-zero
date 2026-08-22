@@ -101,12 +101,15 @@ export function SpaceBackground() {
           />
         ))}
       </svg>
-      {photo && (
-        <p className="space-bg__credit">
-          {photo.title}
-          {photo.copyright ? ` — © ${photo.copyright.trim()}` : " — NASA"}
-        </p>
-      )}
+      <p className="space-bg__credit">
+        <span className="space-bg__credit-source">Background: NASA Astronomy Picture of the Day</span>
+        {photo && (
+          <span className="space-bg__credit-detail">
+            {photo.title}
+            {photo.copyright ? ` — © ${photo.copyright.trim()}` : ""}
+          </span>
+        )}
+      </p>
     </div>
   );
 }

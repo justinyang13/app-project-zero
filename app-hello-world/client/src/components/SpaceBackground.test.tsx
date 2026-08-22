@@ -42,12 +42,13 @@ describe("SpaceBackground", () => {
     expect(screen.queryByText(/A Launch/)).not.toBeInTheDocument();
   });
 
-  it("falls back to the gradient sky when the request fails", async () => {
+  it("falls back to the gradient sky when the request fails, keeping the static NASA credit", async () => {
     vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("network error")));
 
     render(<SpaceBackground />);
 
     await waitFor(() => expect(fetch).toHaveBeenCalled());
-    expect(document.querySelector(".space-bg__credit")).not.toBeInTheDocument();
+    expect(screen.getByText("Background: NASA Astronomy Picture of the Day")).toBeInTheDocument();
+    expect(document.querySelector(".space-bg__credit-detail")).not.toBeInTheDocument();
   });
 });
