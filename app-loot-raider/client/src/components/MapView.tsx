@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
 import { useQuery } from "urql";
@@ -115,9 +115,10 @@ interface VenueMarkerProps {
   catalog: CollectibleItem[];
   onCheckInAdded: () => void;
   autoOpen: boolean;
+  onAutoOpened: () => void;
 }
 
-function VenueMarker({ venue, promotionId, catalog, onCheckInAdded, autoOpen }: VenueMarkerProps) {
+function VenueMarker({ venue, promotionId, catalog, onCheckInAdded, autoOpen, onAutoOpened }: VenueMarkerProps) {
   const [hasOpened, setHasOpened] = useState(false);
   const markerRef = useRef<L.Marker>(null);
 
@@ -129,8 +130,15 @@ function VenueMarker({ venue, promotionId, catalog, onCheckInAdded, autoOpen }: 
   useEffect(() => {
     if (autoOpen) {
       markerRef.current?.openPopup();
+      // Disarm the trigger immediately after using it, rather than leaving
+      // it set — otherwise if this same venue's marker ever unmounts and
+      // remounts later (e.g. it drops out of the viewport during a search
+      // and comes back in), autoOpen would still read true on the fresh
+      // mount and pop it open again, snapping the map back to it long after
+      // the initial load.
+      onAutoOpened();
     }
-  }, [autoOpen]);
+  }, [autoOpen, onAutoOpened]);
 
   return (
     <Marker
@@ -214,6 +222,11 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
     setAutoOpenVenueId(nearest?.id ?? null);
   }
 
+  // The marker that consumes autoOpenVenueId reports back here so it can be
+  // disarmed immediately after use — see the comment on VenueMarker's
+  // effect for why leaving it set permanently is a bug.
+  const handleAutoOpened = useCallback(() => setAutoOpenVenueId(null), []);
+
   return (
     <div className="map-view">
       <CollectibleCatalogPanel
@@ -245,6 +258,7 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
             catalog={catalog}
             onCheckInAdded={refetchVenues}
             autoOpen={venue.id === autoOpenVenueId}
+            onAutoOpened={handleAutoOpened}
           />
         ))}
       </MapContainer>

@@ -62,8 +62,10 @@ export function SearchBar({ onLocationFound }: SearchBarProps) {
         placeholder="Search an address or zip…"
         aria-label="Search an address or zip"
       />
-      <button type="submit" disabled={status === "searching"}>
-        {status === "searching" ? "Searching…" : "Search"}
+      <button type="submit" disabled={status === "searching"} aria-label={status === "searching" ? "Searching…" : "Search"}>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true">
+          <path d="M5 12 L19 12 M13 6 L19 12 L13 18" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
       </button>
       {status === "error" && (
         <p role="alert" className="search-bar__error">
