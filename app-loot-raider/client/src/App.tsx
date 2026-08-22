@@ -57,10 +57,7 @@ function LootRaiderApp() {
           <circle cx="12" cy="12" r="9" />
           <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
         </svg>
-        <div>
-          <h1>Loot Raider</h1>
-          <p className="app__header-subtitle">{promotion.name}</p>
-        </div>
+        <h1>Loot Raider</h1>
       </header>
       <MapView
         promotionId={promotion.id}

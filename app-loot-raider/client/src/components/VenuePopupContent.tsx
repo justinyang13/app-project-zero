@@ -3,6 +3,7 @@ import { useMutation, useQuery } from "urql";
 import { CHECK_INS_FOR_VENUE_QUERY, REPORT_CHECK_IN_MUTATION } from "../api/queries";
 import type { CheckIn, CollectibleItem, VenueSummary } from "../api/types";
 import { hasReportedToday, recordReport } from "../utils/checkInHistory";
+import { currentTimeValue, timeValueToUtcIso } from "../utils/reportTime";
 import { CollectibleIcon } from "./CollectibleIcon";
 import "./VenuePopupContent.css";
 
@@ -22,6 +23,7 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
 
   const [selectedItemId, setSelectedItemId] = useState(catalog[0]?.id ?? "");
   const [nickname, setNickname] = useState("");
+  const [timeValue, setTimeValue] = useState(currentTimeValue);
   const [{ fetching: submitting, error: submitError }, reportCheckIn] = useMutation(REPORT_CHECK_IN_MUTATION);
 
   const catalogById = useMemo(() => new Map(catalog.map((item) => [item.id, item])), [catalog]);
@@ -40,12 +42,14 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
         collectibleItemId: selectedItemId,
         venueId: venue.id,
         nickname: nickname.trim() || null,
+        reportedAtUtc: timeValueToUtcIso(timeValue),
       },
     });
 
     if (!result.error) {
       recordReport(venue.id, selectedItemId);
       setNickname("");
+      setTimeValue(currentTimeValue());
       refetchCheckIns({ requestPolicy: "network-only" });
       onCheckInAdded();
     }
@@ -91,7 +95,12 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
                   <div>
                     <span className="venue-popup__item-name">{item?.name ?? "Unknown item"}</span>
                     <span className="venue-popup__meta">
-                      {new Date(checkIn.reportedAtUtc).toLocaleDateString()}
+                      {new Date(checkIn.reportedAtUtc).toLocaleString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "numeric",
+                        minute: "2-digit",
+                      })}
                       {checkIn.nickname ? ` · ${checkIn.nickname}` : ""}
                     </span>
                   </div>
@@ -133,6 +142,17 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
             {alreadyReportedSelected && (
               <p className="venue-popup__hint">You already reported this today — you can still submit if you're sure.</p>
             )}
+
+            <div className="venue-popup__time-row">
+              <label htmlFor={`time-${venue.id}`}>Time seen (today)</label>
+              <input
+                id={`time-${venue.id}`}
+                type="time"
+                value={timeValue}
+                onChange={(event) => setTimeValue(event.target.value)}
+                required
+              />
+            </div>
 
             <div className="venue-popup__form-row">
               <input

@@ -35,9 +35,29 @@ public sealed class ReportCheckInHandler
             promotionId: command.PromotionId,
             collectibleItemId: command.CollectibleItemId,
             venueId: command.VenueId,
-            reportedAtUtc: DateTime.UtcNow,
+            reportedAtUtc: ResolveReportedAtUtc(command.ReportedAtUtc),
             nickname: command.Nickname);
 
         return await _checkInRepository.AddAsync(checkIn);
+    }
+
+    /// <summary>
+    /// The client picks the time-of-day but not the date — this clamps
+    /// whatever it sends back to "now" if it's outside a generous same-day
+    /// window, so the recorded date is always today regardless of what a
+    /// stale/tampered client sends. Not exact calendar-day equality, since
+    /// that would need the visitor's timezone, which we don't have.
+    /// </summary>
+    private static DateTime ResolveReportedAtUtc(DateTime? requested)
+    {
+        var now = DateTime.UtcNow;
+
+        if (requested is null)
+        {
+            return now;
+        }
+
+        var value = requested.Value;
+        return value > now.AddMinutes(5) || value < now.AddHours(-24) ? now : value;
     }
 }

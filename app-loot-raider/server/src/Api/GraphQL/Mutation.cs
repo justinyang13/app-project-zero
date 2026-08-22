@@ -20,7 +20,8 @@ public sealed class Mutation : ObjectGraphType
                     input.PromotionId,
                     input.CollectibleItemId,
                     input.VenueId,
-                    input.Nickname));
+                    input.Nickname,
+                    input.ReportedAtUtc));
             });
     }
 }
