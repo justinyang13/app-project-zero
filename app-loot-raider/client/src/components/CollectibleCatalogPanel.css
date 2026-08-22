@@ -46,6 +46,41 @@
   border-top: 1px solid var(--border-soft);
 }
 
+.catalog-panel__time-section {
+  padding: 0.7rem 1rem 0.55rem;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.catalog-panel__label {
+  margin: 0 0 0.45rem;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+
+.catalog-panel__time-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.catalog-panel__time-pill {
+  padding: 0.3rem 0.65rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  background: var(--surface-muted);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.catalog-panel__time-pill--selected {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
 .catalog-panel__filter-row {
   display: flex;
   align-items: center;

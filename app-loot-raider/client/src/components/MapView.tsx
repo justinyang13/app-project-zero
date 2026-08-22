@@ -6,6 +6,7 @@ import { VENUES_NEAR_QUERY } from "../api/queries";
 import type { CollectibleItem, VenueSummary } from "../api/types";
 import type { Coordinates } from "../hooks/useGeolocation";
 import { useDebouncedCallback } from "../hooks/useDebouncedCallback";
+import { DEFAULT_TIME_RANGE_HOURS, isWithinTimeRange, type TimeRangeHours } from "../utils/timeRange";
 import { CollectibleCatalogPanel } from "./CollectibleCatalogPanel";
 import { SearchBar } from "./SearchBar";
 import { VenuePopupContent } from "./VenuePopupContent";
@@ -151,6 +152,7 @@ export function MapView({ promotionId, chainName, catalog, initialCenter }: MapV
   });
   const [flyToCenter, setFlyToCenter] = useState<Coordinates | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
+  const [timeRangeHours, setTimeRangeHours] = useState<TimeRangeHours>(DEFAULT_TIME_RANGE_HOURS);
 
   const handleViewportChange = useDebouncedCallback(setViewport, VIEWPORT_DEBOUNCE_MS);
 
@@ -165,7 +167,7 @@ export function MapView({ promotionId, chainName, catalog, initialCenter }: MapV
     },
   });
 
-  const venues = data?.venuesNear ?? [];
+  const venues = (data?.venuesNear ?? []).filter((venue) => isWithinTimeRange(venue.lastCheckInAtUtc, timeRangeHours));
   const selectedItem = catalog.find((item) => item.id === selectedItemId) ?? null;
 
   function refetchVenues() {
@@ -175,7 +177,13 @@ export function MapView({ promotionId, chainName, catalog, initialCenter }: MapV
   return (
     <div className="map-view">
       <SearchBar onLocationFound={setFlyToCenter} />
-      <CollectibleCatalogPanel items={catalog} selectedItemId={selectedItemId} onSelectItem={setSelectedItemId} />
+      <CollectibleCatalogPanel
+        items={catalog}
+        selectedItemId={selectedItemId}
+        onSelectItem={setSelectedItemId}
+        timeRangeHours={timeRangeHours}
+        onTimeRangeChange={setTimeRangeHours}
+      />
 
       <MapContainer
         center={[initialCenter.lat, initialCenter.lng]}
@@ -211,7 +219,9 @@ export function MapView({ promotionId, chainName, catalog, initialCenter }: MapV
         <p className="map-view__banner" role="status">
           {selectedItem
             ? `No ${chainName} locations here have a "${selectedItem.name}" sighting yet — try zooming out or clearing the filter.`
-            : `No ${chainName} locations found here — try zooming out.`}
+            : timeRangeHours !== "all"
+              ? `No ${chainName} locations here had activity in the last ${timeRangeHours}h — try "All" or zooming out.`
+              : `No ${chainName} locations found here — try zooming out.`}
         </p>
       )}
     </div>

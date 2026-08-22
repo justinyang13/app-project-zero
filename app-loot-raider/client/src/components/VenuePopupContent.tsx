@@ -22,7 +22,6 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
   });
 
   const [selectedItemId, setSelectedItemId] = useState(catalog[0]?.id ?? "");
-  const [nickname, setNickname] = useState("");
   const [timeValue, setTimeValue] = useState(currentTimeValue);
   const [{ fetching: submitting, error: submitError }, reportCheckIn] = useMutation(REPORT_CHECK_IN_MUTATION);
 
@@ -41,14 +40,12 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
         promotionId,
         collectibleItemId: selectedItemId,
         venueId: venue.id,
-        nickname: nickname.trim() || null,
         reportedAtUtc: timeValueToUtcIso(timeValue),
       },
     });
 
     if (!result.error) {
       recordReport(venue.id, selectedItemId);
-      setNickname("");
       setTimeValue(currentTimeValue());
       refetchCheckIns({ requestPolicy: "network-only" });
       onCheckInAdded();
@@ -154,18 +151,9 @@ export function VenuePopupContent({ venue, promotionId, catalog, onCheckInAdded 
               />
             </div>
 
-            <div className="venue-popup__form-row">
-              <input
-                type="text"
-                value={nickname}
-                onChange={(event) => setNickname(event.target.value)}
-                placeholder="Nickname (optional)"
-                maxLength={40}
-              />
-              <button type="submit" disabled={submitting}>
-                {submitting ? "Logging…" : "Log it"}
-              </button>
-            </div>
+            <button type="submit" className="venue-popup__submit" disabled={submitting}>
+              {submitting ? "Logging…" : "Log it"}
+            </button>
 
             {submitError && <p role="alert" className="venue-popup__error">Couldn't submit — try again.</p>}
           </form>

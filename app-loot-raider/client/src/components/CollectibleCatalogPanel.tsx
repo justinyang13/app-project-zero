@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { CollectibleItem } from "../api/types";
+import { TIME_RANGE_OPTIONS, type TimeRangeHours } from "../utils/timeRange";
 import { CollectibleIcon } from "./CollectibleIcon";
 import "./CollectibleCatalogPanel.css";
 
@@ -7,14 +8,22 @@ interface CollectibleCatalogPanelProps {
   items: CollectibleItem[];
   selectedItemId: string | null;
   onSelectItem: (itemId: string | null) => void;
+  timeRangeHours: TimeRangeHours;
+  onTimeRangeChange: (hours: TimeRangeHours) => void;
 }
 
 /**
- * UC-7: the full catalog as a reference checklist, independent of any venue.
- * Doubles as the map's collectible filter — clicking an item shows only
- * venues with a check-in for it; clicking it again clears the filter.
+ * UC-7's catalog doubles as the map's filter panel: a time-range control
+ * (how recently a venue needs a check-in to show) and a collectible-item
+ * grid — clicking an item shows only venues with a check-in for it.
  */
-export function CollectibleCatalogPanel({ items, selectedItemId, onSelectItem }: CollectibleCatalogPanelProps) {
+export function CollectibleCatalogPanel({
+  items,
+  selectedItemId,
+  onSelectItem,
+  timeRangeHours,
+  onTimeRangeChange,
+}: CollectibleCatalogPanelProps) {
   const [isOpen, setIsOpen] = useState(false);
 
   if (items.length === 0) {
@@ -31,7 +40,7 @@ export function CollectibleCatalogPanel({ items, selectedItemId, onSelectItem }:
         onClick={() => setIsOpen((open) => !open)}
         aria-expanded={isOpen}
       >
-        <span>Collectible catalog</span>
+        <span>Filter</span>
         <svg
           width="15"
           height="15"
@@ -48,6 +57,27 @@ export function CollectibleCatalogPanel({ items, selectedItemId, onSelectItem }:
 
       {isOpen && (
         <div className="catalog-panel__body">
+          <div className="catalog-panel__time-section">
+            <p className="catalog-panel__label">Time range</p>
+            <div className="catalog-panel__time-pills" role="radiogroup" aria-label="Time range">
+              {TIME_RANGE_OPTIONS.map((option) => {
+                const isSelected = option.value === timeRangeHours;
+                return (
+                  <button
+                    key={option.label}
+                    type="button"
+                    role="radio"
+                    aria-checked={isSelected}
+                    className={`catalog-panel__time-pill ${isSelected ? "catalog-panel__time-pill--selected" : ""}`}
+                    onClick={() => onTimeRangeChange(option.value)}
+                  >
+                    {option.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
           {selectedItem && (
             <div className="catalog-panel__filter-row">
               <span>Filtering: {selectedItem.name}</span>

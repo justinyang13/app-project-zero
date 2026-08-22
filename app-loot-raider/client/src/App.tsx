@@ -1,6 +1,7 @@
 import { Provider, useQuery } from "urql";
 import { ACTIVE_PROMOTION_QUERY, COLLECTIBLE_ITEMS_QUERY } from "./api/queries";
 import type { CollectibleItem, Promotion } from "./api/types";
+import logoUrl from "./assets/logo.png";
 import { HoldingState } from "./components/HoldingState";
 import { MapView } from "./components/MapView";
 import { urqlClient } from "./graphqlClient";
@@ -44,19 +45,7 @@ function LootRaiderApp() {
   return (
     <div className="app">
       <header className="app__header">
-        <svg
-          className="app__header-logo"
-          width="26"
-          height="26"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
-        >
-          <circle cx="12" cy="12" r="9" />
-          <circle cx="12" cy="12" r="3" fill="currentColor" stroke="none" />
-        </svg>
+        <img src={logoUrl} alt="" className="app__header-logo" />
         <h1>Loot Raider</h1>
       </header>
       <MapView

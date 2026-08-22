@@ -18,7 +18,10 @@
 
 .app__header-logo {
   flex-shrink: 0;
-  color: var(--accent);
+  width: 34px;
+  height: 34px;
+  object-fit: contain;
+  border-radius: 50%;
 }
 
 .app__header h1 {
