@@ -1,0 +1,75 @@
+.map-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+}
+
+.map-view__container {
+  width: 100%;
+  height: 100%;
+}
+
+.map-view__banner {
+  position: absolute;
+  bottom: 0.85rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  margin: 0;
+  padding: 0.5rem 1rem;
+  font-size: 0.82rem;
+  color: var(--ink);
+  background: var(--parchment);
+  border: 1px solid var(--gold-deep);
+  border-radius: 999px;
+  box-shadow: 0 2px 0 -1px var(--gold-deep);
+  text-align: center;
+}
+
+/* Gold teardrop pin markers, distinguished by recency of activity (UC-3). */
+.loot-pin__body {
+  stroke: var(--gold-deep);
+  stroke-width: 1;
+}
+
+.loot-pin__core {
+  stroke: var(--gold-deep);
+  stroke-width: 1;
+}
+
+.loot-pin--recent .loot-pin__body {
+  fill: var(--gold-bright);
+}
+
+.loot-pin--recent .loot-pin__core {
+  fill: var(--parchment);
+}
+
+.loot-pin--stale .loot-pin__body {
+  fill: var(--parchment-dark);
+  opacity: 0.85;
+}
+
+.loot-pin--stale .loot-pin__core {
+  fill: var(--gold-deep);
+  opacity: 0.6;
+}
+
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--parchment);
+  border: 1px solid var(--gold-deep);
+  color: var(--ink);
+}
+
+.leaflet-popup-content-wrapper {
+  border-radius: 0.5rem;
+}
+
+.leaflet-tooltip {
+  background: var(--parchment);
+  border: 1px solid var(--gold-deep);
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+}

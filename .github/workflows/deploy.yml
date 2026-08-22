@@ -36,6 +36,7 @@ jobs:
           cache-dependency-path: |
             app-project-zero-hub/package-lock.json
             app-hello-world/client/package-lock.json
+            app-loot-raider/client/package-lock.json
 
       - name: Install and build hub
         working-directory: app-project-zero-hub
@@ -54,6 +55,18 @@ jobs:
         env:
           VITE_GRAPHQL_URL: ${{ vars.RENDER_API_URL }}
 
+      - name: Install and build Loot Raider client
+        working-directory: app-loot-raider/client
+        # VITE_GRAPHQL_URL is baked in at build time — set the
+        # RENDER_API_URL_LOOT_RAIDER repository variable (Settings > Secrets
+        # and variables > Actions > Variables) to the deployed Render API's
+        # https URL + /graphql.
+        run: |
+          npm ci
+          npm run build
+        env:
+          VITE_GRAPHQL_URL: ${{ vars.RENDER_API_URL_LOOT_RAIDER }}
+
       # Each app is a standalone project that only knows how to build
       # itself — this step is what actually composes them into one site,
       # with the hub at the root linking out to each app's subpath.
@@ -67,6 +80,8 @@ jobs:
           cp app-note-ninja/index.html app-note-ninja/game.js app-note-ninja/style.css site/app-note-ninja/
           mkdir -p site/app-pool-party-forecast
           cp app-pool-party-forecast/index.html site/app-pool-party-forecast/
+          mkdir -p site/app-loot-raider
+          cp -r app-loot-raider/client/dist/. site/app-loot-raider/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
@@ -97,3 +112,20 @@ jobs:
           curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
         env:
           RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL }}
+
+  deploy-render-loot-raider:
+    name: Deploy Loot Raider Api to Render
+    if: ${{ github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Render deploy hook
+        # Same fallback-only setup as deploy-render above, for Loot Raider's
+        # separate Render web service (server root: app-loot-raider/server).
+        run: |
+          if [ -z "$RENDER_DEPLOY_HOOK_URL" ]; then
+            echo "RENDER_DEPLOY_HOOK_URL is not set — skipping. Render's own auto-deploy handles this unless it has been disabled."
+            exit 0
+          fi
+          curl --fail --silent --show-error --request POST "$RENDER_DEPLOY_HOOK_URL"
+        env:
+          RENDER_DEPLOY_HOOK_URL: ${{ secrets.RENDER_DEPLOY_HOOK_URL_LOOT_RAIDER }}

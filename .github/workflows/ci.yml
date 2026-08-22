@@ -99,6 +99,65 @@ jobs:
         working-directory: app-hello-world/client
         run: npm run build
 
+  loot-raider-backend-build-test:
+    name: Loot Raider backend build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Restore
+        working-directory: app-loot-raider/server
+        run: dotnet restore
+
+      - name: Build
+        working-directory: app-loot-raider/server
+        run: dotnet build --no-restore --configuration Release
+
+      - name: Test
+        working-directory: app-loot-raider/server
+        run: dotnet test --no-build --configuration Release --logger "trx;LogFileName=test-results.trx"
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: loot-raider-backend-test-results
+          path: app-loot-raider/server/tests/**/TestResults/**/*.trx
+
+  loot-raider-frontend-build-test:
+    name: Loot Raider frontend build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app-loot-raider/client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app-loot-raider/client
+        run: npm ci
+
+      - name: Lint
+        working-directory: app-loot-raider/client
+        run: npm run lint
+
+      - name: Unit test
+        working-directory: app-loot-raider/client
+        run: npm test
+
+      - name: Build
+        working-directory: app-loot-raider/client
+        run: npm run build
+
   hello-world-e2e:
     name: End-to-end tests
     needs: [hello-world-backend-build-test, hello-world-frontend-build-test]

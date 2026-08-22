@@ -40,4 +40,14 @@ export const projects: Project[] = [
     href: "app-pool-party-forecast/",
     linkLabel: "Check forecast",
   },
+  {
+    id: "loot-raider",
+    name: "Loot Raider",
+    tagline: "Crowd-sourced Happy Meal collectible tracker",
+    description:
+      "Report where a limited-time collectible was spotted and see live sightings on a map. React + Leaflet client, .NET GraphQL API.",
+    tags: ["React", "TypeScript", ".NET", "GraphQL", "Leaflet"],
+    href: "app-loot-raider/",
+    linkLabel: "Open map",
+  },
 ];

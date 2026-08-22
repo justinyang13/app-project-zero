@@ -1,0 +1,31 @@
+.holding-state {
+  display: flex;
+  min-height: 100vh;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+  background: var(--parchment);
+}
+
+.holding-state__card {
+  max-width: 26rem;
+  padding: 2rem 2.25rem;
+  text-align: center;
+  background: var(--parchment-dark);
+  border: 1px solid var(--gold-deep);
+  border-radius: 0.5rem;
+  box-shadow: 0 6px 0 -2px var(--gold-deep);
+}
+
+.holding-state__card h1 {
+  margin: 0 0 0.75rem;
+  font-family: var(--font-display);
+  font-size: 1.5rem;
+  color: var(--gold-deep);
+}
+
+.holding-state__card p {
+  margin: 0;
+  color: var(--ink-soft);
+  line-height: 1.5;
+}
