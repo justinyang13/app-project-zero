@@ -36,6 +36,9 @@ function App() {
         <div className="hello-stage" style={heroVars}>
           <Greeting />
         </div>
+        <p className="crew-credit" aria-hidden="true">
+          Crew photos: Wikimedia Commons (CC / public domain)
+        </p>
       </main>
     </Provider>
   );
