@@ -13,7 +13,7 @@ public class ReportCheckInHandlerTests
     public async Task Handle_RecordsCheckIn_WhenItemBelongsToPromotion()
     {
         var checkInRepository = new FakeCheckInRepository();
-        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository(null, Catalog));
+        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository([], Catalog));
 
         var result = await handler.Handle(new ReportCheckInCommand("promo-1", "item-1", "venue-1", "Alex"));
 
@@ -28,7 +28,7 @@ public class ReportCheckInHandlerTests
     public async Task Handle_Throws_WhenItemDoesNotBelongToPromotion()
     {
         var checkInRepository = new FakeCheckInRepository();
-        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository(null, Catalog));
+        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository([], Catalog));
 
         await Assert.ThrowsAsync<InvalidOperationException>(
             () => handler.Handle(new ReportCheckInCommand("promo-1", "item-does-not-exist", "venue-1", null)));
@@ -40,7 +40,7 @@ public class ReportCheckInHandlerTests
     public async Task Handle_DefaultsReportedAtUtc_ToNow_WhenNotSupplied()
     {
         var checkInRepository = new FakeCheckInRepository();
-        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository(null, Catalog));
+        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository([], Catalog));
 
         var before = DateTime.UtcNow;
         var result = await handler.Handle(new ReportCheckInCommand("promo-1", "item-1", "venue-1", null));
@@ -53,7 +53,7 @@ public class ReportCheckInHandlerTests
     public async Task Handle_HonorsClientSuppliedReportedAtUtc_WhenWithinToday()
     {
         var checkInRepository = new FakeCheckInRepository();
-        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository(null, Catalog));
+        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository([], Catalog));
 
         var earlierToday = DateTime.UtcNow.AddHours(-2);
         var result = await handler.Handle(
@@ -66,7 +66,7 @@ public class ReportCheckInHandlerTests
     public async Task Handle_ClampsReportedAtUtc_ToNow_WhenSuppliedValueIsNotToday()
     {
         var checkInRepository = new FakeCheckInRepository();
-        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository(null, Catalog));
+        var handler = new ReportCheckInHandler(checkInRepository, new FakePromotionRepository([], Catalog));
 
         var lastWeek = DateTime.UtcNow.AddDays(-7);
         var before = DateTime.UtcNow;

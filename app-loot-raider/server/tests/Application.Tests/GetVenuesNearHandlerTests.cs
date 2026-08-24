@@ -17,7 +17,7 @@ public class GetVenuesNearHandlerTests
     public async Task Handle_ReturnsEmpty_WhenNoPromotionIsActive()
     {
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(null),
+            new FakePromotionRepository([]),
             new FakeVenueCache(),
             new FakeVenueDiscoveryService([]),
             new FakeCheckInRepository());
@@ -35,7 +35,7 @@ public class GetVenuesNearHandlerTests
         var discovery = new FakeVenueDiscoveryService(new Exception("should not be called"));
 
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(Promotion, Catalog),
+            new FakePromotionRepository([Promotion], Catalog),
             venueCache,
             discovery,
             new FakeCheckInRepository());
@@ -54,7 +54,7 @@ public class GetVenuesNearHandlerTests
         var venueCache = new FakeVenueCache();
 
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(Promotion, Catalog),
+            new FakePromotionRepository([Promotion], Catalog),
             venueCache,
             new FakeVenueDiscoveryService(discovered),
             new FakeCheckInRepository());
@@ -69,7 +69,7 @@ public class GetVenuesNearHandlerTests
     public async Task Handle_ReturnsEmpty_WhenDiscoveryFailsAndCacheIsEmpty()
     {
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(Promotion, Catalog),
+            new FakePromotionRepository([Promotion], Catalog),
             new FakeVenueCache(),
             new FakeVenueDiscoveryService(new HttpRequestException("Overpass is down")),
             new FakeCheckInRepository());
@@ -89,7 +89,7 @@ public class GetVenuesNearHandlerTests
         checkInRepository.CheckIns.Add(new CheckIn("checkin-1", "promo-1", "item-1", "venue-1", reportedAt));
 
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(Promotion, Catalog),
+            new FakePromotionRepository([Promotion], Catalog),
             venueCache,
             new FakeVenueDiscoveryService([]),
             checkInRepository);
@@ -115,7 +115,7 @@ public class GetVenuesNearHandlerTests
         checkInRepository.CheckIns.Add(new CheckIn("checkin-2", "promo-1", "item-2", "venue-2", DateTime.UtcNow));
 
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(Promotion, Catalog),
+            new FakePromotionRepository([Promotion], Catalog),
             venueCache,
             new FakeVenueDiscoveryService([]),
             checkInRepository);
@@ -158,7 +158,7 @@ public class GetVenuesNearHandlerTests
     public async Task Handle_ReturnsEmpty_WhenPromotionIdMatchesNoPromotion()
     {
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(Promotion, Catalog),
+            new FakePromotionRepository([Promotion], Catalog),
             new FakeVenueCache(),
             new FakeVenueDiscoveryService(new Exception("should not be called")),
             new FakeCheckInRepository());
@@ -175,7 +175,7 @@ public class GetVenuesNearHandlerTests
         venueCache.Venues.Add(new Venue("venue-1", "McDonald's", "Test Venue", 0, 0, ""));
 
         var handler = new GetVenuesNearHandler(
-            new FakePromotionRepository(Promotion, Catalog),
+            new FakePromotionRepository([Promotion], Catalog),
             venueCache,
             new FakeVenueDiscoveryService([]),
             new FakeCheckInRepository());

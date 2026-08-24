@@ -12,11 +12,6 @@ internal sealed class FakePromotionRepository : IPromotionRepository
     private readonly List<Promotion> _promotions;
     private readonly List<CollectibleItem> _items;
 
-    public FakePromotionRepository(Promotion? activePromotion, IEnumerable<CollectibleItem>? items = null)
-        : this(activePromotion is null ? [] : [activePromotion], items)
-    {
-    }
-
     public FakePromotionRepository(IEnumerable<Promotion> promotions, IEnumerable<CollectibleItem>? items = null)
     {
         _promotions = promotions.ToList();

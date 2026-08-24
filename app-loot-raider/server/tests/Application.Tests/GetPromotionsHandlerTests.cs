@@ -21,7 +21,7 @@ public class GetPromotionsHandlerTests
     [Fact]
     public async Task Handle_ReturnsEmpty_WhenNoPromotionsExist()
     {
-        var handler = new GetPromotionsHandler(new FakePromotionRepository(null));
+        var handler = new GetPromotionsHandler(new FakePromotionRepository([]));
 
         var result = await handler.Handle(new GetPromotionsQuery());
 
