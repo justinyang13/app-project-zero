@@ -103,6 +103,12 @@ function FlyToLocation({ coords }: { coords: Coordinates }) {
   const map = useMap();
 
   useEffect(() => {
+    // Popups default to autoPan: true, which re-pans the map toward an
+    // already-open popup whenever its content updates (e.g. the venues
+    // query refetching for the new viewport) — without closing it first,
+    // that autoPan fights this flyTo and snaps the map back to wherever
+    // the popup happens to be once its content next changes.
+    map.closePopup();
     map.flyTo([coords.lat, coords.lng], 14);
   }, [coords, map]);
 
