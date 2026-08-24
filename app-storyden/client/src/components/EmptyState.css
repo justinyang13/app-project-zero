@@ -1,0 +1,19 @@
+.empty-state {
+  padding: 60px 24px;
+  text-align: center;
+  background: var(--sd-panel);
+  border: 1.5px dashed var(--sd-panel-border);
+  border-radius: 18px;
+}
+
+.empty-state__title {
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 18px;
+  margin-bottom: 8px;
+}
+
+.empty-state__message {
+  font-size: 13.5px;
+  color: var(--sd-text-muted);
+}

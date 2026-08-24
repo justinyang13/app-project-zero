@@ -1,0 +1,128 @@
+.detail-panel {
+  position: sticky;
+  top: 134px;
+  width: 360px;
+  flex-shrink: 0;
+  background: var(--sd-panel);
+  border: 2px solid var(--sd-panel-border);
+  border-radius: 18px;
+  box-shadow: var(--sd-shadow-panel);
+  padding: 22px;
+  align-self: flex-start;
+}
+
+.detail-panel__close {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--sd-text-muted);
+}
+
+.detail-panel__placeholder {
+  padding: 20px 6px 6px;
+  font-size: 13px;
+  color: var(--sd-text-muted);
+}
+
+.detail-panel__eyebrow {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--sd-accent);
+  margin-bottom: 10px;
+}
+
+.detail-panel__top {
+  display: flex;
+  gap: 14px;
+}
+
+.detail-panel__title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 16px;
+  line-height: 1.25;
+}
+
+.detail-panel__author {
+  font-size: 12.5px;
+  color: var(--sd-text-muted);
+  margin-top: 3px;
+}
+
+.detail-panel__rating {
+  font-size: 12px;
+  color: var(--sd-rating);
+  margin-top: 8px;
+}
+
+.detail-panel__editions {
+  font-size: 11.5px;
+  color: var(--sd-text-muted);
+  margin-top: 4px;
+}
+
+.detail-panel__genre {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 3px 10px;
+  border-radius: 10px;
+  background: var(--sd-genre-tag-bg);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+.detail-panel__description {
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--sd-text-body);
+  margin: 16px 0;
+}
+
+.detail-panel__footer {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11.5px;
+  color: var(--sd-text-muted);
+  border-top: 1px dashed var(--sd-dashed);
+  padding-top: 12px;
+}
+
+.detail-panel__footer a {
+  font-weight: 600;
+  color: var(--sd-accent);
+}
+
+.detail-panel__scrim {
+  display: none;
+}
+
+/* Below the mockup's target width there isn't room to dock the panel
+   beside the grid — open it as a centered modal on selection instead. */
+@media (max-width: 1099px) {
+  .detail-panel__scrim {
+    display: block;
+    position: fixed;
+    inset: 0;
+    background: oklch(15% 0.02 40 / 0.45);
+    z-index: 29;
+  }
+
+  .detail-panel {
+    position: fixed;
+    inset: 0;
+    margin: auto;
+    top: auto;
+    width: min(360px, calc(100vw - 32px));
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    z-index: 30;
+  }
+
+  .detail-panel--empty {
+    display: none;
+  }
+}

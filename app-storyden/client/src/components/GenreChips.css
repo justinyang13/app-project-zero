@@ -1,0 +1,28 @@
+.genre-chips {
+  display: flex;
+  gap: 10px;
+  padding: 18px 36px 0;
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+
+.chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--sd-panel);
+  border: 1.5px solid var(--sd-panel-border);
+  color: oklch(35% 0.04 50);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.chip--active {
+  background: var(--sd-accent);
+  color: var(--sd-accent-text);
+  border-color: var(--sd-accent);
+}

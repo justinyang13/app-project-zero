@@ -9,6 +9,7 @@ A small monorepo of standalone personal projects, fronted by a hub page.
 | [`app-note-ninja/`](app-note-ninja/README.md) | Ear-training game for piano-playing kids |
 | [`app-pool-party-forecast/`](app-pool-party-forecast/README.md) | Green/yellow/red pool-weather verdict for a place and date |
 | [`app-loot-raider/`](app-loot-raider/README.md) | Crowd-sourced map for spotted Happy Meal collectibles (React + .NET GraphQL) |
+| [`app-storyden/`](app-storyden/README.md) | Top 100 kids'/YA books by genre, sourced from the OpenLibrary API (static, no backend) |
 
 Each folder is a fully standalone app: its own dependencies, its own
 README, runnable and testable on its own without the others present. The
@@ -24,19 +25,21 @@ See each app's own README for how to run and test it locally.
   and PR to `main`, with one job per app: the hub's lint/test/build, Hello
   World's backend build + xUnit tests, Hello World's frontend build/lint/
   unit tests, the Playwright e2e suite against the real Hello World stack,
-  and Loot Raider's backend build + xUnit tests and frontend build/lint/
-  unit tests. `app-note-ninja` and `app-pool-party-forecast` are plain
-  static apps with no build step, so they have no CI job. Any failure fails
-  the workflow.
+  Loot Raider's backend build + xUnit tests and frontend build/lint/unit
+  tests, and StoryDen's frontend build/lint/unit tests. `app-note-ninja`
+  and `app-pool-party-forecast` are plain static apps with no build step,
+  so they have no CI job. Any failure fails the workflow.
 - [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs after
-  CI succeeds on `main`: builds the hub, the Hello World client, and the
-  Loot Raider client, copies in Note Ninja's and Pool Party Forecast's
-  static files, and assembles all five into one GitHub Pages site — the hub
-  at the site root, `app-hello-world/`, `app-note-ninja/`,
-  `app-pool-party-forecast/`, and `app-loot-raider/` as subpaths —
-  matching the relative links the hub's cards use. It also triggers a
-  Render deploy of the Hello World `Api` and the Loot Raider `Api` via
-  their own deploy hooks (each app is a separate Render service).
+  CI succeeds on `main`: builds the hub, the Hello World client, the Loot
+  Raider client, and the StoryDen client, copies in Note Ninja's and Pool
+  Party Forecast's static files, and assembles all six into one GitHub
+  Pages site — the hub at the site root, `app-hello-world/`,
+  `app-note-ninja/`, `app-pool-party-forecast/`, `app-loot-raider/`, and
+  `app-storyden/` as subpaths — matching the relative links the hub's
+  cards use. It also triggers a Render deploy of the Hello World `Api` and
+  the Loot Raider `Api` via their own deploy hooks (each app is a separate
+  Render service). StoryDen has no backend, so there's nothing to deploy
+  to Render for it.
 
 ### Deployment configuration
 

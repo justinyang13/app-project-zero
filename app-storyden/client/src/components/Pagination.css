@@ -1,0 +1,36 @@
+.pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-top: 26px;
+  font-size: 13px;
+  color: var(--sd-text-soft);
+}
+
+.pagination__nav:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.pagination__pages {
+  display: flex;
+  gap: 6px;
+}
+
+.pagination__page {
+  width: 26px;
+  height: 26px;
+  border-radius: 6px;
+  background: var(--sd-panel);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+
+.pagination__page--active {
+  background: var(--sd-accent);
+  color: white;
+  font-weight: 700;
+}

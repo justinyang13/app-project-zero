@@ -1,0 +1,11 @@
+.book-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 28px 24px;
+}
+
+.book-tile {
+  padding: 0;
+  text-align: left;
+  display: block;
+}

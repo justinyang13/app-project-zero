@@ -1,0 +1,18 @@
+.app {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.app__main {
+  flex: 1;
+  display: flex;
+  gap: 36px;
+  align-items: flex-start;
+  padding: 24px 36px 48px;
+}
+
+.app__grid-column {
+  flex: 1;
+  min-width: 0;
+}

@@ -50,4 +50,14 @@ export const projects: Project[] = [
     href: "app-loot-raider/",
     linkLabel: "Open map",
   },
+  {
+    id: "storyden",
+    name: "StoryDen",
+    tagline: "100 stories worth curling up with",
+    description:
+      "Browse the top 100 kids'/YA books by genre, sourced from the OpenLibrary API. Static client, no backend, no accounts.",
+    tags: ["React", "TypeScript", "OpenLibrary API"],
+    href: "app-storyden/",
+    linkLabel: "Browse the shelf",
+  },
 ];

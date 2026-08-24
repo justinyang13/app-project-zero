@@ -1,0 +1,57 @@
+:root {
+  color-scheme: light;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* "Cozy Den" direction, locked from the mockup review. */
+  --sd-bg: oklch(93% 0.025 70);
+  --sd-text: oklch(26% 0.03 50);
+  --sd-panel: oklch(97% 0.015 75);
+  --sd-panel-border: oklch(75% 0.04 60);
+  --sd-accent: oklch(52% 0.11 45);
+  --sd-accent-text: oklch(98% 0.01 80);
+  --sd-text-muted: oklch(45% 0.04 55);
+  --sd-text-soft: oklch(40% 0.04 55);
+  --sd-text-body: oklch(32% 0.03 50);
+  --sd-rating: oklch(55% 0.13 60);
+  --sd-genre-tag-bg: oklch(88% 0.05 65);
+  --sd-dashed: oklch(78% 0.04 60);
+  --sd-wood-line: oklch(85% 0.03 65);
+  --sd-lamp-glow: oklch(85% 0.09 75);
+
+  --sd-shadow-cover: 0 6px 14px oklch(30% 0.05 40 / 0.25);
+  --sd-shadow-button: 0 3px 8px oklch(30% 0.08 45 / 0.35);
+  --sd-shadow-panel: 0 16px 36px oklch(30% 0.06 45 / 0.25);
+
+  --font-display: "Lora", serif;
+  --font-body: "Karla", system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--sd-bg);
+  color: var(--sd-text);
+  font-family: var(--font-body);
+}
+
+button {
+  font-family: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+}
+
+a {
+  color: inherit;
+}

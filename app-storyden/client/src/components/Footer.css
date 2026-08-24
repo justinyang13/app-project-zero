@@ -1,0 +1,17 @@
+.footer {
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: var(--sd-text-muted);
+  background: color-mix(in oklch, var(--sd-panel) 80%, transparent);
+  border-top: 1px solid oklch(80% 0.03 60);
+}
+
+.footer a {
+  font-weight: 600;
+  color: var(--sd-accent);
+  text-decoration: underline;
+  margin-left: 4px;
+}
