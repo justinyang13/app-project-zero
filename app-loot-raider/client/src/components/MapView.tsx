@@ -152,11 +152,13 @@ function VenueMarker({ venue, isSelected, onSelect }: VenueMarkerProps) {
 }
 
 export function MapView({ promotionId, chainName, catalog, initialCenter, userCoords, flyToCenter }: MapViewProps) {
-  const [viewport, setViewport] = useState<Viewport>({
-    lat: initialCenter.lat,
-    lng: initialCenter.lng,
-    radiusMeters: DEFAULT_RADIUS_METERS,
-  });
+  // Starts null rather than defaulting to initialCenter + a guessed radius —
+  // ViewportWatcher reports the map's *real* bounds-derived radius on mount
+  // moments later, and firing a query for the guessed radius first just to
+  // immediately supersede it raced urql's request lifecycle badly enough to
+  // abort the first fetch and log a spurious error. Pausing until the real
+  // viewport is known means there's only ever one initial fetch.
+  const [viewport, setViewport] = useState<Viewport | null>(null);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [timeRangeHours, setTimeRangeHours] = useState<TimeRangeHours>(DEFAULT_TIME_RANGE_HOURS);
   const [viewMode, setViewMode] = useState<ViewMode>("map");
@@ -168,12 +170,13 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
   const [{ data, fetching, error }, reexecuteVenuesQuery] = useQuery<{ venuesNear: VenueSummary[] }>({
     query: VENUES_NEAR_QUERY,
     variables: {
-      lat: viewport.lat,
-      lng: viewport.lng,
-      radiusMeters: viewport.radiusMeters,
+      lat: viewport?.lat ?? initialCenter.lat,
+      lng: viewport?.lng ?? initialCenter.lng,
+      radiusMeters: viewport?.radiusMeters ?? DEFAULT_RADIUS_METERS,
       promotionId,
       collectibleItemId: selectedItemId,
     },
+    pause: !viewport,
   });
 
   const venues = (data?.venuesNear ?? []).filter((venue) => isWithinTimeRange(venue.lastCheckInAtUtc, timeRangeHours));
