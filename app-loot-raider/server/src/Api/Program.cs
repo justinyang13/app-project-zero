@@ -13,6 +13,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Application layer use case handlers.
 builder.Services.AddScoped<GetActivePromotionHandler>();
+builder.Services.AddScoped<GetPromotionsHandler>();
 builder.Services.AddScoped<GetCollectibleItemsHandler>();
 builder.Services.AddScoped<GetVenuesNearHandler>();
 builder.Services.AddScoped<GetCheckInsForVenueHandler>();

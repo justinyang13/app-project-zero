@@ -1,0 +1,22 @@
+.promotion-selector {
+  flex-shrink: 1;
+  min-width: 0;
+  max-width: 9rem;
+  padding: 0.4rem 0.55rem;
+  font-family: var(--font-body);
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--ink);
+  background: var(--surface-muted);
+  border: 1px solid var(--border);
+  border-radius: 0.55rem;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .promotion-selector {
+    max-width: 5.5rem;
+    padding: 0.4rem 0.4rem;
+    font-size: 0.7rem;
+  }
+}

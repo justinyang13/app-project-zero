@@ -138,3 +138,9 @@
   text-align: center;
   color: var(--ink-soft);
 }
+
+.catalog-panel__item-number {
+  margin-right: 0.2rem;
+  font-weight: 700;
+  color: var(--accent);
+}

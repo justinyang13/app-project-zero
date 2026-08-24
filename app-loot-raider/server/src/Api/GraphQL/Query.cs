@@ -13,6 +13,7 @@ public sealed class Query : ObjectGraphType
 {
     public Query(
         GetActivePromotionHandler getActivePromotionHandler,
+        GetPromotionsHandler getPromotionsHandler,
         GetCollectibleItemsHandler getCollectibleItemsHandler,
         GetVenuesNearHandler getVenuesNearHandler,
         GetCheckInsForVenueHandler getCheckInsForVenueHandler)
@@ -24,6 +25,10 @@ public sealed class Query : ObjectGraphType
                 var promotion = await getActivePromotionHandler.Handle(new GetActivePromotionQuery());
                 return promotion ?? throw new ExecutionError("No active promotion right now.");
             });
+
+        Field<ListGraphType<PromotionType>>("promotions")
+            .Description("Every promotion, for the promotion picker — not just the active one.")
+            .ResolveAsync(async _ => await getPromotionsHandler.Handle(new GetPromotionsQuery()));
 
         Field<ListGraphType<CollectibleItemType>>("collectibleItems")
             .Description("The given promotion's collectible catalog, in display order.")

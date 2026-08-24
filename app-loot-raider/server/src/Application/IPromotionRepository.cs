@@ -10,5 +10,9 @@ public interface IPromotionRepository
 {
     Task<Promotion?> GetActiveAsync();
 
+    Task<Promotion?> GetByIdAsync(string id);
+
+    Task<IReadOnlyList<Promotion>> GetAllAsync();
+
     Task<IReadOnlyList<CollectibleItem>> GetCollectibleItemsAsync(string promotionId);
 }

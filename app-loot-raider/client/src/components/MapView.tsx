@@ -1,6 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import "leaflet.markercluster";
+import { MapContainer, TileLayer, Marker, Tooltip, useMap, useMapEvents } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import { useQuery } from "urql";
 import { VENUES_NEAR_QUERY } from "../api/queries";
 import type { CollectibleItem, VenueSummary } from "../api/types";
@@ -14,7 +16,8 @@ import {
   type TimeRangeHours,
 } from "../utils/timeRange";
 import { CollectibleCatalogPanel } from "./CollectibleCatalogPanel";
-import { VenuePopupContent } from "./VenuePopupContent";
+import { VenueDetailPanel } from "./VenueDetailPanel";
+import { VenueListView } from "./VenueListView";
 import "leaflet/dist/leaflet.css";
 import "./MapView.css";
 
@@ -23,6 +26,8 @@ const MIN_RADIUS_METERS = 500;
 const MAX_RADIUS_METERS = 20000;
 const RECENT_ACTIVITY_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
 const VIEWPORT_DEBOUNCE_MS = 400;
+
+type ViewMode = "map" | "list";
 
 interface Viewport {
   lat: number;
@@ -35,7 +40,7 @@ interface MapViewProps {
   chainName: string;
   catalog: CollectibleItem[];
   initialCenter: Coordinates;
-  /** Real geolocation, distinct from initialCenter's NYC fallback — auto-opens the nearest venue's popup on load only when this is set. */
+  /** Real geolocation, distinct from initialCenter's NYC fallback — auto-selects the nearest venue on load only when this is set. */
   userCoords: Coordinates | null;
   /** Set by the header's SearchBar (owned by App, since the search bar now lives in the header). */
   flyToCenter: Coordinates | null;
@@ -52,14 +57,14 @@ function isRecentActivity(lastCheckInAtUtc: string | null): boolean {
   return Date.now() - new Date(lastCheckInAtUtc).getTime() < RECENT_ACTIVITY_WINDOW_MS;
 }
 
-function buildPinIcon(recent: boolean, checkInCount: number): L.DivIcon {
+function buildPinIcon(recent: boolean, checkInCount: number, selected: boolean): L.DivIcon {
   const badge =
     checkInCount > 0
       ? `<div class="loot-pin__badge">${checkInCount > 99 ? "99+" : checkInCount}</div>`
       : "";
 
   return L.divIcon({
-    className: `loot-pin ${recent ? "loot-pin--recent" : "loot-pin--stale"}`,
+    className: `loot-pin ${recent ? "loot-pin--recent" : "loot-pin--stale"} ${selected ? "loot-pin--selected" : ""}`,
     html: `<div class="loot-pin__dot-wrap">
       <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="loot-pin__circle" /></svg>
       ${badge}
@@ -68,6 +73,14 @@ function buildPinIcon(recent: boolean, checkInCount: number): L.DivIcon {
     iconAnchor: [10, 10],
     popupAnchor: [0, -12],
     tooltipAnchor: [0, -12],
+  });
+}
+
+function buildClusterIcon(childCount: number): L.DivIcon {
+  return L.divIcon({
+    className: "venue-cluster",
+    html: `<div class="venue-cluster__inner">${childCount > 99 ? "99+" : childCount}</div>`,
+    iconSize: [36, 36],
   });
 }
 
@@ -103,12 +116,6 @@ function FlyToLocation({ coords }: { coords: Coordinates }) {
   const map = useMap();
 
   useEffect(() => {
-    // Popups default to autoPan: true, which re-pans the map toward an
-    // already-open popup whenever its content updates (e.g. the venues
-    // query refetching for the new viewport) — without closing it first,
-    // that autoPan fights this flyTo and snaps the map back to wherever
-    // the popup happens to be once its content next changes.
-    map.closePopup();
     map.flyTo([coords.lat, coords.lng], 14);
   }, [coords, map]);
 
@@ -117,41 +124,21 @@ function FlyToLocation({ coords }: { coords: Coordinates }) {
 
 interface VenueMarkerProps {
   venue: VenueSummary;
-  promotionId: string;
-  catalog: CollectibleItem[];
-  onCheckInAdded: () => void;
-  autoOpen: boolean;
-  onAutoOpened: () => void;
+  isSelected: boolean;
+  onSelect: (venueId: string) => void;
 }
 
-function VenueMarker({ venue, promotionId, catalog, onCheckInAdded, autoOpen, onAutoOpened }: VenueMarkerProps) {
-  const [hasOpened, setHasOpened] = useState(false);
-  const markerRef = useRef<L.Marker>(null);
-
+function VenueMarker({ venue, isSelected, onSelect }: VenueMarkerProps) {
   const icon = useMemo(
-    () => buildPinIcon(isRecentActivity(venue.lastCheckInAtUtc), venue.checkInCount),
-    [venue.lastCheckInAtUtc, venue.checkInCount],
+    () => buildPinIcon(isRecentActivity(venue.lastCheckInAtUtc), venue.checkInCount, isSelected),
+    [venue.lastCheckInAtUtc, venue.checkInCount, isSelected],
   );
-
-  useEffect(() => {
-    if (autoOpen) {
-      markerRef.current?.openPopup();
-      // Disarm the trigger immediately after using it, rather than leaving
-      // it set — otherwise if this same venue's marker ever unmounts and
-      // remounts later (e.g. it drops out of the viewport during a search
-      // and comes back in), autoOpen would still read true on the fresh
-      // mount and pop it open again, snapping the map back to it long after
-      // the initial load.
-      onAutoOpened();
-    }
-  }, [autoOpen, onAutoOpened]);
 
   return (
     <Marker
-      ref={markerRef}
       position={[venue.latitude, venue.longitude]}
       icon={icon}
-      eventHandlers={{ popupopen: () => setHasOpened(true) }}
+      eventHandlers={{ click: () => onSelect(venue.id) }}
     >
       <Tooltip direction="top">
         {venue.checkInCount === 0
@@ -160,18 +147,6 @@ function VenueMarker({ venue, promotionId, catalog, onCheckInAdded, autoOpen, on
               .map((item) => item.name)
               .join(", ")}`}
       </Tooltip>
-      <Popup minWidth={240}>
-        {hasOpened ? (
-          <VenuePopupContent
-            venue={venue}
-            promotionId={promotionId}
-            catalog={catalog}
-            onCheckInAdded={onCheckInAdded}
-          />
-        ) : (
-          <p>Loading…</p>
-        )}
-      </Popup>
     </Marker>
   );
 }
@@ -184,8 +159,9 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
   });
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [timeRangeHours, setTimeRangeHours] = useState<TimeRangeHours>(DEFAULT_TIME_RANGE_HOURS);
-  const [autoOpenVenueId, setAutoOpenVenueId] = useState<string | null>(null);
-  const [hasAutoOpened, setHasAutoOpened] = useState(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("map");
+  const [selectedVenueId, setSelectedVenueId] = useState<string | null>(null);
+  const [hasAutoSelected, setHasAutoSelected] = useState(false);
 
   const handleViewportChange = useDebouncedCallback(setViewport, VIEWPORT_DEBOUNCE_MS);
 
@@ -202,6 +178,7 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
 
   const venues = (data?.venuesNear ?? []).filter((venue) => isWithinTimeRange(venue.lastCheckInAtUtc, timeRangeHours));
   const selectedItem = catalog.find((item) => item.id === selectedItemId) ?? null;
+  const selectedVenue = venues.find((venue) => venue.id === selectedVenueId) ?? null;
 
   function refetchVenues() {
     reexecuteVenuesQuery({ requestPolicy: "network-only" });
@@ -217,57 +194,73 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
   }
 
   // UC-1/UC-5: once, when the visitor's real location and the first batch of
-  // nearby venues are both in, auto-open the closest one's popup. Adjusting
-  // state during render (guarded by hasAutoOpened so it only fires once)
-  // rather than in an effect, per React's pattern for deriving state from
-  // changing props/data — a ref wouldn't do here since it can't be read
-  // during render.
-  if (!hasAutoOpened && userCoords && venues.length > 0) {
-    setHasAutoOpened(true);
+  // nearby venues are both in, auto-select the closest one's detail panel.
+  // Adjusting state during render (guarded by hasAutoSelected so it only
+  // fires once) rather than in an effect, per React's pattern for deriving
+  // state from changing props/data — a ref wouldn't do here since it can't
+  // be read during render. Simpler than the old marker/popup version: this
+  // is a plain panel now, not a Leaflet-managed popup, so there's no
+  // separate "disarm after use" round-trip needed.
+  if (!hasAutoSelected && userCoords && venues.length > 0) {
+    setHasAutoSelected(true);
     const nearest = findNearestVenue(userCoords, venues);
-    setAutoOpenVenueId(nearest?.id ?? null);
+    if (nearest) {
+      setSelectedVenueId(nearest.id);
+    }
   }
-
-  // The marker that consumes autoOpenVenueId reports back here so it can be
-  // disarmed immediately after use — see the comment on VenueMarker's
-  // effect for why leaving it set permanently is a bug.
-  const handleAutoOpened = useCallback(() => setAutoOpenVenueId(null), []);
 
   return (
     <div className="map-view">
-      <CollectibleCatalogPanel
-        items={catalog}
-        selectedItemId={selectedItemId}
-        onSelectItem={handleSelectItem}
-        timeRangeHours={timeRangeHours}
-        onTimeRangeChange={setTimeRangeHours}
-      />
+      <div className="map-view__toggle">
+        <button
+          type="button"
+          className={`map-view__toggle-btn ${viewMode === "list" ? "map-view__toggle-btn--active" : ""}`}
+          onClick={() => setViewMode("list")}
+        >
+          List
+        </button>
+        <button
+          type="button"
+          className={`map-view__toggle-btn ${viewMode === "map" ? "map-view__toggle-btn--active" : ""}`}
+          onClick={() => setViewMode("map")}
+        >
+          Map
+        </button>
+      </div>
 
-      <MapContainer
-        center={[initialCenter.lat, initialCenter.lng]}
-        zoom={13}
-        scrollWheelZoom
-        className="map-view__container"
-      >
-        <TileLayer
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-        />
-        <ViewportWatcher onViewportChange={handleViewportChange} />
-        {flyToCenter && <FlyToLocation coords={flyToCenter} />}
-
-        {venues.map((venue) => (
-          <VenueMarker
-            key={venue.id}
-            venue={venue}
-            promotionId={promotionId}
-            catalog={catalog}
-            onCheckInAdded={refetchVenues}
-            autoOpen={venue.id === autoOpenVenueId}
-            onAutoOpened={handleAutoOpened}
+      {viewMode === "list" ? (
+        <VenueListView venues={venues} selectedVenueId={selectedVenueId} onSelectVenue={setSelectedVenueId} />
+      ) : (
+        <MapContainer
+          center={[initialCenter.lat, initialCenter.lng]}
+          zoom={13}
+          scrollWheelZoom
+          className="map-view__container"
+        >
+          <TileLayer
+            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           />
-        ))}
-      </MapContainer>
+          <ViewportWatcher onViewportChange={handleViewportChange} />
+          {flyToCenter && <FlyToLocation coords={flyToCenter} />}
+
+          <MarkerClusterGroup maxClusterRadius={60} iconCreateFunction={(cluster) => buildClusterIcon(cluster.getChildCount())}>
+            {venues.map((venue) => (
+              <VenueMarker key={venue.id} venue={venue} isSelected={venue.id === selectedVenueId} onSelect={setSelectedVenueId} />
+            ))}
+          </MarkerClusterGroup>
+        </MapContainer>
+      )}
+
+      {selectedVenue && (
+        <VenueDetailPanel
+          venue={selectedVenue}
+          promotionId={promotionId}
+          catalog={catalog}
+          onCheckInAdded={refetchVenues}
+          onClose={() => setSelectedVenueId(null)}
+        />
+      )}
 
       {error && (
         <p className="map-view__banner" role="status">
@@ -284,6 +277,14 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
               : `No ${chainName} locations found here — try zooming out.`}
         </p>
       )}
+
+      <CollectibleCatalogPanel
+        items={catalog}
+        selectedItemId={selectedItemId}
+        onSelectItem={handleSelectItem}
+        timeRangeHours={timeRangeHours}
+        onTimeRangeChange={setTimeRangeHours}
+      />
     </div>
   );
 }

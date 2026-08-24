@@ -127,6 +127,48 @@ public class GetVenuesNearHandlerTests
     }
 
     [Fact]
+    public async Task Handle_UsesTheGivenPromotionId_NotWhicheverPromotionIsActive()
+    {
+        // Regression test: the handler used to always resolve the *active*
+        // promotion regardless of what PromotionId the query carried. Two
+        // promotions here, only the second is active — the query asks for
+        // the first by id, so results must come from the first's chain/data.
+        var requestedPromotion = new Promotion(
+            "promo-requested", "Requested Promo", "Burger King", new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), false);
+        var activePromotion = new Promotion(
+            "promo-active", "Active Promo", "McDonald's", new DateOnly(2026, 1, 1), new DateOnly(2026, 12, 31), true);
+
+        var venueCache = new FakeVenueCache();
+        venueCache.Venues.Add(new Venue("venue-bk", "Burger King", "Requested chain venue", 0, 0, ""));
+        venueCache.Venues.Add(new Venue("venue-mcd", "McDonald's", "Active chain venue", 0, 0, ""));
+
+        var handler = new GetVenuesNearHandler(
+            new FakePromotionRepository([requestedPromotion, activePromotion]),
+            venueCache,
+            new FakeVenueDiscoveryService(new Exception("should not be called")),
+            new FakeCheckInRepository());
+
+        var result = await handler.Handle(new GetVenuesNearQuery(0, 0, 1000, "promo-requested"));
+
+        var summary = Assert.Single(result);
+        Assert.Equal("venue-bk", summary.Venue.Id);
+    }
+
+    [Fact]
+    public async Task Handle_ReturnsEmpty_WhenPromotionIdMatchesNoPromotion()
+    {
+        var handler = new GetVenuesNearHandler(
+            new FakePromotionRepository(Promotion, Catalog),
+            new FakeVenueCache(),
+            new FakeVenueDiscoveryService(new Exception("should not be called")),
+            new FakeCheckInRepository());
+
+        var result = await handler.Handle(new GetVenuesNearQuery(0, 0, 1000, "no-such-promo"));
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
     public async Task Handle_ReturnsEmpty_WhenNoVenueHasCheckInForFilteredItem()
     {
         var venueCache = new FakeVenueCache();

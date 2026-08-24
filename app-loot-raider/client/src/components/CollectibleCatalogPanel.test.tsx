@@ -6,8 +6,8 @@ import { CollectibleCatalogPanel } from "./CollectibleCatalogPanel";
 import { DEFAULT_TIME_RANGE_HOURS, type TimeRangeHours } from "../utils/timeRange";
 
 const items = [
-  { id: "item-1", name: "Hello Kitty x Godzilla", imageUrl: "" },
-  { id: "item-2", name: "Kuromi x Mechagodzilla", imageUrl: "" },
+  { id: "item-1", name: "Hello Kitty x Godzilla", imageUrl: "", sortOrder: 1 },
+  { id: "item-2", name: "Kuromi x Mechagodzilla", imageUrl: "", sortOrder: 2 },
 ];
 
 function ControlledPanel() {

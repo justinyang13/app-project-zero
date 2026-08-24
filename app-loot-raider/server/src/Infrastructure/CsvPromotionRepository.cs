@@ -25,6 +25,21 @@ public sealed class CsvPromotionRepository : IPromotionRepository
         return active is null ? null : ToDomain(active);
     }
 
+    public async Task<Promotion?> GetByIdAsync(string id)
+    {
+        var rows = await _promotions.ReadAllAsync();
+        var match = rows.FirstOrDefault(row => row.Id == id);
+
+        return match is null ? null : ToDomain(match);
+    }
+
+    public async Task<IReadOnlyList<Promotion>> GetAllAsync()
+    {
+        var rows = await _promotions.ReadAllAsync();
+
+        return rows.Select(ToDomain).ToList();
+    }
+
     public async Task<IReadOnlyList<CollectibleItem>> GetCollectibleItemsAsync(string promotionId)
     {
         var rows = await _collectibleItems.ReadAllAsync();

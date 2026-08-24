@@ -9,16 +9,28 @@ namespace Application.Tests;
 /// </summary>
 internal sealed class FakePromotionRepository : IPromotionRepository
 {
-    private readonly Promotion? _activePromotion;
+    private readonly List<Promotion> _promotions;
     private readonly List<CollectibleItem> _items;
 
     public FakePromotionRepository(Promotion? activePromotion, IEnumerable<CollectibleItem>? items = null)
+        : this(activePromotion is null ? [] : [activePromotion], items)
     {
-        _activePromotion = activePromotion;
+    }
+
+    public FakePromotionRepository(IEnumerable<Promotion> promotions, IEnumerable<CollectibleItem>? items = null)
+    {
+        _promotions = promotions.ToList();
         _items = items?.ToList() ?? [];
     }
 
-    public Task<Promotion?> GetActiveAsync() => Task.FromResult(_activePromotion);
+    public Task<Promotion?> GetActiveAsync() =>
+        Task.FromResult(_promotions.FirstOrDefault(p => p.IsActive));
+
+    public Task<Promotion?> GetByIdAsync(string id) =>
+        Task.FromResult(_promotions.FirstOrDefault(p => p.Id == id));
+
+    public Task<IReadOnlyList<Promotion>> GetAllAsync() =>
+        Task.FromResult<IReadOnlyList<Promotion>>(_promotions);
 
     public Task<IReadOnlyList<CollectibleItem>> GetCollectibleItemsAsync(string promotionId) =>
         Task.FromResult<IReadOnlyList<CollectibleItem>>(

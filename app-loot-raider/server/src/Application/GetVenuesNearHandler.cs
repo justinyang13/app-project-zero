@@ -32,7 +32,7 @@ public sealed class GetVenuesNearHandler
 
     public async Task<IReadOnlyList<VenueSummary>> Handle(GetVenuesNearQuery query)
     {
-        var promotion = await _promotionRepository.GetActiveAsync();
+        var promotion = await _promotionRepository.GetByIdAsync(query.PromotionId);
         if (promotion is null)
         {
             return [];

@@ -100,7 +100,10 @@ export function CollectibleCatalogPanel({
                   onClick={() => onSelectItem(isSelected ? null : item.id)}
                 >
                   <CollectibleIcon imageUrl={item.imageUrl} name={item.name} itemId={item.id} size={38} />
-                  <span>{item.name}</span>
+                  <span>
+                    <span className="catalog-panel__item-number">#{item.sortOrder}</span>
+                    <span>{item.name}</span>
+                  </span>
                 </button>
               );
             })}

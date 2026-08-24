@@ -1,6 +1,6 @@
-export const ACTIVE_PROMOTION_QUERY = `
-  query ActivePromotion {
-    activePromotion {
+export const PROMOTIONS_QUERY = `
+  query Promotions {
+    promotions {
       id
       name
       chainName
@@ -15,6 +15,7 @@ export const COLLECTIBLE_ITEMS_QUERY = `
       id
       name
       imageUrl
+      sortOrder
     }
   }
 `;
@@ -40,6 +41,7 @@ export const VENUES_NEAR_QUERY = `
         id
         name
         imageUrl
+        sortOrder
       }
     }
   }

@@ -52,3 +52,12 @@
   letter-spacing: -0.01em;
   line-height: 1;
 }
+
+/* Below this width there isn't room for the brand name alongside the
+ * promotion picker and search bar without crushing the search input — the
+ * logo alone still carries the brand. */
+@media (max-width: 420px) {
+  .app__header h1 {
+    display: none;
+  }
+}

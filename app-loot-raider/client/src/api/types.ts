@@ -9,6 +9,7 @@ export interface CollectibleItem {
   id: string;
   name: string;
   imageUrl: string;
+  sortOrder: number;
 }
 
 export interface VenueSummary {

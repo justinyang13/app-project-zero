@@ -1,5 +1,6 @@
 import { getInitials } from "../utils/initials";
 import { itemTint } from "../utils/itemTint";
+import { TOY_PHOTOS } from "../utils/toyPhotos";
 
 interface CollectibleIconProps {
   imageUrl?: string;
@@ -9,21 +10,23 @@ interface CollectibleIconProps {
 }
 
 /**
- * Real per-item character art is deliberately out of scope (no licensed
- * character art, no user-uploaded photos — see the app README) so every
- * catalog item without an imageUrl falls back to a colored swatch showing
- * its initials, tinted deterministically per item so items stay distinct.
+ * Real toy photos are opt-in per item (see toyPhotos.ts) — a bundled local
+ * photo wins, then the server-provided imageUrl, then a colored initials
+ * swatch (tinted deterministically per item) as the final fallback for any
+ * item without a photo yet.
  */
 export function CollectibleIcon({ imageUrl, name, itemId, size = 32 }: CollectibleIconProps) {
-  if (imageUrl) {
+  const photo = TOY_PHOTOS[itemId] ?? (imageUrl || undefined);
+
+  if (photo) {
     return (
       <img
-        src={imageUrl}
+        src={photo}
         alt={name}
         width={size}
         height={size}
         className="collectible-icon"
-        style={{ borderRadius: size * 0.25, flexShrink: 0 }}
+        style={{ borderRadius: size * 0.25, flexShrink: 0, objectFit: "cover" }}
       />
     );
   }

@@ -47,6 +47,11 @@
   stroke-width: 2;
 }
 
+.loot-pin--selected .loot-pin__circle {
+  stroke: var(--accent);
+  stroke-width: 3.5;
+}
+
 .loot-pin__badge {
   position: absolute;
   top: -5px;
@@ -65,19 +70,49 @@
   justify-content: center;
 }
 
-.leaflet-popup-content-wrapper,
-.leaflet-popup-tip {
+.map-view__toggle {
+  position: absolute;
+  top: 0.85rem;
+  left: 0.85rem;
+  z-index: 1000;
+  display: flex;
+  overflow: hidden;
   background: var(--surface);
-  color: var(--ink);
+  border-radius: 0.7rem;
   box-shadow: var(--shadow-card);
 }
 
-.leaflet-popup-content-wrapper {
-  border-radius: 0.9rem;
+.map-view__toggle-btn {
+  padding: 0.4rem 0.9rem;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--ink-soft);
+  cursor: pointer;
 }
 
-.leaflet-popup-content {
-  margin: 0;
+.map-view__toggle-btn--active {
+  color: var(--accent-ink);
+  background: var(--accent);
+}
+
+/* Custom cluster icon (see MapView.tsx's buildClusterIcon) rather than the
+ * leaflet.markercluster default stylesheet, so it matches the app's pin
+ * design instead of the plugin's default green/yellow/orange circles. */
+.venue-cluster__inner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--accent-ink);
+  background: var(--accent);
+  border: 3px solid var(--surface);
+  border-radius: 50%;
+  box-shadow: var(--shadow-card);
 }
 
 .leaflet-tooltip {
