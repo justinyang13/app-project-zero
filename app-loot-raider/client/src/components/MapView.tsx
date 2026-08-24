@@ -62,17 +62,19 @@ function buildPinIcon(recent: boolean, checkInCount: number, selected: boolean):
     checkInCount > 0
       ? `<div class="loot-pin__badge">${checkInCount > 99 ? "99+" : checkInCount}</div>`
       : "";
+  const size = selected ? 28 : 20;
 
   return L.divIcon({
     className: `loot-pin ${recent ? "loot-pin--recent" : "loot-pin--stale"} ${selected ? "loot-pin--selected" : ""}`,
     html: `<div class="loot-pin__dot-wrap">
-      <svg width="20" height="20" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="loot-pin__circle" /></svg>
+      ${selected ? '<div class="loot-pin__ring"></div>' : ""}
+      <svg width="${size}" height="${size}" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" class="loot-pin__circle" /></svg>
       ${badge}
     </div>`,
-    iconSize: [20, 20],
-    iconAnchor: [10, 10],
-    popupAnchor: [0, -12],
-    tooltipAnchor: [0, -12],
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+    popupAnchor: [0, -size * 0.6],
+    tooltipAnchor: [0, -size * 0.6],
   });
 }
 
@@ -118,6 +120,22 @@ function FlyToLocation({ coords }: { coords: Coordinates }) {
   useEffect(() => {
     map.flyTo([coords.lat, coords.lng], 14);
   }, [coords, map]);
+
+  return null;
+}
+
+/** Centers the map on whichever venue is selected (marker click, list row, or auto-select) so its pin — and the highlight ring in buildPinIcon — is always actually visible, not buried in a cluster or off-screen. */
+function FlyToSelectedVenue({ venue }: { venue: VenueSummary }) {
+  const map = useMap();
+
+  useEffect(() => {
+    // Zoom 17 (~streets/buildings level) so the cluster group's 60px merge
+    // radius essentially never re-clusters a single selected marker with
+    // its neighbors for realistically-spaced real-world venues.
+    map.flyTo([venue.latitude, venue.longitude], Math.max(map.getZoom(), 17));
+    // Only the venue identity/coords should retrigger this, not zoom level.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [venue.id, venue.latitude, venue.longitude, map]);
 
   return null;
 }
@@ -214,46 +232,75 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
 
   return (
     <div className="map-view">
-      <div className="map-view__toggle">
-        <button
-          type="button"
-          className={`map-view__toggle-btn ${viewMode === "list" ? "map-view__toggle-btn--active" : ""}`}
-          onClick={() => setViewMode("list")}
-        >
-          List
-        </button>
-        <button
-          type="button"
-          className={`map-view__toggle-btn ${viewMode === "map" ? "map-view__toggle-btn--active" : ""}`}
-          onClick={() => setViewMode("map")}
-        >
-          Map
-        </button>
+      <div className="map-view__main">
+        <div className="map-view__toolbar">
+          <div className="map-view__toggle">
+            <button
+              type="button"
+              className={`map-view__toggle-btn ${viewMode === "list" ? "map-view__toggle-btn--active" : ""}`}
+              onClick={() => setViewMode("list")}
+            >
+              List
+            </button>
+            <button
+              type="button"
+              className={`map-view__toggle-btn ${viewMode === "map" ? "map-view__toggle-btn--active" : ""}`}
+              onClick={() => setViewMode("map")}
+            >
+              Map
+            </button>
+          </div>
+        </div>
+
+        {viewMode === "list" ? (
+          <VenueListView venues={venues} selectedVenueId={selectedVenueId} onSelectVenue={setSelectedVenueId} />
+        ) : (
+          <MapContainer
+            center={[initialCenter.lat, initialCenter.lng]}
+            zoom={13}
+            scrollWheelZoom
+            className="map-view__container"
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <ViewportWatcher onViewportChange={handleViewportChange} />
+            {flyToCenter && <FlyToLocation coords={flyToCenter} />}
+            {selectedVenue && <FlyToSelectedVenue venue={selectedVenue} />}
+
+            <MarkerClusterGroup maxClusterRadius={60} iconCreateFunction={(cluster) => buildClusterIcon(cluster.getChildCount())}>
+              {venues.map((venue) => (
+                <VenueMarker key={venue.id} venue={venue} isSelected={venue.id === selectedVenueId} onSelect={setSelectedVenueId} />
+              ))}
+            </MarkerClusterGroup>
+          </MapContainer>
+        )}
+
+        {error && (
+          <p className="map-view__banner" role="status">
+            Couldn't refresh venues — showing cached locations.
+          </p>
+        )}
+
+        {!fetching && !error && venues.length === 0 && (
+          <p className="map-view__banner" role="status">
+            {selectedItem
+              ? `No ${chainName} locations here have a "${selectedItem.name}" sighting yet — try zooming out or clearing the filter.`
+              : timeRangeHours !== "all"
+                ? `No ${chainName} locations here had activity in the last ${timeRangeHours}h — try "All" or zooming out.`
+                : `No ${chainName} locations found here — try zooming out.`}
+          </p>
+        )}
+
+        <CollectibleCatalogPanel
+          items={catalog}
+          selectedItemId={selectedItemId}
+          onSelectItem={handleSelectItem}
+          timeRangeHours={timeRangeHours}
+          onTimeRangeChange={setTimeRangeHours}
+        />
       </div>
-
-      {viewMode === "list" ? (
-        <VenueListView venues={venues} selectedVenueId={selectedVenueId} onSelectVenue={setSelectedVenueId} />
-      ) : (
-        <MapContainer
-          center={[initialCenter.lat, initialCenter.lng]}
-          zoom={13}
-          scrollWheelZoom
-          className="map-view__container"
-        >
-          <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          />
-          <ViewportWatcher onViewportChange={handleViewportChange} />
-          {flyToCenter && <FlyToLocation coords={flyToCenter} />}
-
-          <MarkerClusterGroup maxClusterRadius={60} iconCreateFunction={(cluster) => buildClusterIcon(cluster.getChildCount())}>
-            {venues.map((venue) => (
-              <VenueMarker key={venue.id} venue={venue} isSelected={venue.id === selectedVenueId} onSelect={setSelectedVenueId} />
-            ))}
-          </MarkerClusterGroup>
-        </MapContainer>
-      )}
 
       {selectedVenue && (
         <VenueDetailPanel
@@ -264,30 +311,6 @@ export function MapView({ promotionId, chainName, catalog, initialCenter, userCo
           onClose={() => setSelectedVenueId(null)}
         />
       )}
-
-      {error && (
-        <p className="map-view__banner" role="status">
-          Couldn't refresh venues — showing cached locations.
-        </p>
-      )}
-
-      {!fetching && !error && venues.length === 0 && (
-        <p className="map-view__banner" role="status">
-          {selectedItem
-            ? `No ${chainName} locations here have a "${selectedItem.name}" sighting yet — try zooming out or clearing the filter.`
-            : timeRangeHours !== "all"
-              ? `No ${chainName} locations here had activity in the last ${timeRangeHours}h — try "All" or zooming out.`
-              : `No ${chainName} locations found here — try zooming out.`}
-        </p>
-      )}
-
-      <CollectibleCatalogPanel
-        items={catalog}
-        selectedItemId={selectedItemId}
-        onSelectItem={handleSelectItem}
-        timeRangeHours={timeRangeHours}
-        onTimeRangeChange={setTimeRangeHours}
-      />
     </div>
   );
 }

@@ -1,7 +1,17 @@
 .promotion-selector {
+  position: relative;
   flex-shrink: 1;
+  flex-grow: 1;
   min-width: 0;
-  max-width: 9rem;
+  max-width: 16rem;
+}
+
+.promotion-selector__trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  width: 100%;
   padding: 0.4rem 0.55rem;
   font-family: var(--font-body);
   font-size: 0.75rem;
@@ -13,9 +23,66 @@
   cursor: pointer;
 }
 
+.promotion-selector__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.promotion-selector__chevron {
+  flex-shrink: 0;
+  color: var(--ink-soft);
+  transition: transform 0.15s ease;
+}
+
+.promotion-selector__chevron--open {
+  transform: rotate(180deg);
+}
+
+.promotion-selector__menu {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  left: 0;
+  z-index: 1200;
+  min-width: 100%;
+  width: max-content;
+  max-width: 20rem;
+  margin: 0;
+  padding: 0.3rem;
+  list-style: none;
+  background: var(--surface);
+  border-radius: 0.7rem;
+  box-shadow: var(--shadow-card);
+}
+
+.promotion-selector__option {
+  display: block;
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  text-align: left;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  color: var(--ink);
+  border-radius: 0.4rem;
+  cursor: pointer;
+}
+
+.promotion-selector__option:hover {
+  background: var(--surface-hover);
+}
+
+.promotion-selector__option--selected {
+  font-weight: 700;
+  color: var(--accent);
+}
+
 @media (max-width: 640px) {
   .promotion-selector {
-    max-width: 5.5rem;
+    max-width: 8rem;
+  }
+
+  .promotion-selector__trigger {
     padding: 0.4rem 0.4rem;
     font-size: 0.7rem;
   }
