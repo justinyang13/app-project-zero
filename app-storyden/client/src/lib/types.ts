@@ -6,7 +6,19 @@ export type GenreBucket =
   | "Historical Fiction"
   | "Fairy Tales"
   | "Humor"
-  | "Picture Books";
+  | "Picture Books"
+  | "Animals"
+  | "Friendship"
+  | "Family"
+  | "School"
+  | "Sports"
+  | "Horror"
+  | "Graphic Novels"
+  | "Poetry"
+  | "Magic"
+  | "Dragons"
+  | "Space"
+  | "Superheroes";
 
 export interface Book {
   workKey: string;

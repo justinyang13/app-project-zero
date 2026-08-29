@@ -55,6 +55,66 @@ export const GENRES: GenreConfig[] = [
     chipLabel: "Picture Books",
     query: 'subject:"picture books"',
   },
+  {
+    bucket: "Animals",
+    chipLabel: "Animals",
+    query: 'subject:"animals" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Friendship",
+    chipLabel: "Friendship",
+    query: 'subject:"friendship" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Family",
+    chipLabel: "Family",
+    query: 'subject:"family" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "School",
+    chipLabel: "School",
+    query: 'subject:"schools" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Sports",
+    chipLabel: "Sports",
+    query: 'subject:"sports" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Horror",
+    chipLabel: "Horror",
+    query: 'subject:"horror stories" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Graphic Novels",
+    chipLabel: "Graphic Novels",
+    query: 'subject:"graphic novels" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Poetry",
+    chipLabel: "Poetry",
+    query: 'subject:"poetry" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Magic",
+    chipLabel: "Magic",
+    query: 'subject:"magic" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Dragons",
+    chipLabel: "Dragons",
+    query: 'subject:"dragons" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Space",
+    chipLabel: "Space",
+    query: 'subject:"space" AND subject:"juvenile fiction"',
+  },
+  {
+    bucket: "Superheroes",
+    chipLabel: "Superheroes",
+    query: 'subject:"superheroes" AND subject:"juvenile fiction"',
+  },
 ];
 
 const SEARCH_FIELDS = [
@@ -73,10 +133,13 @@ const SEARCH_FIELDS = [
   "language",
 ].join(",");
 
-const BUCKET_LIMIT = 20;
+const BUCKET_LIMIT = 200;
 const MIN_RATINGS_COUNT = 3;
-const MAX_PER_BUCKET = 13;
-const MAX_TOTAL = 100;
+const MAX_TOTAL = 1000;
+// Spread evenly across genres (1000 / 20 buckets = 50) — comfortably above
+// the MIN_BOOKS_PER_GENRE floor even after the ratings guard and dedupe.
+const MAX_PER_BUCKET = Math.ceil(MAX_TOTAL / GENRES.length);
+export const MIN_BOOKS_PER_GENRE = 20;
 
 interface OpenLibraryDoc {
   key: string;
@@ -166,8 +229,9 @@ function mapDocToBook(doc: OpenLibraryDoc, bucket: GenreBucket): Book {
 }
 
 // Applies the ratings-quality guard and cross-bucket dedupe, in bucket
-// order, then caps the combined result at 100 rows so "top 100" holds
-// exactly regardless of how many books each bucket actually yields.
+// order, then caps the combined result at MAX_TOTAL rows so the dataset
+// size holds exactly regardless of how many books each bucket actually
+// yields.
 export function buildDataset(
   genreResults: { genre: GenreConfig; docs: OpenLibraryDoc[] }[],
 ): Book[] {
@@ -194,6 +258,19 @@ export function buildDataset(
   }
 
   return books.slice(0, MAX_TOTAL);
+}
+
+// Every configured genre is expected to clear MIN_BOOKS_PER_GENRE in the
+// final dataset — returns the bucket names that fell short (empty array
+// means the floor holds everywhere). Checked against every configured
+// genre, not just ones that happened to fetch successfully, so a bucket
+// that failed to fetch at all is reported too.
+export function validateGenreCoverage(books: Book[]): GenreBucket[] {
+  const counts = new Map<GenreBucket, number>(GENRES.map((g) => [g.bucket, 0]));
+  for (const book of books) {
+    counts.set(book.genreBucket, (counts.get(book.genreBucket) ?? 0) + 1);
+  }
+  return GENRES.map((g) => g.bucket).filter((bucket) => (counts.get(bucket) ?? 0) < MIN_BOOKS_PER_GENRE);
 }
 
 const CSV_COLUMNS: (keyof Book)[] = [

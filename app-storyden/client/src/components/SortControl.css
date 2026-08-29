@@ -1,0 +1,27 @@
+.sort-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 14px 7px 16px;
+  border-radius: 20px;
+  background: var(--sd-panel);
+  border: 1.5px solid var(--sd-panel-border);
+  font-size: 13px;
+  color: oklch(35% 0.04 50);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.sort-control__label {
+  font-weight: 600;
+  color: var(--sd-text-muted);
+}
+
+.sort-control__select {
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: none;
+  font-weight: 600;
+  cursor: pointer;
+}

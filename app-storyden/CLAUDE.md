@@ -53,6 +53,16 @@ are plain bibliographic text and are fine to display as-is.
   `npm run generate-csv`) and the in-browser "Update Book List" button.
   Keep any future changes to the fetch/dedupe/CSV logic in that one file
   rather than forking it for either call site.
-- Genre bucket processing order matters (Fantasy → Picture Books) — it's
-  the cross-bucket dedupe priority, not just a display order. Don't reorder
-  `GENRES` in `fetchTopBooks.ts` without checking the dedupe tests.
+- Genre bucket processing order matters (Fantasy → Superheroes, see
+  `GENRES` in `fetchTopBooks.ts`) — it's the cross-bucket dedupe priority
+  *and* the "sort by genre" order (`sortBooks.ts`), not just a display
+  order. Don't reorder `GENRES` without checking the dedupe and sort tests.
+- `MIN_BOOKS_PER_GENRE` (currently 20) is a hard floor, enforced by
+  `validateGenreCoverage()` — `npm run generate-csv` throws rather than
+  overwrite the starter CSV if any genre falls short. If you add a new
+  genre bucket, verify its live OpenLibrary result count first (the way
+  the existing ones were verified) so it can actually clear the floor
+  after the ratings-quality guard and cross-bucket dedupe.
+- `MAX_PER_BUCKET` in `fetchTopBooks.ts` is computed from `MAX_TOTAL /
+  GENRES.length`, not hardcoded — adding or removing a genre bucket
+  reflows the per-bucket target automatically.

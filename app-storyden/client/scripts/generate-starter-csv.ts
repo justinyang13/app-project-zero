@@ -6,13 +6,19 @@
 import { writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildDataset, fetchAllGenres, toCSV } from "../src/lib/fetchTopBooks.ts";
+import {
+  buildDataset,
+  fetchAllGenres,
+  GENRES,
+  toCSV,
+  validateGenreCoverage,
+} from "../src/lib/fetchTopBooks.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_PATH = path.join(__dirname, "..", "public", "data", "top-books.csv");
 
 async function main() {
-  console.log("Fetching all 8 genre buckets from OpenLibrary...");
+  console.log(`Fetching all ${GENRES.length} genre buckets from OpenLibrary...`);
   const { succeeded, failed } = await fetchAllGenres();
 
   if (failed.length > 0) {
@@ -27,6 +33,16 @@ async function main() {
 
   const books = buildDataset(succeeded);
   console.log(`Built dataset: ${books.length} books across ${succeeded.length} genre buckets.`);
+
+  // This is the one-time/manual regeneration path — fail loudly here
+  // rather than shipping a starter CSV that breaks the "at least N books
+  // per genre" guarantee. Re-run later if a genre is just having a bad day.
+  const shortGenres = validateGenreCoverage(books);
+  if (shortGenres.length > 0) {
+    throw new Error(
+      `Aborting without writing the starter CSV — under the minimum books-per-genre floor for: ${shortGenres.join(", ")}.`,
+    );
+  }
 
   await writeFile(OUTPUT_PATH, toCSV(books), "utf-8");
   console.log(`Wrote ${OUTPUT_PATH}`);

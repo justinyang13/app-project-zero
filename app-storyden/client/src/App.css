@@ -4,6 +4,20 @@
   flex-direction: column;
 }
 
+.app__controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 18px 36px 0;
+}
+
+@media (max-width: 640px) {
+  .app__controls {
+    padding: 14px 20px 0;
+    flex-wrap: wrap;
+  }
+}
+
 .app__main {
   flex: 1;
   display: flex;

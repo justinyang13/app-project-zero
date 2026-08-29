@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDataset, fromCSV, GENRES, toCSV } from "./fetchTopBooks";
+import { buildDataset, fromCSV, GENRES, MIN_BOOKS_PER_GENRE, toCSV, validateGenreCoverage } from "./fetchTopBooks";
 import type { GenreConfig } from "./fetchTopBooks";
 
 function doc(overrides: Record<string, unknown> = {}) {
@@ -37,15 +37,13 @@ describe("buildDataset", () => {
     expect(books[0].genreBucket).toBe("Fantasy");
   });
 
-  it("caps the combined dataset at 100 books", () => {
-    const manyDocs = Array.from({ length: 60 }, (_, i) => doc({ key: `/works/OLf${i}W` }));
-    const moreDocs = Array.from({ length: 60 }, (_, i) => doc({ key: `/works/OLa${i}W` }));
-    const books = buildDataset([
-      { genre: fantasy, docs: manyDocs },
-      { genre: adventure, docs: moreDocs },
-    ]);
-    // 13 per bucket cap applies before the 100-cap kicks in here.
-    expect(books.length).toBeLessThanOrEqual(100);
+  it("caps the combined dataset at 1000 books", () => {
+    const perGenreDocs = GENRES.map((genre, gi) => ({
+      genre,
+      docs: Array.from({ length: 200 }, (_, i) => doc({ key: `/works/OLg${gi}n${i}W` })),
+    }));
+    const books = buildDataset(perGenreDocs);
+    expect(books.length).toBeLessThanOrEqual(1000);
   });
 
   it("handles a description shaped as { value } as well as a plain string", () => {
@@ -62,6 +60,35 @@ describe("buildDataset", () => {
     expect(books[0].description).toBe("Object-shaped description");
     expect(books[1].description).toBe("Plain string description");
     expect(books[2].description).toBe("");
+  });
+});
+
+describe("validateGenreCoverage", () => {
+  it("reports every genre when the dataset is empty, including buckets that never fetched", () => {
+    const shortfalls = validateGenreCoverage([]);
+    expect(shortfalls).toEqual(GENRES.map((g) => g.bucket));
+  });
+
+  it("reports nothing once every genre clears the floor", () => {
+    const perGenreDocs = GENRES.map((genre, gi) => ({
+      genre,
+      docs: Array.from({ length: MIN_BOOKS_PER_GENRE }, (_, i) => doc({ key: `/works/OLg${gi}n${i}W` })),
+    }));
+    const books = buildDataset(perGenreDocs);
+    expect(validateGenreCoverage(books)).toEqual([]);
+  });
+
+  it("flags only the genre(s) that fall short", () => {
+    const books = buildDataset([
+      {
+        genre: fantasy,
+        docs: Array.from({ length: MIN_BOOKS_PER_GENRE }, (_, i) => doc({ key: `/works/OLf${i}W` })),
+      },
+      { genre: adventure, docs: [doc({ key: "/works/OLa0W" })] },
+    ]);
+    const shortfalls = validateGenreCoverage(books);
+    expect(shortfalls).toContain("Adventure");
+    expect(shortfalls).not.toContain("Fantasy");
   });
 });
 

@@ -1,10 +1,10 @@
 # StoryDen
 
-A static, no-backend catalog of the top 100 kids'/YA books (ages roughly
+A static, no-backend catalog of up to 1,000 kids'/YA books (ages roughly
 0–20), sourced entirely from [OpenLibrary](https://openlibrary.org)'s free
-public API. Browse by genre, page through results, and open a book for its
-full detail — rating, description, edition count, and a link back to
-OpenLibrary.
+public API. Browse by genre, sort by title/popularity/author/genre, page
+through results (100 per page), and open a book for its full detail —
+rating, description, edition count, and a link back to OpenLibrary.
 
 Standalone app: it only depends on itself. Linked to from the hub
 (`app-project-zero-hub`) one way — it doesn't link back.
@@ -31,12 +31,12 @@ Dataset resolution happens in this order, on every page load
    this: zero OpenLibrary calls on normal page loads.
 
 OpenLibrary itself is only ever called from the explicit **"Update Book
-List"** button. That flow makes 8 requests (one per genre bucket), dedupes
-across buckets, applies a ratings-quality guard, updates the page and the
-localStorage cache, and offers a "Download updated CSV" for the site owner
-to manually commit over the bundled starter file and redeploy. A public
-static site can't safely write back to its own repo, so this last step is
-an intentional manual one.
+List"** button. That flow makes one request per genre bucket (20 total),
+dedupes across buckets, applies a ratings-quality guard, updates the page
+and the localStorage cache, and offers a "Download updated CSV" for the
+site owner to manually commit over the bundled starter file and redeploy.
+A public static site can't safely write back to its own repo, so this last
+step is an intentional manual one.
 
 ### The fetch/dedupe module — one codebase, two call sites
 
@@ -51,7 +51,7 @@ isomorphic (no DOM/localStorage) so it runs both:
 
 ### Genres
 
-Eight curated OpenLibrary subject queries, each verified live against the
+Twenty curated OpenLibrary subject queries, each verified live against the
 Search API:
 
 | Genre (chip label) | `genreBucket` | Query |
@@ -64,12 +64,41 @@ Search API:
 | Fairy Tales | Fairy Tales | `subject:"fairy tales" AND subject:"juvenile fiction"` |
 | Humor | Humor | `subject:"humorous stories" AND subject:"juvenile fiction"` |
 | Picture Books | Picture Books | `subject:"picture books"` |
+| Animals | Animals | `subject:"animals" AND subject:"juvenile fiction"` |
+| Friendship | Friendship | `subject:"friendship" AND subject:"juvenile fiction"` |
+| Family | Family | `subject:"family" AND subject:"juvenile fiction"` |
+| School | School | `subject:"schools" AND subject:"juvenile fiction"` |
+| Sports | Sports | `subject:"sports" AND subject:"juvenile fiction"` |
+| Horror | Horror | `subject:"horror stories" AND subject:"juvenile fiction"` |
+| Graphic Novels | Graphic Novels | `subject:"graphic novels" AND subject:"juvenile fiction"` |
+| Poetry | Poetry | `subject:"poetry" AND subject:"juvenile fiction"` |
+| Magic | Magic | `subject:"magic" AND subject:"juvenile fiction"` |
+| Dragons | Dragons | `subject:"dragons" AND subject:"juvenile fiction"` |
+| Space | Space | `subject:"space" AND subject:"juvenile fiction"` |
+| Superheroes | Superheroes | `subject:"superheroes" AND subject:"juvenile fiction"` |
 
 Buckets are processed in this order; a book found in multiple buckets is
 kept only in the first one it matches, so no book appears under two
 genres. Results with `ratings_count < 3` are filtered out before ranking,
-so a single 5-star fluke can't crowd out genuinely popular books. The
-combined dataset is capped at 100 books.
+so a single 5-star fluke can't crowd out genuinely popular books.
+
+Each bucket targets 50 books (1,000 ÷ 20 genres), and the combined dataset
+is capped at 1,000. In practice a bucket occasionally comes in under 50 —
+`validateGenreCoverage()` in `fetchTopBooks.ts` enforces a **hard floor of
+20 books per genre**, and `npm run generate-csv` refuses to overwrite the
+starter CSV if any genre falls short of it.
+
+### Sorting
+
+A "Sort by" control next to the genre chips reorders the current view
+(`client/src/lib/sortBooks.ts`):
+
+- **Popularity** (default) — `wantToReadCount` descending, tiebreak on `ratingsCount`.
+- **Title** — alphabetical.
+- **Author (last name)** — the first credited author's last name; authorless books sort to the end.
+- **Genre** — grouped by the canonical genre order above (not alphabetical).
+
+Changing the sort, like changing the genre filter, resets to page 1.
 
 ### Cover art
 

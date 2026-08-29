@@ -4,6 +4,7 @@ import { IconDefs } from "./components/IconDefs";
 import { Header } from "./components/Header";
 import { GenreChips, ALL_GENRES } from "./components/GenreChips";
 import type { GenreFilter } from "./components/GenreChips";
+import { SortControl } from "./components/SortControl";
 import { BookGrid } from "./components/BookGrid";
 import { Pagination } from "./components/Pagination";
 import { BookDetailPanel } from "./components/BookDetailPanel";
@@ -12,22 +13,25 @@ import { EmptyState } from "./components/EmptyState";
 import { Footer } from "./components/Footer";
 import { useBookDataset } from "./hooks/useBookDataset";
 import { buildDataset, fetchAllGenres, toCSV } from "./lib/fetchTopBooks";
+import { sortBooks } from "./lib/sortBooks";
+import type { SortOption } from "./lib/sortBooks";
 import type { Book } from "./lib/types";
 import "./App.css";
 
-const PAGE_SIZE = 20;
+const PAGE_SIZE = 100;
 
 function App() {
   const { books, status, applyUpdatedBooks } = useBookDataset();
   const [activeGenre, setActiveGenre] = useState<GenreFilter>(ALL_GENRES);
+  const [sortOption, setSortOption] = useState<SortOption>("popularity");
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<{ book: Book; index: number } | null>(null);
   const [updateState, setUpdateState] = useState<UpdateBookListState>({ phase: "idle" });
 
-  const filteredBooks = useMemo(
-    () => (activeGenre === ALL_GENRES ? books : books.filter((b) => b.genreBucket === activeGenre)),
-    [books, activeGenre],
-  );
+  const filteredBooks = useMemo(() => {
+    const scoped = activeGenre === ALL_GENRES ? books : books.filter((b) => b.genreBucket === activeGenre);
+    return sortBooks(scoped, sortOption);
+  }, [books, activeGenre, sortOption]);
 
   const pageCount = Math.max(1, Math.ceil(filteredBooks.length / PAGE_SIZE));
   const pageBooks = filteredBooks.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
@@ -36,6 +40,11 @@ function App() {
     setActiveGenre(genre);
     setPage(1);
     setSelected(null);
+  }
+
+  function handleSelectSort(sort: SortOption) {
+    setSortOption(sort);
+    setPage(1);
   }
 
   function handleSelectBook(book: Book, index: number) {
@@ -85,7 +94,10 @@ function App() {
       <Backdrop />
       <IconDefs />
       <Header updateState={updateState} onUpdate={handleUpdate} />
-      <GenreChips active={activeGenre} onSelect={handleSelectGenre} />
+      <div className="app__controls">
+        <GenreChips active={activeGenre} onSelect={handleSelectGenre} />
+        <SortControl value={sortOption} onChange={handleSelectSort} />
+      </div>
 
       <main className="app__main">
         <div className="app__grid-column">
