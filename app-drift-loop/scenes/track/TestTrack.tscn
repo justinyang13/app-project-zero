@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=15 format=3]
 
 [ext_resource type="Script" path="res://scripts/Track/TrackLayout.cs" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/car/Checkpoint.tscn" id="2"]
@@ -21,7 +21,18 @@ size = Vector2(110, 70)
 [sub_resource type="StandardMaterial3D" id="GroundMat"]
 albedo_color = Color(0.3, 0.5, 0.25, 1)
 
+[sub_resource type="StandardMaterial3D" id="RoadMat"]
+albedo_color = Color(0.16, 0.16, 0.18, 1)
+roughness = 0.9
+
+[sub_resource type="ProceduralSkyMaterial" id="SkyMat"]
+
+[sub_resource type="Sky" id="SkyRes"]
+sky_material = SubResource("SkyMat")
+
 [sub_resource type="Environment" id="Env"]
+background_mode = 2
+sky = SubResource("SkyRes")
 
 [node name="TestTrack" type="Node3D"]
 script = ExtResource("1")
@@ -38,6 +49,17 @@ shadow_enabled = true
 [node name="Ground" type="MeshInstance3D" parent="."]
 mesh = SubResource("GroundMesh")
 surface_material_override/0 = SubResource("GroundMat")
+
+[node name="Road" type="CSGCombiner3D" parent="."]
+position = Vector3(0, 0.15, 0)
+material_override = SubResource("RoadMat")
+
+[node name="OuterSlab" type="CSGBox3D" parent="Road"]
+size = Vector3(100, 0.3, 60)
+
+[node name="InfieldHole" type="CSGBox3D" parent="Road"]
+size = Vector3(60, 1, 30)
+operation = 2
 
 [node name="Walls" type="StaticBody3D" parent="."]
 
@@ -82,11 +104,11 @@ rotation_degrees = Vector3(0, 90, 0)
 Index = 3
 
 [node name="PlayerCarInstance" parent="." instance=ExtResource("3")]
-position = Vector3(-6, 0.5, 22.5)
+position = Vector3(-6, 0, 22.5)
 rotation_degrees = Vector3(0, -90, 0)
 
 [node name="AICarInstance" parent="." instance=ExtResource("4")]
-position = Vector3(6, 0.5, 22.5)
+position = Vector3(6, 0, 22.5)
 rotation_degrees = Vector3(0, -90, 0)
 
 [node name="Driver" parent="AICarInstance"]
