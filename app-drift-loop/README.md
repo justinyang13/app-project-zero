@@ -34,6 +34,9 @@ Godot builds the C# project automatically.
   HUD shows your lap count and elapsed time; there's no separate AI-lap
   display yet). The AI drives at full grip (no drift) for reliable
   cornering — only the player can drift.
+- You're driving a blue sedan; the AI drives a red race car — both real
+  models (see Assets below), tinted per-instance so the same shared model
+  can be recolored without forking it.
 
 ## Project structure
 
@@ -45,11 +48,14 @@ scenes/
   track/TestTrack.tscn  # ground, walls, the AI racing line, checkpoints, both cars, HUD
   ui/Hud.tscn           # lap/timer/status display (a CanvasLayer overlay, unaffected by 2D/3D)
 scripts/
-  Car/                  # CarController (shared 3D drift physics), PlayerInput, AIDriver
+  Car/                  # CarController (shared 3D drift physics), PlayerInput, AIDriver, CarTint
   Race/                 # RaceManager (autoload) and CheckpointArea
-  Track/                # TrackLayout — builds the AI curve, starts the race
+  Track/                # TrackLayout (AI curve, race start) and SceneryScatter (canyon backdrop)
   Ui/                   # Hud.cs
-assets/                 # sprites/ and audio/ — currently empty, see below
+assets/
+  models/cars/           # Kenney Car Kit (CC0) — sedan-sports.glb (player), race.glb (AI)
+  models/nature/          # Kenney Nature Kit (CC0) — rocks/cliffs/cacti for the canyon backdrop
+  audio/                  # currently empty, see below
 ```
 
 The player and AI cars are separate scenes that both attach the same
@@ -59,12 +65,24 @@ camera (`SpringArm3D` + `Camera3D`) lives only on `PlayerCar.tscn` and is
 rigidly parented to the car (no smoothing/lag yet — a reasonable simple
 first pass, not just a placeholder).
 
+## Assets
+
+Car and scenery models are from [Kenney](https://kenney.nl)'s **Car Kit**
+and **Nature Kit** (both CC0 — no attribution required, `LICENSE.txt` kept
+alongside each in `assets/models/` anyway). `CarTint.cs` recolors the
+shared car texture per-instance (blue player, red AI) by duplicating and
+tinting its material rather than forking the asset. `SceneryScatter.cs`
+procedurally scatters scaled-up rock/cliff models in a ring around the
+track for a canyon backdrop, plus smaller rocks/cacti just outside the
+walls — positions are seeded (deterministic), not hand-placed in the
+scene, since typing dozens of transforms by hand isn't worth it. The road
+surface itself is still a CSG-cut slab (see `TestTrack.tscn`), not a
+Kenney track piece.
+
 ## Explicitly out of scope for now
 
-- **Art/audio assets.** `assets/sprites/` and `assets/audio/` are placeholders;
-  the car and track currently render as flat-colored boxes. Kenney's free
-  CC0 3D racing pack and jsfxr-generated SFX are the intended source per
-  the project's tech decisions, added in a follow-up pass.
+- **Audio.** `assets/audio/` is empty; jsfxr-generated SFX (engine, drift,
+  checkpoint, countdown) are the intended source, not added yet.
 - **Track editor.** There's no in-game editor UI — tracks are hand-built
   directly in the Godot editor using 3D nodes (`StaticBody3D` walls,
   `Path3D` for the AI line), saved as `.tscn` scenes (`TestTrack.tscn` is

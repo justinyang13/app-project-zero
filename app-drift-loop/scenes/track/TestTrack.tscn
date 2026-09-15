@@ -1,10 +1,11 @@
-[gd_scene load_steps=15 format=3]
+[gd_scene load_steps=16 format=3]
 
 [ext_resource type="Script" path="res://scripts/Track/TrackLayout.cs" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/car/Checkpoint.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://scenes/car/PlayerCar.tscn" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/car/AICar.tscn" id="4"]
 [ext_resource type="PackedScene" path="res://scenes/ui/Hud.tscn" id="5"]
+[ext_resource type="Script" path="res://scripts/Track/SceneryScatter.cs" id="6"]
 
 [sub_resource type="BoxShape3D" id="WallHoriz"]
 size = Vector3(108, 2, 4)
@@ -16,10 +17,11 @@ size = Vector3(4, 2, 64)
 size = Vector3(60, 2, 30)
 
 [sub_resource type="PlaneMesh" id="GroundMesh"]
-size = Vector2(110, 70)
+size = Vector2(240, 240)
 
 [sub_resource type="StandardMaterial3D" id="GroundMat"]
-albedo_color = Color(0.3, 0.5, 0.25, 1)
+albedo_color = Color(0.76, 0.62, 0.42, 1)
+roughness = 1.0
 
 [sub_resource type="StandardMaterial3D" id="RoadMat"]
 albedo_color = Color(0.16, 0.16, 0.18, 1)
@@ -60,6 +62,9 @@ size = Vector3(100, 0.3, 60)
 [node name="InfieldHole" type="CSGBox3D" parent="Road"]
 size = Vector3(60, 1, 30)
 operation = 2
+
+[node name="Scenery" type="Node3D" parent="."]
+script = ExtResource("6")
 
 [node name="Walls" type="StaticBody3D" parent="."]
 
