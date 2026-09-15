@@ -1,0 +1,96 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://scripts/Track/TrackLayout.cs" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/car/Checkpoint.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/car/PlayerCar.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/car/AICar.tscn" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/ui/Hud.tscn" id="5"]
+
+[sub_resource type="BoxShape3D" id="WallHoriz"]
+size = Vector3(108, 2, 4)
+
+[sub_resource type="BoxShape3D" id="WallVert"]
+size = Vector3(4, 2, 64)
+
+[sub_resource type="BoxShape3D" id="Infield"]
+size = Vector3(60, 2, 30)
+
+[sub_resource type="PlaneMesh" id="GroundMesh"]
+size = Vector2(110, 70)
+
+[sub_resource type="StandardMaterial3D" id="GroundMat"]
+albedo_color = Color(0.3, 0.5, 0.25, 1)
+
+[sub_resource type="Environment" id="Env"]
+
+[node name="TestTrack" type="Node3D"]
+script = ExtResource("1")
+PlayerCarPath = NodePath("PlayerCarInstance")
+AiCarPath = NodePath("AICarInstance")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+rotation_degrees = Vector3(-45, -30, 0)
+shadow_enabled = true
+
+[node name="Ground" type="MeshInstance3D" parent="."]
+mesh = SubResource("GroundMesh")
+surface_material_override/0 = SubResource("GroundMat")
+
+[node name="Walls" type="StaticBody3D" parent="."]
+
+[node name="Top" type="CollisionShape3D" parent="Walls"]
+position = Vector3(0, 1, -32)
+shape = SubResource("WallHoriz")
+
+[node name="Bottom" type="CollisionShape3D" parent="Walls"]
+position = Vector3(0, 1, 32)
+shape = SubResource("WallHoriz")
+
+[node name="Left" type="CollisionShape3D" parent="Walls"]
+position = Vector3(-52, 1, 0)
+shape = SubResource("WallVert")
+
+[node name="Right" type="CollisionShape3D" parent="Walls"]
+position = Vector3(52, 1, 0)
+shape = SubResource("WallVert")
+
+[node name="Infield" type="CollisionShape3D" parent="Walls"]
+position = Vector3(0, 1, 0)
+shape = SubResource("Infield")
+
+[node name="AILine" type="Path3D" parent="."]
+
+[node name="Checkpoint0" parent="." instance=ExtResource("2")]
+position = Vector3(0, 1, 22.5)
+Index = 0
+
+[node name="Checkpoint1" parent="." instance=ExtResource("2")]
+position = Vector3(40, 1, 0)
+rotation_degrees = Vector3(0, 90, 0)
+Index = 1
+
+[node name="Checkpoint2" parent="." instance=ExtResource("2")]
+position = Vector3(0, 1, -22.5)
+Index = 2
+
+[node name="Checkpoint3" parent="." instance=ExtResource("2")]
+position = Vector3(-40, 1, 0)
+rotation_degrees = Vector3(0, 90, 0)
+Index = 3
+
+[node name="PlayerCarInstance" parent="." instance=ExtResource("3")]
+position = Vector3(-6, 0.5, 22.5)
+rotation_degrees = Vector3(0, -90, 0)
+
+[node name="AICarInstance" parent="." instance=ExtResource("4")]
+position = Vector3(6, 0.5, 22.5)
+rotation_degrees = Vector3(0, -90, 0)
+
+[node name="Driver" parent="AICarInstance"]
+RacingLinePath = NodePath("../../AILine")
+
+[node name="Hud" parent="." instance=ExtResource("5")]
+PlayerCarPath = NodePath("../PlayerCarInstance")

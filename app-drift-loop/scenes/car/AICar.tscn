@@ -1,0 +1,27 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://scripts/Car/CarController.cs" id="1"]
+[ext_resource type="Script" path="res://scripts/Car/AIDriver.cs" id="2"]
+
+[sub_resource type="BoxShape3D" id="CarShape"]
+size = Vector3(2, 1, 4)
+
+[sub_resource type="BoxMesh" id="CarMesh"]
+size = Vector3(2, 1, 4)
+
+[sub_resource type="StandardMaterial3D" id="CarMat"]
+albedo_color = Color(0.9, 0.2, 0.2, 1)
+
+[node name="AICar" type="CharacterBody3D"]
+motion_mode = 1
+script = ExtResource("1")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+shape = SubResource("CarShape")
+
+[node name="Visual" type="MeshInstance3D" parent="."]
+mesh = SubResource("CarMesh")
+surface_material_override/0 = SubResource("CarMat")
+
+[node name="Driver" type="Node" parent="."]
+script = ExtResource("2")
