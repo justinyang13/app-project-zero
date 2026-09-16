@@ -1,0 +1,15 @@
+/* Resets the browser default body margin (8px) and disables page scroll
+   — without this, the canvas (sized to 100vw/100vh) overflows the
+   viewport by the margin, a scrollbar appears, and the default
+   space-bar-scrolls-the-page behavior can yank the canvas out of view. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  height: 100%;
+}
+
+#root {
+  height: 100%;
+}

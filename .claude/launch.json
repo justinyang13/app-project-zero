@@ -24,6 +24,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "app-storyden/client", "--", "--port", "5176"],
       "port": 5176
+    },
+    {
+      "name": "sim-craft-client-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "app-sim-craft/client", "--", "--port", "5177"],
+      "port": 5177
     }
   ]
 }

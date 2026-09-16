@@ -1,0 +1,39 @@
+import { useEffect, useRef } from "react";
+import { GameLoop } from "./engine/GameLoop";
+import { DebugOverlay } from "./ui/DebugOverlay";
+import { Hotbar } from "./ui/Hotbar";
+import { Crosshair } from "./ui/Crosshair";
+
+export function App() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+
+    let cancelled = false;
+    let loop: GameLoop | null = null;
+    void GameLoop.create(canvas).then((created) => {
+      if (cancelled) {
+        created.dispose();
+        return;
+      }
+      loop = created;
+      loop.start();
+    });
+
+    return () => {
+      cancelled = true;
+      loop?.dispose();
+    };
+  }, []);
+
+  return (
+    <>
+      <canvas ref={canvasRef} style={{ display: "block", width: "100vw", height: "100vh" }} />
+      <Crosshair />
+      <Hotbar />
+      <DebugOverlay />
+    </>
+  );
+}

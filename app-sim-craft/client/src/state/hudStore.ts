@@ -1,0 +1,48 @@
+// UI-facing Zustand store. Per spec/01-tech-stack-architecture.md §3, this
+// only ever receives a throttled, read-only projection of GameLoop/World
+// state — it is never the primary store for simulation data.
+import { create } from "zustand";
+
+export interface DebugSnapshot {
+  fps: number;
+  frameTimeMs: number;
+  position: { x: number; y: number; z: number };
+  facingYawDeg: number;
+  chunkCount: number;
+  simTick: number;
+  worldSeed: number;
+  pointerLocked: boolean;
+  biome: string;
+  targetBlock: string | null;
+  pendingChunkOps: number;
+  flying: boolean;
+  viewMode: "first" | "third";
+}
+
+interface HudState {
+  debugVisible: boolean;
+  toggleDebug: () => void;
+  debug: DebugSnapshot;
+  setDebug: (snapshot: DebugSnapshot) => void;
+}
+
+export const useHudStore = create<HudState>((set) => ({
+  debugVisible: true,
+  toggleDebug: () => set((s) => ({ debugVisible: !s.debugVisible })),
+  debug: {
+    fps: 0,
+    frameTimeMs: 0,
+    position: { x: 0, y: 0, z: 0 },
+    facingYawDeg: 0,
+    chunkCount: 0,
+    simTick: 0,
+    worldSeed: 0,
+    pointerLocked: false,
+    biome: "",
+    targetBlock: null,
+    pendingChunkOps: 0,
+    flying: false,
+    viewMode: "first",
+  },
+  setDebug: (snapshot) => set({ debug: snapshot }),
+}));
