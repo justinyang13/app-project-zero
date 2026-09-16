@@ -3,6 +3,7 @@ import { GameLoop } from "./engine/GameLoop";
 import { DebugOverlay } from "./ui/DebugOverlay";
 import { Hotbar } from "./ui/Hotbar";
 import { Crosshair } from "./ui/Crosshair";
+import { Logo } from "./ui/Logo";
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -34,6 +35,7 @@ export function App() {
       <Crosshair />
       <Hotbar />
       <DebugOverlay />
+      <Logo />
     </>
   );
 }
