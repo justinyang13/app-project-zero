@@ -315,7 +315,17 @@ export class GameLoop {
       // (camera rotation) is a bonus on top of WASD, never a
       // prerequisite for it (same reasoning as handleMouseDown above).
       const axes = this.mouseLook.getMoveAxes(this.camera);
-      this.player.tick(SIM_DT, this.world, this.buildPlayerInput(), axes.forward, axes.right);
+      // Walking keeps the yaw-only forward (pitch shouldn't slow down
+      // ground movement or skew diagonals against the yaw-only right
+      // vector); flying uses the full look direction so facing down and
+      // holding forward actually dives.
+      let forward3D = { x: axes.forward.x, y: 0, z: axes.forward.z };
+      if (this.player.flying) {
+        const lookDir = new THREE.Vector3();
+        this.camera.getWorldDirection(lookDir);
+        forward3D = lookDir;
+      }
+      this.player.tick(SIM_DT, this.world, this.buildPlayerInput(), forward3D, axes.right);
       for (const creature of this.creatures) creature.tick(SIM_DT, this.world);
       this.simTick++;
       this.accumulator -= SIM_DT;

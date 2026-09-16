@@ -56,12 +56,18 @@ export class Player {
     return false;
   }
 
-  /** One fixed-timestep physics update. `forwardVec`/`rightVec` are the camera's yaw-only unit vectors. */
+  /**
+   * One fixed-timestep physics update. `forwardVec` is the camera's full
+   * look direction (pitch included) — while flying, moving "forward"
+   * follows wherever you're actually looking (look down, you dive; look
+   * up, you climb), matching walking's ground-relative feel otherwise.
+   * `rightVec` stays yaw-only in both modes — strafing doesn't tilt.
+   */
   tick(
     dt: number,
     world: World,
     input: PlayerInput,
-    forwardVec: { x: number; z: number },
+    forwardVec: { x: number; y: number; z: number },
     rightVec: { x: number; z: number },
   ): void {
     // Safety net: if the player is ever found embedded in solid terrain
@@ -79,17 +85,35 @@ export class Player {
     const speed = this.flying ? FLY_SPEED : input.sprint ? SPRINT_SPEED : WALK_SPEED;
     let wishX = forwardVec.x * input.forward + rightVec.x * input.right;
     let wishZ = forwardVec.z * input.forward + rightVec.z * input.right;
-    const len = Math.hypot(wishX, wishZ);
-    if (len > 0) {
-      wishX /= len;
-      wishZ /= len;
+    let wishY = 0;
+
+    if (this.flying) {
+      // Full 3D normalize here (forward's pitch component included) so
+      // looking straight down and holding forward dives at full speed
+      // instead of adding an extra vertical burst on top of level flight.
+      wishY = forwardVec.y * input.forward;
+      const len = Math.hypot(wishX, wishY, wishZ);
+      if (len > 0) {
+        wishX /= len;
+        wishY /= len;
+        wishZ /= len;
+      }
+    } else {
+      const len = Math.hypot(wishX, wishZ);
+      if (len > 0) {
+        wishX /= len;
+        wishZ /= len;
+      }
     }
+
     this.velocity.x = wishX * speed;
     this.velocity.z = wishZ * speed;
 
     if (this.flying) {
-      this.velocity.y = (input.flyUp ? 1 : 0) - (input.flyDown ? 1 : 0);
-      this.velocity.y *= FLY_SPEED;
+      // Space/Shift still give pure vertical control on top of whatever
+      // looking up/down already contributes — handy for climbing/
+      // descending straight while looking level.
+      this.velocity.y = wishY * speed + ((input.flyUp ? 1 : 0) - (input.flyDown ? 1 : 0)) * FLY_SPEED;
     } else {
       if (this.onGround && input.jump) {
         this.velocity.y = JUMP_VELOCITY;
