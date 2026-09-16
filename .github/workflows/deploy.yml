@@ -38,6 +38,7 @@ jobs:
             app-hello-world/client/package-lock.json
             app-loot-raider/client/package-lock.json
             app-storyden/client/package-lock.json
+            app-sim-craft/client/package-lock.json
 
       - name: Install and build hub
         working-directory: app-project-zero-hub
@@ -74,6 +75,12 @@ jobs:
           npm ci
           npm run build
 
+      - name: Install and build SimCraft client
+        working-directory: app-sim-craft/client
+        run: |
+          npm ci
+          npm run build
+
       # Each app is a standalone project that only knows how to build
       # itself — this step is what actually composes them into one site,
       # with the hub at the root linking out to each app's subpath.
@@ -91,6 +98,8 @@ jobs:
           cp -r app-loot-raider/client/dist/. site/app-loot-raider/
           mkdir -p site/app-storyden
           cp -r app-storyden/client/dist/. site/app-storyden/
+          mkdir -p site/app-sim-craft
+          cp -r app-sim-craft/client/dist/. site/app-sim-craft/
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

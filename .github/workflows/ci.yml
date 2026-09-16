@@ -187,6 +187,35 @@ jobs:
         working-directory: app-storyden/client
         run: npm run build
 
+  sim-craft-frontend-build-test:
+    name: SimCraft frontend build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: app-sim-craft/client/package-lock.json
+
+      - name: Install dependencies
+        working-directory: app-sim-craft/client
+        run: npm ci
+
+      - name: Lint
+        working-directory: app-sim-craft/client
+        run: npm run lint
+
+      - name: Unit test
+        working-directory: app-sim-craft/client
+        run: npm test
+
+      - name: Build
+        working-directory: app-sim-craft/client
+        run: npm run build
+
   hello-world-e2e:
     name: End-to-end tests
     needs: [hello-world-backend-build-test, hello-world-frontend-build-test]

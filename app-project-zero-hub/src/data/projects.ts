@@ -60,4 +60,14 @@ export const projects: Project[] = [
     href: "app-storyden/",
     linkLabel: "Browse the shelf",
   },
+  {
+    id: "sim-craft",
+    name: "SimCraft",
+    tagline: "A voxel sandbox you can build in, right in the browser",
+    description:
+      "Mine, place, and explore a procedurally generated world — chunk-streamed terrain, day/night tied to your system clock, and a landmark castle to find. No install, no account.",
+    tags: ["React", "TypeScript", "Three.js", "WebGL"],
+    href: "app-sim-craft/",
+    linkLabel: "Start building",
+  },
 ];
