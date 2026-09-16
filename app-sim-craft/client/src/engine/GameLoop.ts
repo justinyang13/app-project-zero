@@ -11,7 +11,8 @@ import { raycastVoxels, type RaycastHit } from "./Raycaster";
 import { Creature, findSurfaceY, type CreatureSpecies } from "./Creature";
 import { PlayerModel } from "./PlayerModel";
 import { Clouds } from "./Clouds";
-import { Sky } from "./Sky";
+import { Sky, getSystemTimeOfDay } from "./Sky";
+import { useTimeStore } from "../state/timeStore";
 import { CampfireVisual } from "./CampfireVisual";
 import { CAMPFIRE_CENTER, getStructureAnchors } from "./worldgen/structures";
 import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
@@ -341,7 +342,9 @@ export class GameLoop {
     this.playerModel.visible = this.viewMode === "third";
 
     this.clouds.update(dt, this.player.position.x, this.player.position.z);
-    this.sky.update(this.player.position);
+    const timeState = useTimeStore.getState();
+    const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
+    this.sky.update(this.player.position, timeOfDay);
     this.campfire.update(dt);
 
     this.chunkManager.update(this.player.position.x, this.player.position.z);
@@ -388,6 +391,7 @@ export class GameLoop {
       pendingChunkOps: this.chunkManager.pendingCount,
       flying: this.player.flying,
       viewMode: this.viewMode,
+      timeOfDay,
     });
 
     this.rafHandle = requestAnimationFrame(this.frame);

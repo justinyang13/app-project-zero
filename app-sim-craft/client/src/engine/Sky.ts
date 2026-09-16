@@ -1,10 +1,11 @@
-// Day/night driven by the real system clock, per the user's explicit
+// Day/night defaults to the real system clock, per the user's original
 // "default to system time" request — not spec/07-survival-systems.md's
-// accelerated in-game day cycle (that's a separate, later-phase system;
-// this one always matches whatever time it actually is when you play).
-// Owns the sun/moon meshes, the single directional "sky light" (whichever
-// body is up), ambient light, and the sky/fog color, all driven by one
-// continuously-read Date().
+// accelerated in-game day cycle (that's a separate, later-phase system).
+// The caller (GameLoop) decides each frame whether to pass the live clock
+// or a player-chosen override (see state/timeStore.ts) — this class just
+// renders whatever timeOfDay fraction it's given. Owns the sun/moon
+// meshes, the single directional "sky light" (whichever body is up),
+// ambient light, and the sky/fog color.
 import * as THREE from "three";
 
 const SUNRISE = 6 / 24;
@@ -74,13 +75,8 @@ export class Sky {
     scene.fog = new THREE.Fog(DAY_SKY.getHex(), 60, 190);
   }
 
-  get isDay(): boolean {
-    const t = getSystemTimeOfDay();
-    return t >= SUNRISE && t < SUNSET;
-  }
-
-  update(playerPosition: { x: number; y: number; z: number }): void {
-    const t = getSystemTimeOfDay();
+  update(playerPosition: { x: number; y: number; z: number }, timeOfDay: number): void {
+    const t = timeOfDay;
     const day = dayFactorAt(t);
 
     // Sun and moon arc opposite each other across a fixed compass line —

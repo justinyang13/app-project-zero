@@ -17,6 +17,7 @@ export interface DebugSnapshot {
   pendingChunkOps: number;
   flying: boolean;
   viewMode: "first" | "third";
+  timeOfDay: number; // fraction of a day, [0, 1) — whatever Sky is actually rendering right now
 }
 
 interface HudState {
@@ -43,6 +44,7 @@ export const useHudStore = create<HudState>((set) => ({
     pendingChunkOps: 0,
     flying: false,
     viewMode: "first",
+    timeOfDay: 0.5,
   },
   setDebug: (snapshot) => set({ debug: snapshot }),
 }));
