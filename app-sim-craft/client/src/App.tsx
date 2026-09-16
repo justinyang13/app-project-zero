@@ -5,17 +5,21 @@ import { Hotbar } from "./ui/Hotbar";
 import { Crosshair } from "./ui/Crosshair";
 import { Logo } from "./ui/Logo";
 import { TimeControl } from "./ui/TimeControl";
+import { VehiclePrompt } from "./ui/VehiclePrompt";
+import { MiniMapPanel } from "./ui/MiniMapPanel";
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const minimapCanvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    const minimapCanvas = minimapCanvasRef.current;
+    if (!canvas || !minimapCanvas) return;
 
     let cancelled = false;
     let loop: GameLoop | null = null;
-    void GameLoop.create(canvas).then((created) => {
+    void GameLoop.create(canvas, minimapCanvas).then((created) => {
       if (cancelled) {
         created.dispose();
         return;
@@ -38,6 +42,8 @@ export function App() {
       <DebugOverlay />
       <Logo />
       <TimeControl />
+      <VehiclePrompt />
+      <MiniMapPanel canvasRef={minimapCanvasRef} />
     </>
   );
 }

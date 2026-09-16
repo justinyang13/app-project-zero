@@ -221,6 +221,26 @@ export const BLOCKS: BlockDef[] = [
     dropTable: [{ itemKey: "roof_tile", minCount: 1, maxCount: 1, chance: 1 }],
     color: 0xb5502a,
   },
+  {
+    id: 15,
+    key: "asphalt",
+    name: "Asphalt",
+    // Painted over the terrain surface by the road grid (see
+    // engine/worldgen/roads.ts) instead of being hand-placed — it never
+    // changes terrain height, just what's on top of it, same as the
+    // biome surface swap in worldgen/biomes.ts.
+    hardness: 1.0,
+    toolType: "pickaxe",
+    toolTier: 0,
+    lightEmission: 0,
+    lightOpacity: 15,
+    flammable: false,
+    solid: true,
+    transparentToRender: false,
+    gravityAffected: false,
+    dropTable: [{ itemKey: "asphalt", minCount: 1, maxCount: 1, chance: 1 }],
+    color: 0x3c3c3e,
+  },
 ];
 
 function leafVariant(id: number, key: string, name: string, color: number): BlockDef {

@@ -11,12 +11,14 @@ import { pickBiome, type BiomeDef } from "./biomes";
 import { getBlockByKey } from "../../data/blocks";
 import { placeTrees } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
+import { isRoadColumn, FLAT_ROAD_Y } from "./roads";
 
 const SALT_TEMPERATURE = 0x5eed01;
 const SALT_HEIGHT = 0x5eed02;
 
 const STONE_ID = getBlockByKey("greystone").id;
 const WATER_ID = getBlockByKey("water").id;
+const ROAD_ID = getBlockByKey("asphalt").id;
 
 // Any column whose surface height falls below this gets flooded up to it
 // at generation time, forming lakes wherever the noise-based heightmap
@@ -73,24 +75,37 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
   // plus whatever a fixed structure overlapping this chunk needs (a
   // castle tower reaches well above typical terrain — see
   // worldgen/structures.ts).
-  const maxCy = maxChunkYFor(Math.max(maxHeight + 8, SEA_LEVEL, structureMaxYFor(seed, cx, cz)));
+  const maxCy = maxChunkYFor(Math.max(maxHeight + 8, SEA_LEVEL, FLAT_ROAD_Y, structureMaxYFor(seed, cx, cz)));
   const chunks: Chunk[] = [];
   for (let cy = 0; cy <= maxCy; cy++) chunks.push(new Chunk({ cx, cy, cz }));
 
   for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
       const { height, biome } = columns[lx * CHUNK_SIZE + lz];
-      const filledTop = Math.max(height, SEA_LEVEL); // top of lake water, or bare ground if above sea level
+
+      // The loop road is flattened, not just surface-painted: every
+      // column under it is cut/filled to a single constant elevation
+      // (FLAT_ROAD_Y) regardless of the natural heightmap, cutting
+      // through hills and causewaying over lakes so the whole loop reads
+      // as genuinely flat (see worldgen/roads.ts).
+      const worldX = cx * CHUNK_SIZE + lx;
+      const worldZ = cz * CHUNK_SIZE + lz;
+      const isRoad = isRoadColumn(worldX, worldZ);
+      const filledTop = isRoad ? FLAT_ROAD_Y : Math.max(height, SEA_LEVEL); // top of road/lake/bare ground
 
       for (let cy = 0; cy <= maxCy; cy++) {
         const chunk = chunks[cy];
         const baseY = cy * CHUNK_SIZE;
         for (let ly = 0; ly < CHUNK_SIZE; ly++) {
           const worldY = baseY + ly;
-          if (worldY > filledTop) break; // above the water/surface: leave as air (id 0)
+          if (worldY > filledTop) break; // above the road/water/surface: leave as air (id 0)
           const idx = lx | (ly << 5) | (lz << 10);
           chunk.skyLight[idx] = 0;
-          if (worldY > height) chunk.blocks[idx] = WATER_ID;
+          if (isRoad) {
+            if (worldY === FLAT_ROAD_Y) chunk.blocks[idx] = ROAD_ID;
+            else if (worldY >= FLAT_ROAD_Y - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
+            else chunk.blocks[idx] = STONE_ID;
+          } else if (worldY > height) chunk.blocks[idx] = WATER_ID;
           else if (worldY === height) chunk.blocks[idx] = biome.surfaceBlock;
           else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
           else chunk.blocks[idx] = STONE_ID;

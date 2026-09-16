@@ -9,12 +9,15 @@ import { Player, EYE_HEIGHT, type PlayerInput } from "./Player";
 import { ChunkManager } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
 import { Creature, findSurfaceY, type CreatureSpecies } from "./Creature";
+import { Car, type CarInput } from "./Car";
+import { pointAtProgress, LOOP_PERIMETER, FLAT_ROAD_Y } from "./worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
 import { Clouds } from "./Clouds";
 import { Sky, getSystemTimeOfDay } from "./Sky";
 import { useTimeStore } from "../state/timeStore";
 import { CampfireVisual } from "./CampfireVisual";
-import { CAMPFIRE_CENTER, getStructureAnchors } from "./worldgen/structures";
+import { CAMPFIRE_SITES, CASTLE_CENTER, getStructureAnchors } from "./worldgen/structures";
+import { MiniMap, type MiniMapMarker } from "./MiniMap";
 import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
 import { sampleColumn, biomeKeyFromIndex, sampleBiomeIndexAt } from "./worldgen/terrain";
 import { useHudStore } from "../state/hudStore";
@@ -27,6 +30,10 @@ const MAX_SIM_STEPS_PER_FRAME = 5;
 const ARROW_PAN_SPEED = 2.2; // radians/sec
 const THIRD_PERSON_DISTANCE = 4.5;
 const THIRD_PERSON_UP_OFFSET = 1.0;
+const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped position
+const ENTER_VEHICLE_RANGE = 3;
+const CAR_COUNT = 6;
+const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0xecf0f1, 0xe67e22];
 
 type ViewMode = "first" | "third";
 
@@ -43,10 +50,14 @@ export class GameLoop {
   private readonly highlightMesh: THREE.LineSegments;
   private readonly creatures: Creature[] = [];
   private creaturesSpawned = false;
+  private readonly cars: Car[] = [];
+  private carsSpawned = false;
+  private drivingCar: Car | null = null;
   private readonly playerModel: PlayerModel;
   private readonly clouds: Clouds;
   private readonly sky: Sky;
-  private readonly campfire: CampfireVisual;
+  private readonly campfires: CampfireVisual[];
+  private readonly miniMap: MiniMap;
   private viewMode: ViewMode = "first";
 
   private readonly pressed = new Set<string>();
@@ -62,14 +73,15 @@ export class GameLoop {
   private rafHandle = 0;
   private disposed = false;
 
-  static async create(canvas: HTMLCanvasElement): Promise<GameLoop> {
+  static async create(canvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement): Promise<GameLoop> {
     const saveManager = new SaveManager();
     const { seed, playerState } = await saveManager.load();
-    return new GameLoop(canvas, seed, saveManager, playerState);
+    return new GameLoop(canvas, minimapCanvas, seed, saveManager, playerState);
   }
 
   private constructor(
     canvas: HTMLCanvasElement,
+    minimapCanvas: HTMLCanvasElement,
     seed: number,
     saveManager: SaveManager,
     playerState: Awaited<ReturnType<SaveManager["load"]>>["playerState"],
@@ -116,9 +128,11 @@ export class GameLoop {
     this.clouds = new Clouds();
     this.scene.add(this.clouds.group);
 
-    const { campfireY } = getStructureAnchors(seed);
-    this.campfire = new CampfireVisual(CAMPFIRE_CENTER.x, campfireY, CAMPFIRE_CENTER.z);
-    this.scene.add(this.campfire.group);
+    const { campfireYs } = getStructureAnchors(seed);
+    this.campfires = CAMPFIRE_SITES.map((site, i) => new CampfireVisual(site.x, campfireYs[i], site.z));
+    for (const campfire of this.campfires) this.scene.add(campfire.group);
+
+    this.miniMap = new MiniMap(minimapCanvas, seed);
 
     window.addEventListener("resize", this.handleResize);
     window.addEventListener("keydown", this.handleKeyDown);
@@ -182,6 +196,9 @@ export class GameLoop {
     }
     if (e.code === "KeyB" && !e.repeat) {
       useHotbarStore.getState().toggleMode();
+    }
+    if (e.code === "KeyE" && !e.repeat) {
+      this.toggleDriving();
     }
     if (e.code === "F5") {
       // F5's browser default is a page refresh, which would lose the
@@ -278,6 +295,82 @@ export class GameLoop {
     }
   }
 
+  /** Landmark + live-creature markers for the minimap. Cheap to rebuild every frame — a handful of fixed points plus one per creature. */
+  private buildMiniMapMarkers(): MiniMapMarker[] {
+    const markers: MiniMapMarker[] = [{ x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, kind: "castle" }];
+    for (const site of CAMPFIRE_SITES) markers.push({ x: site.x, z: site.z, kind: "campfire" });
+    for (const creature of this.creatures) markers.push({ x: creature.position.x, z: creature.position.z, kind: "creature" });
+    return markers;
+  }
+
+  // Same "wait for ground to exist" gating as trySpawnCreatures. Cars are
+  // spaced evenly around the loop road (worldgen/roads.ts) so they start
+  // out already spread around the track their AI drives.
+  private trySpawnCars(): void {
+    if (this.carsSpawned || this.chunkManager.pendingCount > 0 || this.chunkManager.loadedChunkCount === 0) {
+      return;
+    }
+    this.carsSpawned = true;
+
+    for (let i = 0; i < CAR_COUNT; i++) {
+      const progress = (LOOP_PERIMETER / CAR_COUNT) * i;
+      const { x, z } = pointAtProgress(progress);
+      const y = findSurfaceY(this.world, x, z) ?? FLAT_ROAD_Y;
+
+      const car = new Car(CAR_COLORS[i % CAR_COLORS.length], y, progress);
+      this.cars.push(car);
+      this.scene.add(car.mesh);
+    }
+  }
+
+  /** Nearest car the player is close enough to hop into, or null. */
+  private findNearbyEnterableCar(): Car | null {
+    let nearest: Car | null = null;
+    let nearestDist = ENTER_VEHICLE_RANGE;
+    for (const car of this.cars) {
+      if (car.driven) continue;
+      const d = Math.hypot(car.position.x - this.player.position.x, car.position.z - this.player.position.z);
+      if (d < nearestDist) {
+        nearest = car;
+        nearestDist = d;
+      }
+    }
+    return nearest;
+  }
+
+  private toggleDriving(): void {
+    if (this.drivingCar) {
+      const car = this.drivingCar;
+      car.driven = false;
+      car.parked = true; // stays put rather than resuming AI wandering from wherever it was left
+      this.drivingCar = null;
+
+      // Step out to the car's side, re-grounded independently in case the
+      // car itself is resting on something a standing player wouldn't
+      // (e.g. it nosed a little onto a ledge).
+      const exitX = car.position.x + Math.sin(car.yaw + Math.PI / 2) * 1.5;
+      const exitZ = car.position.z + Math.cos(car.yaw + Math.PI / 2) * 1.5;
+      const groundY = findSurfaceY(this.world, exitX, exitZ) ?? car.position.y;
+      this.player.position = { x: exitX, y: groundY, z: exitZ };
+      this.player.velocity = { x: 0, y: 0, z: 0 };
+      return;
+    }
+
+    const nearest = this.findNearbyEnterableCar();
+    if (nearest) {
+      nearest.driven = true;
+      nearest.parked = false;
+      this.drivingCar = nearest;
+    }
+  }
+
+  private buildCarInput(): CarInput {
+    return {
+      throttle: (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0),
+      steer: (this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0),
+    };
+  }
+
   private buildPlayerInput(): PlayerInput {
     return {
       forward: (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0),
@@ -325,17 +418,34 @@ export class GameLoop {
         this.camera.getWorldDirection(lookDir);
         forward3D = lookDir;
       }
-      this.player.tick(SIM_DT, this.world, this.buildPlayerInput(), forward3D, axes.right);
+      if (this.drivingCar) {
+        this.drivingCar.tickDriven(SIM_DT, this.world, this.buildCarInput());
+        // Keep the player's own position (used for chunk streaming, HUD,
+        // and save-on-exit) glued to the car while it's being driven.
+        this.player.position = { ...this.drivingCar.position };
+        this.player.velocity = { x: 0, y: 0, z: 0 };
+      } else {
+        this.player.tick(SIM_DT, this.world, this.buildPlayerInput(), forward3D, axes.right);
+      }
       for (const creature of this.creatures) creature.tick(SIM_DT, this.world);
+      for (const car of this.cars) {
+        if (car === this.drivingCar || car.parked) continue;
+        car.tickAI(SIM_DT, this.world);
+      }
       this.simTick++;
       this.accumulator -= SIM_DT;
       steps++;
     }
 
+    const driving = this.drivingCar !== null;
+    // Driving always uses the third-person chase cam — there's no
+    // in-cabin first-person view of the car's interior — but mouse-look
+    // still free-rotates the camera around that anchor same as on foot.
+    const activeViewMode: ViewMode = driving ? "third" : this.viewMode;
     const eyeX = this.player.position.x;
-    const eyeY = this.player.position.y + EYE_HEIGHT;
+    const eyeY = this.player.position.y + (driving ? DRIVING_EYE_HEIGHT : EYE_HEIGHT);
     const eyeZ = this.player.position.z;
-    if (this.viewMode === "first") {
+    if (activeViewMode === "first") {
       this.camera.position.set(eyeX, eyeY, eyeZ);
     } else {
       const forward = new THREE.Vector3();
@@ -349,16 +459,27 @@ export class GameLoop {
     const bodyYaw = new THREE.Euler().setFromQuaternion(this.camera.quaternion, "YXZ").y;
     const horizontalSpeed = Math.hypot(this.player.velocity.x, this.player.velocity.z);
     this.playerModel.update(this.player.position, bodyYaw, horizontalSpeed, dt);
-    this.playerModel.visible = this.viewMode === "third";
+    this.playerModel.visible = activeViewMode === "third" && !driving;
 
     this.clouds.update(dt, this.player.position.x, this.player.position.z);
     const timeState = useTimeStore.getState();
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
     this.sky.update(this.player.position, timeOfDay);
-    this.campfire.update(dt);
+    for (const campfire of this.campfires) campfire.update(dt);
+
+    // While driving, point the arrow at the car's actual heading rather
+    // than the free-look camera's yaw (see the third-person chase cam
+    // above — mouse-look can face anywhere independent of travel).
+    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw : bodyYaw;
+    this.miniMap.update(this.player.position.x, this.player.position.z, miniMapYaw, this.buildMiniMapMarkers());
 
     this.chunkManager.update(this.player.position.x, this.player.position.z);
     this.trySpawnCreatures();
+    this.trySpawnCars();
+
+    useHudStore
+      .getState()
+      .setVehiclePrompt(driving ? "exit" : this.findNearbyEnterableCar() ? "enter" : null);
 
     this.currentTarget = this.computeTargetHit();
     if (this.currentTarget) {
@@ -399,6 +520,7 @@ export class GameLoop {
       biome: biomeKey,
       targetBlock: this.currentTarget ? getBlockById(this.currentTarget.blockId).name : null,
       pendingChunkOps: this.chunkManager.pendingCount,
+      carCount: this.cars.length,
       flying: this.player.flying,
       viewMode: this.viewMode,
       timeOfDay,
@@ -443,13 +565,19 @@ export class GameLoop {
       this.scene.remove(creature.mesh);
       creature.dispose();
     }
+    for (const car of this.cars) {
+      this.scene.remove(car.mesh);
+      car.dispose();
+    }
     this.scene.remove(this.playerModel.group);
     this.playerModel.dispose();
     this.scene.remove(this.clouds.group);
     this.clouds.dispose();
     this.sky.dispose();
-    this.scene.remove(this.campfire.group);
-    this.campfire.dispose();
+    for (const campfire of this.campfires) {
+      this.scene.remove(campfire.group);
+      campfire.dispose();
+    }
     this.renderer.dispose();
 
     this.savePlayerStateNow();

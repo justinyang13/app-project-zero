@@ -8,6 +8,7 @@
 import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { getBlockByKey } from "../../data/blocks";
 import { SEA_LEVEL, type ColumnSample } from "./terrain";
+import { isRoadColumn } from "./roads";
 
 const LOG_ID = getBlockByKey("log").id;
 const LEAF_IDS = [
@@ -53,6 +54,7 @@ export function placeTrees(seed: number, cx: number, cz: number, columns: Column
 
       const worldX = cx * CHUNK_SIZE + lx;
       const worldZ = cz * CHUNK_SIZE + lz;
+      if (isRoadColumn(worldX, worldZ)) continue; // keep roads clear of trees
       if (hash01(seed, worldX, worldZ, 1) >= density) continue;
 
       const trunkHeight = 3 + Math.floor(hash01(seed, worldX, worldZ, 2) * 3); // 3-5

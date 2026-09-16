@@ -1,10 +1,10 @@
 // Fixed, deterministic landmark structures near spawn — a small,
 // hard-coded slice of spec/02-world-generation.md §6 (the real spec
 // wants chunk-hash-based probabilistic placement across the whole world;
-// this is one bridge, one castle, and one campfire pit at fixed world
-// coordinates near origin, stamped the same way trees are: by checking,
-// for each generated chunk, whether it overlaps the structure's
-// world-space bounding box, so it stays correct across chunk
+// this is one bridge, one castle, and a handful of campfire camps at
+// fixed world coordinates near origin, stamped the same way trees are:
+// by checking, for each generated chunk, whether it overlaps the
+// structure's world-space bounding box, so it stays correct across chunk
 // load/unload and never needs to be treated as a "player edit" for
 // persistence purposes).
 import { CHUNK_SIZE, Chunk } from "../Chunk";
@@ -33,7 +33,23 @@ const CASTLE_CORNERS: [number, number][] = [
   [CASTLE_CENTER.x + CASTLE_HALF_SIZE, CASTLE_CENTER.z + CASTLE_HALF_SIZE],
 ];
 
-export const CAMPFIRE_CENTER = { x: 4, z: 6 };
+// Several small camps scattered near spawn, each a fire pit ringed by
+// seating (see stampCampfireSite) — deliberately kept off the road grid
+// (worldgen/roads.ts bands are `mod(coord, 32) < 5`; every site below
+// sits at a `32k + 16` coordinate on both axes, dead center of a road
+// cell) so a camp never gets paved over.
+export const CAMPFIRE_SITES: { x: number; z: number }[] = [
+  { x: 4, z: 6 }, // original camp, right by spawn
+  { x: 16, z: -48 },
+  { x: -48, z: 16 },
+  { x: 48, z: 48 },
+  { x: -80, z: -16 },
+];
+export const CAMPFIRE_CENTER = CAMPFIRE_SITES[0];
+
+const SEAT_ID = getBlockByKey("plank").id;
+const SEAT_RADIUS = 2.2;
+const SEAT_COUNT = 6;
 
 // sampleColumn is a pure function, so these anchor heights are cheap to
 // recompute, but every chunk generation calls in here — memoize per seed
@@ -41,7 +57,7 @@ export const CAMPFIRE_CENTER = { x: 4, z: 6 };
 let cachedSeed: number | null = null;
 let cachedBridgeDeckY = 0;
 let cachedCastleBaseY = 0;
-let cachedCampfireY = 0;
+let cachedCampfireYs: number[] = [];
 
 function ensureCache(seed: number): void {
   if (cachedSeed === seed) return;
@@ -50,13 +66,13 @@ function ensureCache(seed: number): void {
   const bridgeEnd = sampleColumn(seed, BRIDGE_CENTER.x + BRIDGE_HALF_LENGTH, BRIDGE_CENTER.z).height;
   cachedBridgeDeckY = Math.max(bridgeStart, bridgeEnd, SEA_LEVEL) + 1;
   cachedCastleBaseY = sampleColumn(seed, CASTLE_CENTER.x, CASTLE_CENTER.z).height + 1;
-  cachedCampfireY = sampleColumn(seed, CAMPFIRE_CENTER.x, CAMPFIRE_CENTER.z).height + 1;
+  cachedCampfireYs = CAMPFIRE_SITES.map((site) => sampleColumn(seed, site.x, site.z).height + 1);
 }
 
-/** World-space anchor heights for these structures — exported so GameLoop can place the campfire's flame/light without waiting on chunk load. */
-export function getStructureAnchors(seed: number): { bridgeDeckY: number; castleBaseY: number; campfireY: number } {
+/** World-space anchor heights for these structures — exported so GameLoop can place each campfire's flame/light without waiting on chunk load. */
+export function getStructureAnchors(seed: number): { bridgeDeckY: number; castleBaseY: number; campfireYs: number[] } {
   ensureCache(seed);
-  return { bridgeDeckY: cachedBridgeDeckY, castleBaseY: cachedCastleBaseY, campfireY: cachedCampfireY };
+  return { bridgeDeckY: cachedBridgeDeckY, castleBaseY: cachedCastleBaseY, campfireYs: cachedCampfireYs };
 }
 
 function chunkOverlapsBox(cx: number, cz: number, minX: number, maxX: number, minZ: number, maxZ: number): boolean {
@@ -169,20 +185,43 @@ function stampCastle(seed: number, cx: number, cz: number, chunks: Chunk[]): voi
   }
 }
 
-function stampCampfire(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
-  const { x, z } = CAMPFIRE_CENTER;
-  if (!chunkOverlapsBox(cx, cz, x - 1, x + 1, z - 1, z + 1)) return;
-  const { campfireY } = getStructureAnchors(seed);
+/** One camp: a crossed-log fire pit plus a ring of plank seats around it, each seat resting at its own local ground height since terrain isn't flattened for these camps. */
+function stampCampfireSite(
+  seed: number,
+  cx: number,
+  cz: number,
+  chunks: Chunk[],
+  site: { x: number; z: number },
+  fireY: number,
+): void {
+  const { x, z } = site;
+  setWorldVoxel(chunks, cx, cz, x - 1, fireY, z, LOG_ID);
+  setWorldVoxel(chunks, cx, cz, x + 1, fireY, z, LOG_ID);
+  setWorldVoxel(chunks, cx, cz, x, fireY, z - 1, LOG_ID);
+  setWorldVoxel(chunks, cx, cz, x, fireY, z + 1, LOG_ID);
 
-  setWorldVoxel(chunks, cx, cz, x - 1, campfireY, z, LOG_ID);
-  setWorldVoxel(chunks, cx, cz, x + 1, campfireY, z, LOG_ID);
-  setWorldVoxel(chunks, cx, cz, x, campfireY, z - 1, LOG_ID);
-  setWorldVoxel(chunks, cx, cz, x, campfireY, z + 1, LOG_ID);
+  for (let i = 0; i < SEAT_COUNT; i++) {
+    const angle = (i / SEAT_COUNT) * Math.PI * 2;
+    const sx = Math.round(x + Math.cos(angle) * SEAT_RADIUS);
+    const sz = Math.round(z + Math.sin(angle) * SEAT_RADIUS);
+    const seatY = sampleColumn(seed, sx, sz).height + 1;
+    setWorldVoxel(chunks, cx, cz, sx, seatY, sz, SEAT_ID);
+  }
+}
+
+function stampCampfires(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
+  const { campfireYs } = getStructureAnchors(seed);
+  const margin = Math.ceil(SEAT_RADIUS) + 1;
+  for (let i = 0; i < CAMPFIRE_SITES.length; i++) {
+    const site = CAMPFIRE_SITES[i];
+    if (!chunkOverlapsBox(cx, cz, site.x - margin, site.x + margin, site.z - margin, site.z + margin)) continue;
+    stampCampfireSite(seed, cx, cz, chunks, site, campfireYs[i]);
+  }
 }
 
 /** Stamps every fixed structure that overlaps this chunk column. Mutates `chunks` in place. */
 export function stampStructures(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   stampBridge(seed, cx, cz, chunks);
   stampCastle(seed, cx, cz, chunks);
-  stampCampfire(seed, cx, cz, chunks);
+  stampCampfires(seed, cx, cz, chunks);
 }

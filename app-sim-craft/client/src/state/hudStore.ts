@@ -15,21 +15,28 @@ export interface DebugSnapshot {
   biome: string;
   targetBlock: string | null;
   pendingChunkOps: number;
+  carCount: number;
   flying: boolean;
   viewMode: "first" | "third";
   timeOfDay: number; // fraction of a day, [0, 1) — whatever Sky is actually rendering right now
 }
+
+export type VehiclePrompt = "enter" | "exit" | null;
 
 interface HudState {
   debugVisible: boolean;
   toggleDebug: () => void;
   debug: DebugSnapshot;
   setDebug: (snapshot: DebugSnapshot) => void;
+  vehiclePrompt: VehiclePrompt;
+  setVehiclePrompt: (prompt: VehiclePrompt) => void;
 }
 
 export const useHudStore = create<HudState>((set) => ({
-  debugVisible: true,
+  debugVisible: false,
   toggleDebug: () => set((s) => ({ debugVisible: !s.debugVisible })),
+  vehiclePrompt: null,
+  setVehiclePrompt: (vehiclePrompt) => set({ vehiclePrompt }),
   debug: {
     fps: 0,
     frameTimeMs: 0,
@@ -42,6 +49,7 @@ export const useHudStore = create<HudState>((set) => ({
     biome: "",
     targetBlock: null,
     pendingChunkOps: 0,
+    carCount: 0,
     flying: false,
     viewMode: "first",
     timeOfDay: 0.5,
