@@ -12,7 +12,12 @@ import type { MeshApi } from "../workers/mesh.worker";
 import type { BoundaryLayers } from "../rendering/greedyMesh";
 import type { SaveManager } from "../persistence/SaveManager";
 
-export const RENDER_DISTANCE_COLUMNS = 3; // chunk columns in each horizontal direction
+// Measured against spec/15-performance.md §1's budget (~10ms of the 16.6ms
+// frame for render+sim) with the debug overlay's frame-time readout: at this
+// radius, frame time stayed under 5ms even mid-stream while walking, well
+// short of the budget — see spec/15-performance.md §3's "Medium" preset,
+// which uses the same 10-chunk radius as its default target.
+export const RENDER_DISTANCE_COLUMNS = 10; // chunk columns in each horizontal direction
 const EVICT_MARGIN = 1;
 
 const material = new THREE.MeshLambertMaterial({ vertexColors: true });

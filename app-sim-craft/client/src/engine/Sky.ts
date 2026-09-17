@@ -41,6 +41,11 @@ function dayFactorAt(t: number): number {
   return Math.min(rising, setting);
 }
 
+/** True once it's dark enough for headlights (car high-beams, etc.) to matter — outside the sunrise/sunset transition, not just past dusk's midpoint. */
+export function isNight(timeOfDay: number): boolean {
+  return dayFactorAt(timeOfDay) < 0.5;
+}
+
 export class Sky {
   readonly skyLight: THREE.DirectionalLight;
   readonly ambientLight: THREE.AmbientLight;
@@ -71,8 +76,12 @@ export class Sky {
     );
     scene.add(this.sunMesh, this.moonMesh);
 
+    // Near/far tuned to RENDER_DISTANCE_COLUMNS (ChunkManager.ts): far sits
+    // just inside the loaded-chunk edge (10 columns × 32 blocks = 320) so
+    // the world fades to sky color before chunks pop in/out at the streaming
+    // boundary, instead of ending in a visible hard edge.
     scene.background = DAY_SKY.clone();
-    scene.fog = new THREE.Fog(DAY_SKY.getHex(), 60, 190);
+    scene.fog = new THREE.Fog(DAY_SKY.getHex(), 120, 300);
   }
 
   update(playerPosition: { x: number; y: number; z: number }, timeOfDay: number): void {

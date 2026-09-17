@@ -10,20 +10,26 @@ const HOTBAR_BLOCK_KEYS = ["turf", "loam", "greystone", "dune_sand", "frost_turf
 
 export const HOTBAR_SLOTS = HOTBAR_BLOCK_KEYS.map((key) => BLOCKS.find((b) => b.key === key)!);
 
-export type BuildMode = "break" | "place";
+// "break"/"place" edit voxel blocks; "torch" and "flag" place freestanding
+// runtime props instead (a light source and a location marker — see
+// engine/Torch.ts and engine/Flag.ts) since neither is a voxel block.
+export type BuildMode = "break" | "place" | "torch" | "flag";
+const MODE_CYCLE: BuildMode[] = ["break", "place", "torch", "flag"];
 
 interface HotbarState {
   selectedIndex: number;
   select: (index: number) => void;
   cycle: (delta: number) => void;
-  // Left-click alone does both break and place, gated by this mode —
-  // right-click-to-place is unreliable across input devices (trackpads
-  // with secondary-click disabled, single-button mice), so it can't be
-  // the only way to place a block. Right-click still works as a shortcut
-  // where it's available; this mode is what makes building possible
-  // without it. Toggled with B or the on-screen button (see ui/Hotbar.tsx).
+  // Left-click's action is gated by this mode — right-click-to-place is
+  // unreliable across input devices (trackpads with secondary-click
+  // disabled, single-button mice), so it can't be the only way to place
+  // a block. Right-click still works as a break/place shortcut where
+  // it's available; this mode is what makes building possible without
+  // it. Selected directly via the on-screen buttons, or cycled with B
+  // (see ui/Hotbar.tsx).
   mode: BuildMode;
-  toggleMode: () => void;
+  setMode: (mode: BuildMode) => void;
+  cycleMode: () => void;
 }
 
 export const useHotbarStore = create<HotbarState>((set) => ({
@@ -34,5 +40,7 @@ export const useHotbarStore = create<HotbarState>((set) => ({
       selectedIndex: ((s.selectedIndex + delta) % HOTBAR_SLOTS.length + HOTBAR_SLOTS.length) % HOTBAR_SLOTS.length,
     })),
   mode: "break",
-  toggleMode: () => set((s) => ({ mode: s.mode === "break" ? "place" : "break" })),
+  setMode: (mode) => set({ mode }),
+  cycleMode: () =>
+    set((s) => ({ mode: MODE_CYCLE[(MODE_CYCLE.indexOf(s.mode) + 1) % MODE_CYCLE.length] })),
 }));

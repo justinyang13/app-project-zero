@@ -6,6 +6,8 @@ const LEGEND: { color: string; label: string }[] = [
   { color: "#e2e2e2", label: "Castle" },
   { color: "#ff8c2a", label: "Campfire" },
   { color: "#fff066", label: "Animal" },
+  { color: "#ff4fd8", label: "Marker" },
+  { color: "#ffb347", label: "Torch" },
 ];
 
 export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasElement | null> }) {
@@ -55,6 +57,18 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
             {entry.label}
           </span>
         ))}
+      </div>
+      <div
+        style={{
+          padding: "2px 6px",
+          background: "rgba(0, 0, 0, 0.4)",
+          borderRadius: 3,
+          fontFamily: "monospace",
+          fontSize: 9,
+          color: "rgba(255, 255, 255, 0.8)",
+        }}
+      >
+        M: mark spot · B: cycle mode
       </div>
     </div>
   );

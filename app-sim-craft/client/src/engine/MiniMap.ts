@@ -18,7 +18,7 @@ const MAX_CACHE_ENTRIES = 6000; // bound memory for long sessions that roam far
 
 type TerrainSample = "water" | "road" | "land";
 
-export type MiniMapMarkerKind = "castle" | "campfire" | "creature";
+export type MiniMapMarkerKind = "castle" | "campfire" | "creature" | "custom" | "torch";
 
 export interface MiniMapMarker {
   x: number;
@@ -26,10 +26,12 @@ export interface MiniMapMarker {
   kind: MiniMapMarkerKind;
 }
 
-const MARKER_STYLE: Record<MiniMapMarkerKind, { color: string; radius: number; shape: "square" | "circle" }> = {
+const MARKER_STYLE: Record<MiniMapMarkerKind, { color: string; radius: number; shape: "square" | "circle" | "diamond" }> = {
   castle: { color: "#e2e2e2", radius: 4, shape: "square" },
   campfire: { color: "#ff8c2a", radius: 3, shape: "circle" },
   creature: { color: "#fff066", radius: 2, shape: "circle" },
+  custom: { color: "#ff4fd8", radius: 4, shape: "diamond" },
+  torch: { color: "#ffb347", radius: 2, shape: "circle" },
 };
 
 export class MiniMap {
@@ -95,6 +97,17 @@ export class MiniMap {
       ctx.fillStyle = style.color;
       if (style.shape === "square") {
         ctx.fillRect(sx - style.radius, sy - style.radius, style.radius * 2, style.radius * 2);
+      } else if (style.shape === "diamond") {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - style.radius);
+        ctx.lineTo(sx + style.radius, sy);
+        ctx.lineTo(sx, sy + style.radius);
+        ctx.lineTo(sx - style.radius, sy);
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
       } else {
         ctx.beginPath();
         ctx.arc(sx, sy, style.radius, 0, Math.PI * 2);

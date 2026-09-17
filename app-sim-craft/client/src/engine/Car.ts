@@ -27,6 +27,18 @@ const DRIVEN_ACCEL = 8;
 const DRIVEN_FRICTION = 5;
 const DRIVEN_TURN_RATE = 2.4; // radians/sec at full speed
 
+// Nitro: double-tap Space while driving (see GameLoop.ts's Space
+// handler) for a short top-speed/acceleration boost. No fuel or
+// cooldown to track — it's just a timer that counts back down to 0, so
+// it's always available again the instant it runs out.
+const NITRO_DURATION = 1.6; // seconds per activation
+const NITRO_MULTIPLIER = 3.2; // scales both max speed and acceleration while active
+
+const HEADLIGHT_LENS_ON = 0xfff8c0;
+const HEADLIGHT_LENS_OFF = 0x2a2a22;
+const HEADLIGHT_INTENSITY = 6;
+const HEADLIGHT_DISTANCE = 16;
+
 export class Car {
   readonly mesh: THREE.Group;
   position: { x: number; y: number; z: number };
@@ -36,14 +48,34 @@ export class Car {
   parked = false; // true once the player has exited it — stays put instead of resuming AI wandering
 
   private progress: number; // arc-length position along the loop (worldgen/roads.ts)
+  private readonly headlightLenses: THREE.MeshBasicMaterial;
+  private readonly headlight: THREE.SpotLight;
+  private headlightsOn = false;
+  private nitroTimer = 0;
 
   constructor(color: number, y: number, startProgress: number) {
-    this.mesh = buildMesh(color);
+    const built = buildMesh(color);
+    this.mesh = built.group;
+    this.headlightLenses = built.headlightLensMat;
+    this.headlight = built.headlight;
     this.progress = startProgress;
     const { x, z, yaw } = pointAtProgress(startProgress);
     this.position = { x, y, z };
     this.yaw = yaw;
     this.mesh.position.set(x, y, z);
+  }
+
+  /** Switches headlights on/off — called every frame from GameLoop based on time of day (see engine/Sky.ts's isNight). */
+  setHeadlightsOn(on: boolean): void {
+    if (on === this.headlightsOn) return;
+    this.headlightsOn = on;
+    this.headlightLenses.color.setHex(on ? HEADLIGHT_LENS_ON : HEADLIGHT_LENS_OFF);
+    this.headlight.intensity = on ? HEADLIGHT_INTENSITY : 0;
+  }
+
+  /** Triggers (or refreshes) a nitro boost — always available, never runs dry. */
+  activateNitro(): void {
+    this.nitroTimer = NITRO_DURATION;
   }
 
   /** Autonomous driving: follows the loop road's centerline at a constant pace. */
@@ -64,13 +96,18 @@ export class Car {
    * gravity/jump state of its own to fall or launch out of.
    */
   tickDriven(dt: number, world: World, input: CarInput): void {
+    this.nitroTimer = Math.max(0, this.nitroTimer - dt);
+    const boosting = this.nitroTimer > 0;
+    const maxSpeed = boosting ? DRIVEN_MAX_SPEED * NITRO_MULTIPLIER : DRIVEN_MAX_SPEED;
+    const accel = boosting ? DRIVEN_ACCEL * NITRO_MULTIPLIER : DRIVEN_ACCEL;
+
     if (input.throttle !== 0) {
-      this.speed += input.throttle * DRIVEN_ACCEL * dt;
+      this.speed += input.throttle * accel * dt;
     } else if (this.speed !== 0) {
       const decel = DRIVEN_FRICTION * dt;
       this.speed = Math.abs(this.speed) <= decel ? 0 : this.speed - Math.sign(this.speed) * decel;
     }
-    this.speed = THREE.MathUtils.clamp(this.speed, -DRIVEN_REVERSE_MAX_SPEED, DRIVEN_MAX_SPEED);
+    this.speed = THREE.MathUtils.clamp(this.speed, -DRIVEN_REVERSE_MAX_SPEED, maxSpeed);
 
     if (Math.abs(this.speed) > 0.05) {
       // Scale turn rate by speed (can't pivot in place) and flip it in
@@ -99,15 +136,25 @@ export class Car {
   }
 }
 
-function buildMesh(color: number): THREE.Group {
+interface BuiltCarMesh {
+  group: THREE.Group;
+  headlightLensMat: THREE.MeshBasicMaterial;
+  headlight: THREE.SpotLight;
+}
+
+// The car's "front" is +local-Z — matches this engine's yaw convention
+// (forward = (sin(yaw), cos(yaw)), and at yaw=0 that's +z), so a car's
+// heading always visually points nose-first the way it actually drives.
+function buildMesh(color: number): BuiltCarMesh {
   const group = new THREE.Group();
   const bodyMat = new THREE.MeshLambertMaterial({ color });
   const glassMat = new THREE.MeshLambertMaterial({ color: 0x9fd3e8 });
   const wheelMat = new THREE.MeshLambertMaterial({ color: 0x1a1a1a });
 
   const bodyHeight = CAR_HEIGHT * 0.6;
+  const bodyY = WHEEL_RADIUS + bodyHeight / 2;
   const body = new THREE.Mesh(new THREE.BoxGeometry(CAR_WIDTH, bodyHeight, CAR_LENGTH), bodyMat);
-  body.position.y = WHEEL_RADIUS + bodyHeight / 2;
+  body.position.y = bodyY;
   group.add(body);
 
   const cabinHeight = CAR_HEIGHT * 0.5;
@@ -127,5 +174,26 @@ function buildMesh(color: number): THREE.Group {
     }
   }
 
-  return group;
+  // Headlights: two small glowing lenses (always visible, just dim/dark
+  // when off) plus one shared spotlight for the actual illumination —
+  // one light per car keeps the per-car light count down even though
+  // there are two lenses.
+  const headlightLensMat = new THREE.MeshBasicMaterial({ color: HEADLIGHT_LENS_OFF });
+  const lensGeom = new THREE.BoxGeometry(0.12, 0.1, 0.05);
+  const lensOffsetX = CAR_WIDTH / 2 - 0.12;
+  for (const sx of [-1, 1]) {
+    const lens = new THREE.Mesh(lensGeom, headlightLensMat);
+    lens.position.set(sx * lensOffsetX, bodyY, CAR_LENGTH / 2 + 0.02);
+    group.add(lens);
+  }
+
+  const headlight = new THREE.SpotLight(HEADLIGHT_LENS_ON, 0, HEADLIGHT_DISTANCE, Math.PI / 5, 0.5, 1.2);
+  headlight.position.set(0, bodyY, CAR_LENGTH / 2);
+  const headlightTarget = new THREE.Object3D();
+  headlightTarget.position.set(0, bodyY * 0.6, CAR_LENGTH / 2 + HEADLIGHT_DISTANCE);
+  group.add(headlightTarget);
+  headlight.target = headlightTarget;
+  group.add(headlight);
+
+  return { group, headlightLensMat, headlight };
 }

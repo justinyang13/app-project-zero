@@ -10,11 +10,13 @@
 import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { getBlockByKey } from "../../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
+import { pointAtProgress, LOOP_PERIMETER, ROAD_WIDTH } from "./roads";
 
 const WALL_ID = getBlockByKey("greystone").id;
 const ROOF_ID = getBlockByKey("roof_tile").id;
 const PLANK_ID = getBlockByKey("plank").id;
 const LOG_ID = getBlockByKey("log").id;
+const SANDSTONE_ID = getBlockByKey("sandstone").id;
 const AIR_ID = 0;
 
 export const BRIDGE_CENTER = { x: 14, z: 0 };
@@ -24,7 +26,7 @@ const BRIDGE_HALF_WIDTH = 1;
 export const CASTLE_CENTER = { x: -34, z: -20 };
 const CASTLE_HALF_SIZE = 8;
 const CASTLE_WALL_HEIGHT = 7;
-const CASTLE_TOWER_EXTRA = 5;
+const CASTLE_TOWER_EXTRA = 6;
 const TOWER_HALF = 1;
 const CASTLE_CORNERS: [number, number][] = [
   [CASTLE_CENTER.x - CASTLE_HALF_SIZE, CASTLE_CENTER.z - CASTLE_HALF_SIZE],
@@ -32,6 +34,16 @@ const CASTLE_CORNERS: [number, number][] = [
   [CASTLE_CENTER.x + CASTLE_HALF_SIZE, CASTLE_CENTER.z - CASTLE_HALF_SIZE],
   [CASTLE_CENTER.x + CASTLE_HALF_SIZE, CASTLE_CENTER.z + CASTLE_HALF_SIZE],
 ];
+
+// A central keep in the courtyard — taller than the curtain wall and its
+// corner towers, so it reads as the castle's dominant structure instead
+// of an empty walled yard.
+const KEEP_HALF_SIZE = 3; // 7x7 footprint
+const KEEP_HEIGHT = 14;
+const CASTLE_MAX_EXTRA_ABOVE_BASE = Math.max(
+  CASTLE_WALL_HEIGHT + CASTLE_TOWER_EXTRA + 4, // corner tower + its roof cap
+  KEEP_HEIGHT + 6, // keep + its taller stepped roof and spire
+);
 
 // Several small camps scattered near spawn, each a fire pit ringed by
 // seating (see stampCampfireSite) — deliberately kept off the road grid
@@ -47,6 +59,82 @@ export const CAMPFIRE_SITES: { x: number; z: number }[] = [
 ];
 export const CAMPFIRE_CENTER = CAMPFIRE_SITES[0];
 
+// Street lamps: posts spaced around the loop road (worldgen/roads.ts),
+// alternating shoulders, offset clear of the paved ROAD_WIDTH surface.
+// The post itself is baked into terrain like every other structure here;
+// the actual glow (bulb color + a night-only point light) is a runtime
+// visual on top — see engine/StreetLamp.ts — the same split
+// CampfireVisual uses for its flame/light, since a plain voxel block
+// would just get Lambert-shaded dark at night like anything else.
+export const LAMP_POST_HEIGHT = 4;
+const LAMP_SPACING = 90; // road arc-length blocks between posts
+const LAMP_OFFSET = ROAD_WIDTH / 2 + 2; // clears the shoulder
+
+export const LAMP_SITES: { x: number; z: number }[] = Array.from(
+  { length: Math.floor(LOOP_PERIMETER / LAMP_SPACING) },
+  (_, i) => {
+    const { x, z, yaw } = pointAtProgress(i * LAMP_SPACING);
+    const side = i % 2 === 0 ? 1 : -1;
+    return {
+      x: Math.round(x + Math.cos(yaw) * LAMP_OFFSET * side),
+      z: Math.round(z - Math.sin(yaw) * LAMP_OFFSET * side),
+    };
+  },
+);
+
+// A residential neighborhood: a fixed grid of lots south of the loop
+// road (clear of it — the loop's own bounding box only reaches
+// |z| ≈ 90+TOWER_HALF, see worldgen/roads.ts), each with a differently
+// shaped, sized, and walled house plus a fenced yard. Every lot's
+// dimensions are
+// derived from its index with moduli chosen (4, 5, 5, 3, 2 — pairwise
+// coprime enough that their combination doesn't repeat inside 30 lots)
+// so all 30 houses come out visually distinct without needing a random
+// number generator — this file's structures are meant to regenerate
+// identically every time a chunk reloads, so anything Math.random()-based
+// would make the neighborhood look different on every visit.
+const RESIDENTIAL_COLS = 6;
+const RESIDENTIAL_ROWS = 5;
+const LOT_SIZE = 14;
+const RESIDENTIAL_ORIGIN = { x: -(RESIDENTIAL_COLS * LOT_SIZE) / 2, z: 130 };
+const HOUSE_WALL_MATERIALS = [WALL_ID, PLANK_ID, LOG_ID, SANDSTONE_ID];
+const YARD_MARGIN = 2;
+const FENCE_ID = LOG_ID;
+const PATH_ID = PLANK_ID;
+
+interface HouseLot {
+  x: number; // footprint's min-X corner
+  z: number; // footprint's min-Z corner
+  width: number;
+  depth: number;
+  height: number;
+  wallBlock: number;
+  pitched: boolean;
+}
+
+export const HOUSE_LOTS: HouseLot[] = Array.from({ length: RESIDENTIAL_COLS * RESIDENTIAL_ROWS }, (_, i) => {
+  const col = i % RESIDENTIAL_COLS;
+  const row = Math.floor(i / RESIDENTIAL_COLS);
+  const centerX = RESIDENTIAL_ORIGIN.x + col * LOT_SIZE + LOT_SIZE / 2;
+  const centerZ = RESIDENTIAL_ORIGIN.z + row * LOT_SIZE + LOT_SIZE / 2;
+  const width = 5 + (i % 5); // 5..9
+  const depth = 5 + ((i * 2 + 3) % 5); // 5..9, different phase so it isn't just width again
+  return {
+    x: Math.round(centerX - width / 2),
+    z: Math.round(centerZ - depth / 2),
+    width,
+    depth,
+    height: 3 + (i % 3), // 3..5
+    wallBlock: HOUSE_WALL_MATERIALS[i % HOUSE_WALL_MATERIALS.length],
+    pitched: i % 2 === 0,
+  };
+});
+
+/** Extra vertical blocks a lot's roof needs above its wall top — gable roofs rise with the footprint's longer side, flat roofs just cap it. */
+function houseRoofRise(lot: HouseLot): number {
+  return lot.pitched ? Math.ceil((lot.depth + 2) / 2) + 1 : 1;
+}
+
 const SEAT_ID = getBlockByKey("plank").id;
 const SEAT_RADIUS = 2.2;
 const SEAT_COUNT = 6;
@@ -58,6 +146,8 @@ let cachedSeed: number | null = null;
 let cachedBridgeDeckY = 0;
 let cachedCastleBaseY = 0;
 let cachedCampfireYs: number[] = [];
+let cachedLampYs: number[] = [];
+let cachedHouseYs: number[] = [];
 
 function ensureCache(seed: number): void {
   if (cachedSeed === seed) return;
@@ -67,12 +157,24 @@ function ensureCache(seed: number): void {
   cachedBridgeDeckY = Math.max(bridgeStart, bridgeEnd, SEA_LEVEL) + 1;
   cachedCastleBaseY = sampleColumn(seed, CASTLE_CENTER.x, CASTLE_CENTER.z).height + 1;
   cachedCampfireYs = CAMPFIRE_SITES.map((site) => sampleColumn(seed, site.x, site.z).height + 1);
+  cachedLampYs = LAMP_SITES.map((site) => sampleColumn(seed, site.x, site.z).height + 1);
+  cachedHouseYs = HOUSE_LOTS.map(
+    (lot) => sampleColumn(seed, lot.x + Math.floor(lot.width / 2), lot.z + Math.floor(lot.depth / 2)).height + 1,
+  );
 }
 
-/** World-space anchor heights for these structures — exported so GameLoop can place each campfire's flame/light without waiting on chunk load. */
-export function getStructureAnchors(seed: number): { bridgeDeckY: number; castleBaseY: number; campfireYs: number[] } {
+/** World-space anchor heights for these structures — exported so GameLoop can place each campfire's flame/light (or lamp's bulb/light) without waiting on chunk load. */
+export function getStructureAnchors(
+  seed: number,
+): { bridgeDeckY: number; castleBaseY: number; campfireYs: number[]; lampYs: number[]; houseYs: number[] } {
   ensureCache(seed);
-  return { bridgeDeckY: cachedBridgeDeckY, castleBaseY: cachedCastleBaseY, campfireYs: cachedCampfireYs };
+  return {
+    bridgeDeckY: cachedBridgeDeckY,
+    castleBaseY: cachedCastleBaseY,
+    campfireYs: cachedCampfireYs,
+    lampYs: cachedLampYs,
+    houseYs: cachedHouseYs,
+  };
 }
 
 function chunkOverlapsBox(cx: number, cz: number, minX: number, maxX: number, minZ: number, maxZ: number): boolean {
@@ -120,7 +222,24 @@ export function structureMaxYFor(seed: number, cx: number, cz: number): number {
       CASTLE_CENTER.z + CASTLE_HALF_SIZE + TOWER_HALF,
     )
   ) {
-    maxY = Math.max(maxY, cachedCastleBaseY + CASTLE_WALL_HEIGHT + CASTLE_TOWER_EXTRA + 4);
+    maxY = Math.max(maxY, cachedCastleBaseY + CASTLE_MAX_EXTRA_ABOVE_BASE);
+  }
+  for (let i = 0; i < HOUSE_LOTS.length; i++) {
+    const lot = HOUSE_LOTS[i];
+    const margin = YARD_MARGIN + 1;
+    if (
+      !chunkOverlapsBox(
+        cx,
+        cz,
+        lot.x - margin,
+        lot.x + lot.width - 1 + margin,
+        lot.z - margin,
+        lot.z + lot.depth - 1 + margin,
+      )
+    ) {
+      continue;
+    }
+    maxY = Math.max(maxY, cachedHouseYs[i] + lot.height + houseRoofRise(lot) + 1);
   }
   return maxY;
 }
@@ -169,6 +288,12 @@ function stampCastle(seed: number, cx: number, cz: number, chunks: Chunk[]): voi
         for (let wy = castleBaseY - 3; wy <= castleBaseY + CASTLE_WALL_HEIGHT; wy++) {
           setWorldVoxel(chunks, cx, cz, wx, wy, wz, WALL_ID);
         }
+        // Crenellations: alternating merlons one block above the wall
+        // top, so the curtain wall reads as a proper parapet instead of
+        // a flat-topped box.
+        if ((wx + wz) % 2 === 0) {
+          setWorldVoxel(chunks, cx, cz, wx, castleBaseY + CASTLE_WALL_HEIGHT + 1, wz, WALL_ID);
+        }
       } else if (onWallLine && isGate) {
         for (let wy = castleBaseY; wy <= castleBaseY + CASTLE_WALL_HEIGHT; wy++) {
           setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
@@ -182,6 +307,96 @@ function stampCastle(seed: number, cx: number, cz: number, chunks: Chunk[]): voi
       for (let dz = -1; dz <= 1; dz++) setWorldVoxel(chunks, cx, cz, tx + dx, towerTop + 1, tz + dz, ROOF_ID);
     }
     setWorldVoxel(chunks, cx, cz, tx, towerTop + 2, tz, ROOF_ID);
+    setWorldVoxel(chunks, cx, cz, tx, towerTop + 3, tz, LOG_ID);
+  }
+}
+
+function stampSquareRoofTier(
+  chunks: Chunk[],
+  cx: number,
+  cz: number,
+  centerX: number,
+  centerZ: number,
+  wy: number,
+  half: number,
+): void {
+  for (let dx = -half; dx <= half; dx++) {
+    for (let dz = -half; dz <= half; dz++) {
+      setWorldVoxel(chunks, cx, cz, centerX + dx, wy, centerZ + dz, ROOF_ID);
+    }
+  }
+}
+
+/** A central keep in the courtyard: a hollow tower with a door, four windows, and a tall stepped-pyramid roof with a spire. */
+function stampKeep(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
+  const { x: kx, z: kz } = CASTLE_CENTER;
+  const minX = kx - KEEP_HALF_SIZE;
+  const maxX = kx + KEEP_HALF_SIZE;
+  const minZ = kz - KEEP_HALF_SIZE;
+  const maxZ = kz + KEEP_HALF_SIZE;
+  if (!chunkOverlapsBox(cx, cz, minX, maxX, minZ, maxZ)) return;
+  const { castleBaseY } = getStructureAnchors(seed);
+  const keepTop = castleBaseY + KEEP_HEIGHT;
+
+  const doorMinX = kx - 1;
+  const doorMaxX = kx + 1;
+
+  for (let wx = minX; wx <= maxX; wx++) {
+    for (let wz = minZ; wz <= maxZ; wz++) {
+      const onWallLine = wx === minX || wx === maxX || wz === minZ || wz === maxZ;
+      if (!onWallLine) {
+        // Interior floor, with the space above it cleared to air —
+        // without this, whatever the natural terrain under the keep
+        // happens to be (this seed's spot dips just below sea level, per
+        // SEA_LEVEL in terrain.ts) would still fill the interior right
+        // up to sea level, showing as a pool of water inside a
+        // supposedly-finished building.
+        setWorldVoxel(chunks, cx, cz, wx, castleBaseY - 1, wz, PLANK_ID);
+        for (let wy = castleBaseY; wy < keepTop; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+        continue;
+      }
+      const isDoor = wz === maxZ && wx >= doorMinX && wx <= doorMaxX;
+      const isWindow =
+        !isDoor && ((wx === kx && (wz === minZ || wz === maxZ)) || (wz === kz && (wx === minX || wx === maxX)));
+
+      for (let wy = castleBaseY - 3; wy <= keepTop; wy++) {
+        if (isDoor && wy <= castleBaseY + 2) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+        else if (isWindow && wy === castleBaseY + 4) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+        else setWorldVoxel(chunks, cx, cz, wx, wy, wz, WALL_ID);
+      }
+    }
+  }
+
+  // Stepped pyramid roof + spire — taller and more tiered than the
+  // corner towers' cap, so the keep reads as the tallest, most important
+  // part of the castle.
+  stampSquareRoofTier(chunks, cx, cz, kx, kz, keepTop + 1, 2);
+  stampSquareRoofTier(chunks, cx, cz, kx, kz, keepTop + 2, 1);
+  setWorldVoxel(chunks, cx, cz, kx, keepTop + 3, kz, ROOF_ID);
+  setWorldVoxel(chunks, cx, cz, kx, keepTop + 4, kz, LOG_ID);
+  setWorldVoxel(chunks, cx, cz, kx, keepTop + 5, kz, LOG_ID);
+}
+
+/** Paves the courtyard between the curtain wall and the keep, instead of leaving bare terrain inside the walls. */
+function stampCourtyardFloor(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
+  const minX = CASTLE_CENTER.x - CASTLE_HALF_SIZE + 1;
+  const maxX = CASTLE_CENTER.x + CASTLE_HALF_SIZE - 1;
+  const minZ = CASTLE_CENTER.z - CASTLE_HALF_SIZE + 1;
+  const maxZ = CASTLE_CENTER.z + CASTLE_HALF_SIZE - 1;
+  if (!chunkOverlapsBox(cx, cz, minX, maxX, minZ, maxZ)) return;
+  const { castleBaseY } = getStructureAnchors(seed);
+  const floorY = castleBaseY - 1;
+
+  const keepMinX = CASTLE_CENTER.x - KEEP_HALF_SIZE;
+  const keepMaxX = CASTLE_CENTER.x + KEEP_HALF_SIZE;
+  const keepMinZ = CASTLE_CENTER.z - KEEP_HALF_SIZE;
+  const keepMaxZ = CASTLE_CENTER.z + KEEP_HALF_SIZE;
+
+  for (let wx = minX; wx <= maxX; wx++) {
+    for (let wz = minZ; wz <= maxZ; wz++) {
+      if (wx >= keepMinX && wx <= keepMaxX && wz >= keepMinZ && wz <= keepMaxZ) continue;
+      setWorldVoxel(chunks, cx, cz, wx, floorY, wz, PLANK_ID);
+    }
   }
 }
 
@@ -219,9 +434,128 @@ function stampCampfires(seed: number, cx: number, cz: number, chunks: Chunk[]): 
   }
 }
 
+function stampFlatRoof(cx: number, cz: number, chunks: Chunk[], minX: number, maxX: number, minZ: number, maxZ: number, wy: number): void {
+  for (let wx = minX - 1; wx <= maxX + 1; wx++) {
+    for (let wz = minZ - 1; wz <= maxZ + 1; wz++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, ROOF_ID);
+  }
+}
+
+/** A gable roof: two tiers stepping in from the north/south edges each level up until they meet at a ridge running along X. */
+function stampGableRoof(cx: number, cz: number, chunks: Chunk[], minX: number, maxX: number, minZ: number, maxZ: number, wy: number): void {
+  let curMinZ = minZ - 1;
+  let curMaxZ = maxZ + 1;
+  let y = wy;
+  while (curMinZ < curMaxZ) {
+    for (let wx = minX - 1; wx <= maxX + 1; wx++) {
+      setWorldVoxel(chunks, cx, cz, wx, y, curMinZ, ROOF_ID);
+      setWorldVoxel(chunks, cx, cz, wx, y, curMaxZ, ROOF_ID);
+    }
+    curMinZ++;
+    curMaxZ--;
+    y++;
+  }
+  if (curMinZ === curMaxZ) {
+    for (let wx = minX - 1; wx <= maxX + 1; wx++) setWorldVoxel(chunks, cx, cz, wx, y, curMinZ, ROOF_ID);
+  }
+}
+
+/** One house: a hollow box with a front door, three windows, a plank floor, and a flat or gable roof depending on the lot. */
+function stampHouse(cx: number, cz: number, chunks: Chunk[], lot: HouseLot, baseY: number): void {
+  const minX = lot.x;
+  const maxX = lot.x + lot.width - 1;
+  const minZ = lot.z;
+  const maxZ = lot.z + lot.depth - 1;
+  const topWallY = baseY + lot.height - 1;
+  const midX = lot.x + Math.floor(lot.width / 2);
+  const midZ = lot.z + Math.floor(lot.depth / 2);
+  const windowY = baseY + 1;
+
+  for (let wx = minX; wx <= maxX; wx++) {
+    for (let wz = minZ; wz <= maxZ; wz++) {
+      setWorldVoxel(chunks, cx, cz, wx, baseY - 1, wz, PLANK_ID);
+      const onWall = wx === minX || wx === maxX || wz === minZ || wz === maxZ;
+      if (!onWall) {
+        for (let wy = baseY; wy <= topWallY; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+        continue;
+      }
+      const isDoor = wz === minZ && wx === midX;
+      const isWindow =
+        !isDoor &&
+        windowY <= topWallY &&
+        ((wz === maxZ && wx === midX) || (wx === minX && wz === midZ) || (wx === maxX && wz === midZ));
+      for (let wy = baseY; wy <= topWallY; wy++) {
+        if (isDoor && wy <= baseY + 1) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+        else if (isWindow && wy === windowY) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+        else setWorldVoxel(chunks, cx, cz, wx, wy, wz, lot.wallBlock);
+      }
+    }
+  }
+
+  if (lot.pitched) stampGableRoof(cx, cz, chunks, minX, maxX, minZ, maxZ, topWallY + 1);
+  else stampFlatRoof(cx, cz, chunks, minX, maxX, minZ, maxZ, topWallY + 1);
+}
+
+/** A picket-style fence (posts every other block) around the yard, with a gate gap facing the house's front door, plus a short path from the gate to the door. */
+function stampYard(cx: number, cz: number, chunks: Chunk[], lot: HouseLot, baseY: number): void {
+  const minX = lot.x - YARD_MARGIN;
+  const maxX = lot.x + lot.width - 1 + YARD_MARGIN;
+  const minZ = lot.z - YARD_MARGIN;
+  const maxZ = lot.z + lot.depth - 1 + YARD_MARGIN;
+  const gateX = lot.x + Math.floor(lot.width / 2);
+
+  for (let wx = minX; wx <= maxX; wx++) {
+    if ((wx - minX) % 2 !== 0) continue;
+    if (Math.abs(wx - gateX) > 1) setWorldVoxel(chunks, cx, cz, wx, baseY, minZ, FENCE_ID);
+    setWorldVoxel(chunks, cx, cz, wx, baseY, maxZ, FENCE_ID);
+  }
+  for (let wz = minZ; wz <= maxZ; wz++) {
+    if ((wz - minZ) % 2 !== 0) continue;
+    setWorldVoxel(chunks, cx, cz, minX, baseY, wz, FENCE_ID);
+    setWorldVoxel(chunks, cx, cz, maxX, baseY, wz, FENCE_ID);
+  }
+  for (let wz = minZ; wz < lot.z; wz++) setWorldVoxel(chunks, cx, cz, gateX, baseY - 1, wz, PATH_ID);
+}
+
+function stampResidentialArea(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
+  const { houseYs } = getStructureAnchors(seed);
+  const margin = YARD_MARGIN + 1;
+  for (let i = 0; i < HOUSE_LOTS.length; i++) {
+    const lot = HOUSE_LOTS[i];
+    if (
+      !chunkOverlapsBox(
+        cx,
+        cz,
+        lot.x - margin,
+        lot.x + lot.width - 1 + margin,
+        lot.z - margin,
+        lot.z + lot.depth - 1 + margin,
+      )
+    ) {
+      continue;
+    }
+    stampYard(cx, cz, chunks, lot, houseYs[i]);
+    stampHouse(cx, cz, chunks, lot, houseYs[i]);
+  }
+}
+
+function stampStreetLamps(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
+  const { lampYs } = getStructureAnchors(seed);
+  for (let i = 0; i < LAMP_SITES.length; i++) {
+    const { x, z } = LAMP_SITES[i];
+    if (!chunkOverlapsBox(cx, cz, x, x, z, z)) continue;
+    const baseY = lampYs[i];
+    for (let dy = 0; dy < LAMP_POST_HEIGHT; dy++) setWorldVoxel(chunks, cx, cz, x, baseY + dy, z, LOG_ID);
+    setWorldVoxel(chunks, cx, cz, x, baseY + LAMP_POST_HEIGHT, z, WALL_ID);
+  }
+}
+
 /** Stamps every fixed structure that overlaps this chunk column. Mutates `chunks` in place. */
 export function stampStructures(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   stampBridge(seed, cx, cz, chunks);
   stampCastle(seed, cx, cz, chunks);
+  stampKeep(seed, cx, cz, chunks);
+  stampCourtyardFloor(seed, cx, cz, chunks);
   stampCampfires(seed, cx, cz, chunks);
+  stampStreetLamps(seed, cx, cz, chunks);
+  stampResidentialArea(seed, cx, cz, chunks);
 }

@@ -8,21 +8,26 @@ import { MouseLook } from "./Camera";
 import { Player, EYE_HEIGHT, type PlayerInput } from "./Player";
 import { ChunkManager } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
-import { Creature, findSurfaceY, type CreatureSpecies } from "./Creature";
+import { Creature, findSurfaceY, ALL_SPECIES } from "./Creature";
 import { Car, type CarInput } from "./Car";
 import { pointAtProgress, LOOP_PERIMETER, FLAT_ROAD_Y } from "./worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
+import { HeldItem } from "./HeldItem";
 import { Clouds } from "./Clouds";
-import { Sky, getSystemTimeOfDay } from "./Sky";
+import { Sky, getSystemTimeOfDay, isNight } from "./Sky";
 import { useTimeStore } from "../state/timeStore";
 import { CampfireVisual } from "./CampfireVisual";
-import { CAMPFIRE_SITES, CASTLE_CENTER, getStructureAnchors } from "./worldgen/structures";
+import { StreetLamp } from "./StreetLamp";
+import { Torch } from "./Torch";
+import { Flag } from "./Flag";
+import { CAMPFIRE_SITES, CASTLE_CENTER, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "./worldgen/structures";
 import { MiniMap, type MiniMapMarker } from "./MiniMap";
 import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
 import { sampleColumn, biomeKeyFromIndex, sampleBiomeIndexAt } from "./worldgen/terrain";
 import { useHudStore } from "../state/hudStore";
 import { useHotbarStore, HOTBAR_SLOTS } from "../state/hotbarStore";
 import { SaveManager } from "../persistence/SaveManager";
+import type { MapMarkerRecord, TorchRecord } from "../persistence/db";
 
 const SIM_HZ = 20;
 const SIM_DT = 1 / SIM_HZ;
@@ -54,10 +59,16 @@ export class GameLoop {
   private carsSpawned = false;
   private drivingCar: Car | null = null;
   private readonly playerModel: PlayerModel;
+  private readonly heldItem: HeldItem;
   private readonly clouds: Clouds;
   private readonly sky: Sky;
   private readonly campfires: CampfireVisual[];
+  private readonly streetLamps: StreetLamp[];
   private readonly miniMap: MiniMap;
+  private customMarkers: MapMarkerRecord[] = [];
+  private flagVisuals: Flag[] = [];
+  private torchRecords: TorchRecord[] = [];
+  private torchVisuals: Torch[] = [];
   private viewMode: ViewMode = "first";
 
   private readonly pressed = new Set<string>();
@@ -96,6 +107,11 @@ export class GameLoop {
     this.scene = new THREE.Scene();
 
     this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    // The camera itself needs to be part of the scene graph for its
+    // children (the held-item viewmodel below) to render at all — a
+    // camera doesn't have to be in the scene to be used for rendering,
+    // but anything parented to it does.
+    this.scene.add(this.camera);
     this.mouseLook = new MouseLook(this.camera, canvas);
 
     this.sky = new Sky(this.scene);
@@ -109,6 +125,8 @@ export class GameLoop {
       this.player.flying = playerState.flying;
       this.camera.rotation.set(playerState.pitch, playerState.yaw, 0, "YXZ");
       useHotbarStore.getState().select(playerState.selectedHotbarIndex);
+      this.customMarkers = playerState.markers ? [...playerState.markers] : [];
+      this.torchRecords = playerState.torches ? [...playerState.torches] : [];
     } else {
       const spawnHeight = sampleColumn(seed, 0, 0).height;
       this.world.spawnPoint = { x: 0.5, y: spawnHeight + 1, z: 0.5 };
@@ -125,12 +143,21 @@ export class GameLoop {
     this.playerModel.visible = false; // first-person by default — see the F5 view-mode toggle
     this.scene.add(this.playerModel.group);
 
+    this.heldItem = new HeldItem();
+    this.camera.add(this.heldItem.group);
+
     this.clouds = new Clouds();
     this.scene.add(this.clouds.group);
 
-    const { campfireYs } = getStructureAnchors(seed);
+    const { campfireYs, lampYs } = getStructureAnchors(seed);
     this.campfires = CAMPFIRE_SITES.map((site, i) => new CampfireVisual(site.x, campfireYs[i], site.z));
     for (const campfire of this.campfires) this.scene.add(campfire.group);
+
+    this.streetLamps = LAMP_SITES.map((site, i) => new StreetLamp(site.x, lampYs[i], site.z, LAMP_POST_HEIGHT));
+    for (const lamp of this.streetLamps) this.scene.add(lamp.group);
+
+    this.syncFlagVisuals();
+    this.syncTorchVisuals();
 
     this.miniMap = new MiniMap(minimapCanvas, seed);
 
@@ -185,9 +212,16 @@ export class GameLoop {
     if (e.code === "Space" && !e.repeat) {
       // e.repeat guards against the browser's key-repeat firing keydown
       // continuously while held — without it, holding Space would flip
-      // flying on/off many times a second instead of once per real tap.
+      // flying (or fire nitro) many times a second instead of once per
+      // real tap.
       const now = performance.now();
-      if (now - this.lastSpaceTapTime < 300) this.player.flying = !this.player.flying;
+      if (now - this.lastSpaceTapTime < 300) {
+        // While driving, double-tap Space is nitro instead of the fly
+        // toggle — flying isn't meaningful for a car, so the same
+        // gesture is free to mean something else in that context.
+        if (this.drivingCar) this.drivingCar.activateNitro();
+        else this.player.flying = !this.player.flying;
+      }
       this.lastSpaceTapTime = now;
     }
     if (e.code.startsWith("Digit")) {
@@ -195,10 +229,13 @@ export class GameLoop {
       if (n >= 1 && n <= HOTBAR_SLOTS.length) useHotbarStore.getState().select(n - 1);
     }
     if (e.code === "KeyB" && !e.repeat) {
-      useHotbarStore.getState().toggleMode();
+      useHotbarStore.getState().cycleMode();
     }
     if (e.code === "KeyE" && !e.repeat) {
       this.toggleDriving();
+    }
+    if (e.code === "KeyM" && !e.repeat) {
+      this.toggleMarkerAtPlayer();
     }
     if (e.code === "F5") {
       // F5's browser default is a page refresh, which would lose the
@@ -232,14 +269,22 @@ export class GameLoop {
     // finicky across browsers/embeds), so mouse-look is a bonus on top
     // of building, never a prerequisite for it.
     if (e.button === 0) {
-      // Left click does whichever action the Build/Break mode selects
-      // (see hotbarStore.ts) — right-click-to-place alone isn't reliable
+      // Left click does whichever action the current mode selects (see
+      // hotbarStore.ts) — right-click-to-place alone isn't reliable
       // across input devices (trackpads, single-button mice), so left
-      // click has to be able to do both.
-      if (useHotbarStore.getState().mode === "place") this.placeSelectedBlock();
-      else this.breakTargetedBlock();
+      // click has to be able to do everything.
+      const mode = useHotbarStore.getState().mode;
+      if (mode === "place") this.placeSelectedBlock();
+      else if (mode === "break") this.breakTargetedBlock();
+      else if (mode === "torch") this.placeTorchAtTarget();
+      else if (mode === "flag") this.placeFlagAtTarget();
     } else if (e.button === 2) {
-      this.placeSelectedBlock();
+      // Right-click is a quick block-place shortcut for the break/place
+      // modes only — Torch/Flag don't have a natural second action, so
+      // it's left as a no-op there rather than surprising placing a
+      // hotbar block instead.
+      const mode = useHotbarStore.getState().mode;
+      if (mode === "break" || mode === "place") this.placeSelectedBlock();
     }
   };
 
@@ -262,27 +307,26 @@ export class GameLoop {
   }
 
   // Waits until the initial chunk load settles (so ground actually
-  // exists to snap to) before scattering a few ambient passive creatures
-  // near spawn. Positions are randomized, not seed-derived — creature
-  // placement isn't part of world generation's determinism contract
-  // (spec/01-tech-stack-architecture.md §9 scopes that to terrain only).
+  // exists to snap to) before scattering ambient passive creatures near
+  // spawn — two of every species, wide enough to feel like a populated
+  // world rather than a small huddle. Positions are randomized, not
+  // seed-derived — creature placement isn't part of world generation's
+  // determinism contract (spec/01-tech-stack-architecture.md §9 scopes
+  // that to terrain only). updateAmbientCreatures keeps them "everywhere"
+  // as the player roams: it despawns stragglers left far behind and
+  // spawns fresh ones out ahead, capped so the population never grows
+  // unbounded over a long session.
   private trySpawnCreatures(): void {
     if (this.creaturesSpawned || this.chunkManager.pendingCount > 0 || this.chunkManager.loadedChunkCount === 0) {
       return;
     }
     this.creaturesSpawned = true;
 
-    const plan: { species: CreatureSpecies; count: number }[] = [
-      { species: "sheep", count: 3 },
-      { species: "llama", count: 2 },
-      { species: "cat", count: 2 },
-    ];
     const origin = this.player.position;
-
-    for (const { species, count } of plan) {
-      for (let i = 0; i < count; i++) {
+    for (const species of ALL_SPECIES) {
+      for (let i = 0; i < 2; i++) {
         const angle = Math.random() * Math.PI * 2;
-        const radius = 6 + Math.random() * 14;
+        const radius = 8 + Math.random() * 40;
         const x = origin.x + Math.cos(angle) * radius;
         const z = origin.z + Math.sin(angle) * radius;
         const y = findSurfaceY(this.world, x, z);
@@ -295,11 +339,49 @@ export class GameLoop {
     }
   }
 
+  private static readonly MAX_CREATURES = 60;
+  private static readonly CREATURE_SPAWN_INTERVAL = 5; // seconds
+  private static readonly CREATURE_DESPAWN_RADIUS = 110;
+  private creatureSpawnTimer = 0;
+
+  private updateAmbientCreatures(dt: number): void {
+    for (let i = this.creatures.length - 1; i >= 0; i--) {
+      const creature = this.creatures[i];
+      const dist = Math.hypot(creature.position.x - this.player.position.x, creature.position.z - this.player.position.z);
+      if (dist <= GameLoop.CREATURE_DESPAWN_RADIUS) continue;
+      this.scene.remove(creature.mesh);
+      creature.dispose();
+      this.creatures.splice(i, 1);
+    }
+
+    if (!this.creaturesSpawned) return; // wait for the initial batch first
+    this.creatureSpawnTimer -= dt;
+    if (this.creatureSpawnTimer > 0) return;
+    this.creatureSpawnTimer = GameLoop.CREATURE_SPAWN_INTERVAL;
+
+    const spawnCount = 1 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < spawnCount && this.creatures.length < GameLoop.MAX_CREATURES; i++) {
+      const species = ALL_SPECIES[Math.floor(Math.random() * ALL_SPECIES.length)];
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 20 + Math.random() * 55;
+      const x = this.player.position.x + Math.cos(angle) * radius;
+      const z = this.player.position.z + Math.sin(angle) * radius;
+      const y = findSurfaceY(this.world, x, z);
+      if (y === null) continue;
+
+      const creature = new Creature(species, x, y, z);
+      this.creatures.push(creature);
+      this.scene.add(creature.mesh);
+    }
+  }
+
   /** Landmark + live-creature markers for the minimap. Cheap to rebuild every frame — a handful of fixed points plus one per creature. */
   private buildMiniMapMarkers(): MiniMapMarker[] {
     const markers: MiniMapMarker[] = [{ x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, kind: "castle" }];
     for (const site of CAMPFIRE_SITES) markers.push({ x: site.x, z: site.z, kind: "campfire" });
     for (const creature of this.creatures) markers.push({ x: creature.position.x, z: creature.position.z, kind: "creature" });
+    for (const marker of this.customMarkers) markers.push({ x: marker.x, z: marker.z, kind: "custom" });
+    for (const torch of this.torchRecords) markers.push({ x: torch.x, z: torch.z, kind: "torch" });
     return markers;
   }
 
@@ -362,6 +444,96 @@ export class GameLoop {
       nearest.parked = false;
       this.drivingCar = nearest;
     }
+  }
+
+  private static readonly MARKER_TOGGLE_RANGE = 3;
+  private static readonly TORCH_TOGGLE_RANGE = 1.5;
+
+  /** M toggles a custom minimap marker at the player's current spot — same toggle Flag build mode uses at the raycast target instead (see placeFlagAtTarget). Saved immediately (not just on unload) so a remembered spot survives a crash or hard-close. */
+  private toggleMarkerAtPlayer(): void {
+    this.toggleMarkerAt(this.player.position.x, this.player.position.y, this.player.position.z);
+  }
+
+  /** Removes the nearest marker within range, or drops a new one — shared by the M key (at the player) and Flag build mode (at the raycast target). */
+  private toggleMarkerAt(x: number, y: number, z: number): void {
+    let nearestIndex = -1;
+    let nearestDist = GameLoop.MARKER_TOGGLE_RANGE;
+    for (let i = 0; i < this.customMarkers.length; i++) {
+      const marker = this.customMarkers[i];
+      const dist = Math.hypot(marker.x - x, marker.z - z);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIndex = i;
+      }
+    }
+
+    if (nearestIndex >= 0) {
+      this.customMarkers.splice(nearestIndex, 1);
+    } else {
+      this.customMarkers.push({ x, y, z, label: `Marker ${this.customMarkers.length + 1}` });
+    }
+    this.syncFlagVisuals();
+    this.savePlayerStateNow();
+  }
+
+  /** Flag build mode: drop/pick up a flag (and its minimap marker) at whatever block the player is looking at. */
+  private placeFlagAtTarget(): void {
+    if (!this.currentTarget) return;
+    const { x, y, z } = this.currentTarget.placeAt;
+    this.toggleMarkerAt(x + 0.5, y, z + 0.5);
+  }
+
+  private syncFlagVisuals(): void {
+    for (const flag of this.flagVisuals) {
+      this.scene.remove(flag.group);
+      flag.dispose();
+    }
+    this.flagVisuals = this.customMarkers.map((marker) => {
+      const y = marker.y ?? findSurfaceY(this.world, marker.x, marker.z) ?? this.player.position.y;
+      const flag = new Flag(Math.floor(marker.x), y, Math.floor(marker.z));
+      this.scene.add(flag.group);
+      return flag;
+    });
+  }
+
+  /** Torch build mode: place/remove a portable light at whatever block the player is looking at. */
+  private placeTorchAtTarget(): void {
+    if (!this.currentTarget) return;
+    const { x, y, z } = this.currentTarget.placeAt;
+    this.toggleTorchAt(x, y, z);
+  }
+
+  private toggleTorchAt(x: number, y: number, z: number): void {
+    let nearestIndex = -1;
+    let nearestDist = GameLoop.TORCH_TOGGLE_RANGE;
+    for (let i = 0; i < this.torchRecords.length; i++) {
+      const torch = this.torchRecords[i];
+      const dist = Math.hypot(torch.x - x, torch.y - y, torch.z - z);
+      if (dist < nearestDist) {
+        nearestDist = dist;
+        nearestIndex = i;
+      }
+    }
+
+    if (nearestIndex >= 0) {
+      this.torchRecords.splice(nearestIndex, 1);
+    } else {
+      this.torchRecords.push({ x, y, z });
+    }
+    this.syncTorchVisuals();
+    this.savePlayerStateNow();
+  }
+
+  private syncTorchVisuals(): void {
+    for (const torch of this.torchVisuals) {
+      this.scene.remove(torch.group);
+      torch.dispose();
+    }
+    this.torchVisuals = this.torchRecords.map((rec) => {
+      const torch = new Torch(rec.x, rec.y, rec.z);
+      this.scene.add(torch.group);
+      return torch;
+    });
   }
 
   private buildCarInput(): CarInput {
@@ -461,11 +633,20 @@ export class GameLoop {
     this.playerModel.update(this.player.position, bodyYaw, horizontalSpeed, dt);
     this.playerModel.visible = activeViewMode === "third" && !driving;
 
+    const hotbarState = useHotbarStore.getState();
+    this.heldItem.update(dt, hotbarState.mode, HOTBAR_SLOTS[hotbarState.selectedIndex], horizontalSpeed);
+    this.heldItem.group.visible = activeViewMode === "first" && !driving;
+
     this.clouds.update(dt, this.player.position.x, this.player.position.z);
     const timeState = useTimeStore.getState();
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
     this.sky.update(this.player.position, timeOfDay);
     for (const campfire of this.campfires) campfire.update(dt);
+    for (const torch of this.torchVisuals) torch.update(dt);
+    for (const flag of this.flagVisuals) flag.update(dt);
+    const dark = isNight(timeOfDay);
+    for (const car of this.cars) car.setHeadlightsOn(dark);
+    for (const lamp of this.streetLamps) lamp.setOn(dark);
 
     // While driving, point the arrow at the car's actual heading rather
     // than the free-look camera's yaw (see the third-person chase cam
@@ -475,6 +656,7 @@ export class GameLoop {
 
     this.chunkManager.update(this.player.position.x, this.player.position.z);
     this.trySpawnCreatures();
+    this.updateAmbientCreatures(dt);
     this.trySpawnCars();
 
     useHudStore
@@ -541,6 +723,8 @@ export class GameLoop {
       pitch: euler.x,
       flying: this.player.flying,
       selectedHotbarIndex: useHotbarStore.getState().selectedIndex,
+      markers: this.customMarkers,
+      torches: this.torchRecords,
     });
   };
 
@@ -571,12 +755,26 @@ export class GameLoop {
     }
     this.scene.remove(this.playerModel.group);
     this.playerModel.dispose();
+    this.camera.remove(this.heldItem.group);
+    this.heldItem.dispose();
     this.scene.remove(this.clouds.group);
     this.clouds.dispose();
     this.sky.dispose();
     for (const campfire of this.campfires) {
       this.scene.remove(campfire.group);
       campfire.dispose();
+    }
+    for (const lamp of this.streetLamps) {
+      this.scene.remove(lamp.group);
+      lamp.dispose();
+    }
+    for (const flag of this.flagVisuals) {
+      this.scene.remove(flag.group);
+      flag.dispose();
+    }
+    for (const torch of this.torchVisuals) {
+      this.scene.remove(torch.group);
+      torch.dispose();
     }
     this.renderer.dispose();
 

@@ -17,7 +17,7 @@ const SALT_TEMPERATURE = 0x5eed01;
 const SALT_HEIGHT = 0x5eed02;
 
 const STONE_ID = getBlockByKey("greystone").id;
-const WATER_ID = getBlockByKey("water").id;
+export const WATER_ID = getBlockByKey("water").id;
 const ROAD_ID = getBlockByKey("asphalt").id;
 
 // Any column whose surface height falls below this gets flooded up to it
