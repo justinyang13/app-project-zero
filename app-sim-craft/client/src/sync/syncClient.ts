@@ -9,8 +9,9 @@ import type { WorldExportBlob } from "../persistence/worldExport";
 // login/registration system, and the server is reachable only from this
 // tailnet, so there's nothing meaningful for a player to configure here.
 // Not a secret (Tailscale itself is the access control), just not a
-// player-facing setting.
-export const SYNC_SERVER_URL = "http://100.64.70.111:4177";
+// player-facing setting. Runs on the iMac now (moved off the Mac Mini,
+// which was 100.64.70.111).
+export const SYNC_SERVER_URL = "http://100.97.31.56:4177";
 
 export type SyncErrorKind = "network" | "not-found" | "too-large" | "invalid-name" | "server";
 
