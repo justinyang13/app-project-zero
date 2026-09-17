@@ -6,6 +6,7 @@ import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const MODES: { mode: BuildMode; label: string; color: string; hotkey: string; icon: () => ReactElement }[] = [
   { mode: "break", label: "Break", color: "#e0645a", hotkey: "Z", icon: () => <ToolIcon tool="pickaxe" size={20} /> },
+  { mode: "tunnel", label: "Tunnel", color: "#b98ae0", hotkey: "T", icon: () => <TunnelGlyph /> },
   { mode: "place", label: "Build", color: "#6fbf3f", hotkey: "X", icon: () => <BuildGlyph /> },
   { mode: "torch", label: "Torch", color: "#ffb347", hotkey: "C", icon: () => <TorchGlyph /> },
   { mode: "flag", label: "Flag", color: "#ff4fd8", hotkey: "V", icon: () => <FlagGlyph /> },
@@ -37,9 +38,9 @@ export function Hotbar() {
     // fit a narrow phone screen at all, let alone leave room for
     // TouchJoystick.tsx/TouchActionButtons.tsx in both bottom corners —
     // raised above that row entirely, horizontally scrollable as a
-    // fallback, and the four mode-select icons are dropped (redundant
-    // with TouchActionButtons.tsx's own mode-cycle button and the
-    // primary action button's mode icon) to save width.
+    // fallback, and the mode-select icons are dropped (redundant with
+    // TouchActionButtons.tsx's own mode-cycle button and the primary
+    // action button's mode icon) to save width.
     return (
       <div
         style={{
@@ -92,7 +93,11 @@ export function Hotbar() {
           <button
             key={m.mode}
             onClick={() => setMode(m.mode)}
-            title={`${m.label} — left-click to use (${m.hotkey}, or cycle with B)`}
+            title={
+              m.mode === "tunnel"
+                ? `${m.label} — hold left-click to dig continuously (${m.hotkey}, or cycle with B)`
+                : `${m.label} — left-click to use (${m.hotkey}, or cycle with B)`
+            }
             style={{
               width: 48,
               height: 48,
@@ -166,6 +171,20 @@ function BuildGlyph() {
     <svg width={20} height={20} viewBox="0 0 16 16" style={{ display: "block" }}>
       <path d="M8 2 L13.5 5 L13.5 11 L8 14 L2.5 11 L2.5 5 Z" fill="#cfe8cf" stroke="#e8e8e8" strokeWidth="0.8" />
       <path d="M8 2 L13.5 5 L8 8 L2.5 5 Z" fill="#e6f5e6" stroke="#e8e8e8" strokeWidth="0.8" />
+    </svg>
+  );
+}
+
+/** A small drill-bit-with-speed-lines glyph for Tunnel mode — the speed lines are what distinguish it from Break's plain pickaxe at a glance. */
+function TunnelGlyph() {
+  return (
+    <svg width={20} height={20} viewBox="0 0 16 16" style={{ display: "block" }}>
+      <path d="M6.4 2 L9.6 2 L8.6 9 L7.4 9 Z" fill="#e2cdf5" stroke="#e8e8e8" strokeWidth="0.6" />
+      <path d="M7.4 9 L8.6 9 L8 13 Z" fill="#b98ae0" />
+      <path d="M1.5 5 L4 5" stroke="#e2cdf5" strokeWidth="1.1" strokeLinecap="round" />
+      <path d="M1.5 8 L4 8" stroke="#e2cdf5" strokeWidth="1.1" strokeLinecap="round" />
+      <path d="M12 5 L14.5 5" stroke="#e2cdf5" strokeWidth="1.1" strokeLinecap="round" />
+      <path d="M12 8 L14.5 8" stroke="#e2cdf5" strokeWidth="1.1" strokeLinecap="round" />
     </svg>
   );
 }

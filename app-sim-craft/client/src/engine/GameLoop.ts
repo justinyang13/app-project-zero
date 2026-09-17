@@ -40,6 +40,7 @@ const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped po
 const ENTER_VEHICLE_RANGE = 3;
 const CAR_COUNT = 6;
 const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0xecf0f1, 0xe67e22];
+const TUNNEL_INTERVAL = 0.15; // seconds between auto-breaks while holding Tunnel mode's primary action
 
 type ViewMode = "first" | "third";
 
@@ -90,6 +91,13 @@ export class GameLoop {
   private touchJumpHeld = false;
   private touchFlyUpHeld = false;
   private touchFlyDownHeld = false;
+
+  // Whether the primary action (left mouse / the touch action button) is
+  // currently held down — only Tunnel mode reads this (see the frame
+  // loop's tunnelCooldown countdown below); every other mode still fires
+  // once per triggerPrimaryAction call, same as before.
+  private primaryActionHeld = false;
+  private tunnelCooldown = 0;
 
   private simTick = 0;
   private accumulator = 0;
@@ -189,6 +197,10 @@ export class GameLoop {
     window.addEventListener("beforeunload", this.handleBeforeUnload);
     document.addEventListener("visibilitychange", this.handleBeforeUnload);
     canvas.addEventListener("mousedown", this.handleMouseDown);
+    // On window, not canvas — releasing the button after dragging off
+    // the canvas (or off-screen entirely) must still stop Tunnel mode
+    // from digging forever.
+    window.addEventListener("mouseup", this.handleMouseUp);
     canvas.addEventListener("contextmenu", this.handleContextMenu);
     canvas.addEventListener("wheel", this.handleWheel);
   }
@@ -256,6 +268,7 @@ export class GameLoop {
     // Direct mode hotkeys, alongside B's cycle — Z/X/C/V mirrors the
     // Hotbar's Break/Build/Torch/Flag button order (see ui/Hotbar.tsx).
     if (e.code === "KeyZ" && !e.repeat) useHotbarStore.getState().setMode("break");
+    if (e.code === "KeyT" && !e.repeat) useHotbarStore.getState().setMode("tunnel");
     if (e.code === "KeyX" && !e.repeat) useHotbarStore.getState().setMode("place");
     if (e.code === "KeyC" && !e.repeat) useHotbarStore.getState().setMode("torch");
     if (e.code === "KeyV" && !e.repeat) useHotbarStore.getState().setMode("flag");
@@ -301,6 +314,9 @@ export class GameLoop {
     if (e.button === 0) {
       // Left click does whichever action the current mode selects — see
       // triggerPrimaryAction, shared with the touch action button below.
+      // Held state only matters to Tunnel mode (see setPrimaryActionHeld),
+      // but it's harmless to always track it.
+      this.primaryActionHeld = true;
       this.triggerPrimaryAction();
     } else if (e.button === 2) {
       // Right-click is a quick block-place shortcut for the break/place
@@ -312,19 +328,35 @@ export class GameLoop {
     }
   };
 
+  private handleMouseUp = (e: MouseEvent): void => {
+    if (e.button === 0) this.primaryActionHeld = false;
+  };
+
+  /** Touch counterpart to handleMouseUp/primaryActionHeld — see ui/TouchActionButtons.tsx's primary action button. */
+  setPrimaryActionHeld(held: boolean): void {
+    this.primaryActionHeld = held;
+  }
+
   /**
    * Whichever action the current Build/Break mode selects (see
    * hotbarStore.ts) — shared by desktop's left-click (handleMouseDown
    * above) and the touch action button (ui/TouchActionButtons.tsx via
    * engine/activeGameLoop.ts), so both trigger identically instead of
    * touch inventing its own semantics. Fires once per call, matching
-   * mousedown's own non-repeating behavior — there's no hold-to-mine
-   * mechanic on desktop to replicate.
+   * mousedown's own non-repeating behavior for every mode except
+   * Tunnel, whose continued digging while held is driven by the frame
+   * loop's tunnelCooldown countdown instead (see frame() below) — this
+   * call still breaks the first block immediately rather than waiting
+   * out that cooldown, and resets it so the two don't double up.
    */
   triggerPrimaryAction(): void {
     const mode = useHotbarStore.getState().mode;
     if (mode === "place") this.placeSelectedBlock();
     else if (mode === "break") this.breakTargetedBlock();
+    else if (mode === "tunnel") {
+      this.breakTargetedBlock();
+      this.tunnelCooldown = TUNNEL_INTERVAL;
+    }
     else if (mode === "torch") this.placeTorchAtTarget();
     else if (mode === "flag") this.placeFlagAtTarget();
   }
@@ -757,6 +789,20 @@ export class GameLoop {
       this.highlightMesh.visible = false;
     }
 
+    // Tunnel mode's hold-to-keep-digging: re-checked every frame against
+    // the just-recomputed currentTarget above, so breaking through one
+    // block immediately continues into whatever's now exposed behind it
+    // instead of needing a fresh click per block.
+    if (this.primaryActionHeld && useHotbarStore.getState().mode === "tunnel") {
+      this.tunnelCooldown -= dt;
+      if (this.tunnelCooldown <= 0) {
+        this.breakTargetedBlock();
+        this.tunnelCooldown = TUNNEL_INTERVAL;
+      }
+    } else {
+      this.tunnelCooldown = 0;
+    }
+
     this.renderer.render(this.scene, this.camera);
 
     this.fpsFrameCount++;
@@ -840,6 +886,7 @@ export class GameLoop {
     window.removeEventListener("beforeunload", this.handleBeforeUnload);
     document.removeEventListener("visibilitychange", this.handleBeforeUnload);
     this.canvas.removeEventListener("mousedown", this.handleMouseDown);
+    window.removeEventListener("mouseup", this.handleMouseUp);
     this.canvas.removeEventListener("contextmenu", this.handleContextMenu);
     this.canvas.removeEventListener("wheel", this.handleWheel);
     this.mouseLook.dispose();

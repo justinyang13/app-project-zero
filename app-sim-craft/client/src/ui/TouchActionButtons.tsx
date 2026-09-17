@@ -19,7 +19,7 @@ const BUTTON_STYLE_BASE: React.CSSProperties = {
   zIndex: 10,
 };
 
-const MODE_LABELS: Record<BuildMode, string> = { break: "⛏", place: "▦", torch: "🔥", flag: "🚩" };
+const MODE_LABELS: Record<BuildMode, string> = { break: "⛏", tunnel: "🕳", place: "▦", torch: "🔥", flag: "🚩" };
 
 /**
  * Bottom-right cluster: jump, fly toggle (+ up/down while flying), the
@@ -43,14 +43,21 @@ export function TouchActionButtons() {
 
   return (
     <>
-      {/* Primary action: whatever the current Build/Break mode does on left-click. */}
+      {/* Primary action: whatever the current Build/Break mode does on left-click.
+          Held state only matters to Tunnel mode (see GameLoop.ts's
+          primaryActionHeld) — every other mode still just fires once on
+          the initial tap, same as before. */}
       <button
         onPointerDown={(e) => {
           e.preventDefault();
+          getActiveGameLoop()?.setPrimaryActionHeld(true);
           getActiveGameLoop()?.triggerPrimaryAction();
         }}
+        onPointerUp={() => getActiveGameLoop()?.setPrimaryActionHeld(false)}
+        onPointerCancel={() => getActiveGameLoop()?.setPrimaryActionHeld(false)}
+        onPointerLeave={() => getActiveGameLoop()?.setPrimaryActionHeld(false)}
         style={{ ...BUTTON_STYLE_BASE, position: "fixed", bottom: safeBottom, right: safeRight, width: 64, height: 64, fontSize: 26 }}
-        title={`${mode} (tap)`}
+        title={mode === "tunnel" ? `${mode} (hold)` : `${mode} (tap)`}
       >
         {MODE_LABELS[mode]}
       </button>

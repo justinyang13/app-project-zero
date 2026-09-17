@@ -103,7 +103,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           color: "rgba(255, 255, 255, 0.8)",
         }}
       >
-        M: mark spot · ZXCV/B: mode · +/-: zoom
+        M: mark spot · ZTXCV/B: mode · +/-: zoom
       </div>
     </div>
   );

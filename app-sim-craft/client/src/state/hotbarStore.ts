@@ -13,8 +13,12 @@ export const HOTBAR_SLOTS = HOTBAR_BLOCK_KEYS.map((key) => BLOCKS.find((b) => b.
 // "break"/"place" edit voxel blocks; "torch" and "flag" place freestanding
 // runtime props instead (a light source and a location marker — see
 // engine/Torch.ts and engine/Flag.ts) since neither is a voxel block.
-export type BuildMode = "break" | "place" | "torch" | "flag";
-const MODE_CYCLE: BuildMode[] = ["break", "place", "torch", "flag"];
+// "tunnel" is break's continuous cousin — holding the primary action
+// down keeps breaking whatever's targeted (see engine/GameLoop.ts's
+// primaryActionHeld/tunnelCooldown), instead of one block per click, so
+// digging a tunnel doesn't take one click per block.
+export type BuildMode = "break" | "tunnel" | "place" | "torch" | "flag";
+const MODE_CYCLE: BuildMode[] = ["break", "tunnel", "place", "torch", "flag"];
 
 interface HotbarState {
   selectedIndex: number;
