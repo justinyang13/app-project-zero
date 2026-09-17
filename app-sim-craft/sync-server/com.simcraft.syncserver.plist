@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.simcraft.syncserver</string>
+
+  <!--
+    Update these two paths for your machine before installing:
+    - ProgramArguments[0]: absolute path to `node` (`which node`)
+    - The `dist/index.js` path: absolute path to this repo's
+      app-sim-craft/sync-server/dist/index.js
+  -->
+  <key>ProgramArguments</key>
+  <array>
+    <string>/usr/local/bin/node</string>
+    <string>/REPLACE/WITH/ABSOLUTE/PATH/TO/app-sim-craft/sync-server/dist/index.js</string>
+  </array>
+
+  <key>WorkingDirectory</key>
+  <string>/REPLACE/WITH/ABSOLUTE/PATH/TO/app-sim-craft/sync-server</string>
+
+  <key>RunAtLoad</key>
+  <true/>
+
+  <key>KeepAlive</key>
+  <true/>
+
+  <key>StandardOutPath</key>
+  <string>/REPLACE/WITH/ABSOLUTE/PATH/TO/app-sim-craft/sync-server/logs/stdout.log</string>
+
+  <key>StandardErrorPath</key>
+  <string>/REPLACE/WITH/ABSOLUTE/PATH/TO/app-sim-craft/sync-server/logs/stderr.log</string>
+
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/usr/bin:/bin</string>
+  </dict>
+</dict>
+</plist>

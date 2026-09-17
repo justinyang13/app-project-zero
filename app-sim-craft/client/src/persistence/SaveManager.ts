@@ -1,11 +1,12 @@
 // Autosave + explicit chunk/player persistence, per
-// spec/14-persistence-saves.md §2-3. A single fixed-id "default" world
-// for now (no World Select screen yet — see db.ts's header note).
+// spec/14-persistence-saves.md §2-3. Operates on whichever named world id
+// it's given at load() — see persistence/migration.ts for how that id is
+// resolved (first run / legacy-save rename / already-chosen) before this
+// ever starts its autosave timer.
 import { hashSeedString } from "../engine/worldgen/noise";
 import { openSimCraftDB, type PlayerStateRecord } from "./db";
 import type { Chunk } from "../engine/Chunk";
 
-const WORLD_ID = "default";
 const SCHEMA_VERSION = 1;
 const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000; // spec default: every 2 real-world minutes
 
@@ -17,21 +18,23 @@ export interface LoadedWorldInfo {
 
 export class SaveManager {
   private db!: Awaited<ReturnType<typeof openSimCraftDB>>;
+  private worldId!: string;
   private readonly chunkDiffs = new Map<string, Map<number, number>>();
   private readonly dirtyChunkKeys = new Set<string>();
   private autosaveHandle: ReturnType<typeof setInterval> | null = null;
 
-  async load(): Promise<LoadedWorldInfo> {
+  async load(worldId: string): Promise<LoadedWorldInfo> {
+    this.worldId = worldId;
     this.db = await openSimCraftDB();
 
-    let record = await this.db.get("worlds", WORLD_ID);
+    let record = await this.db.get("worlds", worldId);
     let isNewWorld = false;
     if (!record) {
       isNewWorld = true;
       const seedString = crypto.getRandomValues(new Uint32Array(2)).join("-");
       record = {
-        id: WORLD_ID,
-        name: "World",
+        id: worldId,
+        name: worldId,
         seed: hashSeedString(seedString),
         worldType: "standard",
         createdAt: Date.now(),
@@ -44,14 +47,13 @@ export class SaveManager {
       await this.db.put("worlds", record);
     }
 
-    const allChunkRecords = await this.db.getAll("chunks");
+    const allChunkRecords = await this.db.getAllFromIndex("chunks", "worldId", worldId);
     for (const rec of allChunkRecords) {
-      if (!rec.key.startsWith(`${WORLD_ID}:`)) continue;
-      const coordKey = rec.key.slice(WORLD_ID.length + 1);
+      const coordKey = rec.key.slice(worldId.length + 1);
       this.chunkDiffs.set(coordKey, new Map(rec.overrides));
     }
 
-    const playerState = (await this.db.get("playerState", WORLD_ID)) ?? null;
+    const playerState = (await this.db.get("playerState", worldId)) ?? null;
 
     this.startAutosave();
     window.addEventListener("beforeunload", this.flushSync);
@@ -82,15 +84,15 @@ export class SaveManager {
     const diff = this.chunkDiffs.get(coordKey);
     if (!diff) return;
     await this.db.put("chunks", {
-      key: `${WORLD_ID}:${coordKey}`,
-      worldId: WORLD_ID,
+      key: `${this.worldId}:${coordKey}`,
+      worldId: this.worldId,
       overrides: [...diff.entries()],
       schemaVersion: SCHEMA_VERSION,
     });
   }
 
   async savePlayerState(state: Omit<PlayerStateRecord, "worldId" | "schemaVersion">): Promise<void> {
-    await this.db.put("playerState", { ...state, worldId: WORLD_ID, schemaVersion: SCHEMA_VERSION });
+    await this.db.put("playerState", { ...state, worldId: this.worldId, schemaVersion: SCHEMA_VERSION });
   }
 
   /** Flushes every dirty chunk diff — the autosave-timer and pause-menu "Save Now" path. */
@@ -102,8 +104,8 @@ export class SaveManager {
         const diff = this.chunkDiffs.get(coordKey);
         if (!diff) return Promise.resolve();
         return this.db.put("chunks", {
-          key: `${WORLD_ID}:${coordKey}`,
-          worldId: WORLD_ID,
+          key: `${this.worldId}:${coordKey}`,
+          worldId: this.worldId,
           overrides: [...diff.entries()],
           schemaVersion: SCHEMA_VERSION,
         });

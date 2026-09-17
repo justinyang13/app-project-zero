@@ -84,9 +84,9 @@ export class GameLoop {
   private rafHandle = 0;
   private disposed = false;
 
-  static async create(canvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement): Promise<GameLoop> {
+  static async create(canvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement, worldId: string): Promise<GameLoop> {
     const saveManager = new SaveManager();
-    const { seed, playerState } = await saveManager.load();
+    const { seed, playerState } = await saveManager.load(worldId);
     return new GameLoop(canvas, minimapCanvas, seed, saveManager, playerState);
   }
 
@@ -715,9 +715,9 @@ export class GameLoop {
   // both from a real page-unload (the only path guaranteed to fire on a
   // hard reload/tab close — React's unmount cleanup does not) and from
   // dispose() (dev HMR, or a future in-game "back to menu").
-  private savePlayerStateNow = (): void => {
+  private buildPlayerStateSnapshot() {
     const euler = new THREE.Euler().setFromQuaternion(this.camera.quaternion, "YXZ");
-    void this.saveManager.savePlayerState({
+    return {
       position: this.player.position,
       yaw: euler.y,
       pitch: euler.x,
@@ -725,12 +725,28 @@ export class GameLoop {
       selectedHotbarIndex: useHotbarStore.getState().selectedIndex,
       markers: this.customMarkers,
       torches: this.torchRecords,
-    });
+    };
+  }
+
+  private savePlayerStateNow = (): void => {
+    void this.saveManager.savePlayerState(this.buildPlayerStateSnapshot());
   };
 
   private handleBeforeUnload = (): void => {
     this.savePlayerStateNow();
   };
+
+  /**
+   * Awaits a full flush of player state + dirty chunk diffs to IndexedDB.
+   * Unlike beforeunload/dispose's fire-and-forget saves (the page may be
+   * gone before those land), this is used before operations that touch
+   * this world's IndexedDB rows right afterward — switching/renaming/
+   * pushing a world — where a write racing in after would be a real bug.
+   */
+  async flushAll(): Promise<void> {
+    await this.saveManager.savePlayerState(this.buildPlayerStateSnapshot());
+    await this.saveManager.flushDirtyChunks();
+  }
 
   dispose(): void {
     this.disposed = true;
