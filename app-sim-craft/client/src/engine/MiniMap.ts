@@ -11,9 +11,8 @@ import { sampleColumn, SEA_LEVEL } from "./worldgen/terrain";
 import { isRoadColumn } from "./worldgen/roads";
 
 const CANVAS_SIZE = 160; // px, square
-const WORLD_RANGE = 128; // world blocks shown across the canvas
-const SAMPLE_STEP = 4; // blocks between terrain samples, for perf
-const SCALE = CANVAS_SIZE / WORLD_RANGE;
+const DEFAULT_WORLD_RANGE = 128; // world blocks shown across the canvas, before zoom
+const BASE_SAMPLE_STEP = 4; // blocks between terrain samples at the default zoom, for perf
 const MAX_CACHE_ENTRIES = 6000; // bound memory for long sessions that roam far
 
 type TerrainSample = "water" | "road" | "land";
@@ -63,33 +62,44 @@ export class MiniMap {
     return sample;
   }
 
-  update(playerX: number, playerZ: number, playerYaw: number, markers: MiniMapMarker[]): void {
+  update(
+    playerX: number,
+    playerZ: number,
+    playerYaw: number,
+    markers: MiniMapMarker[],
+    worldRange: number = DEFAULT_WORLD_RANGE,
+  ): void {
     const ctx = this.ctx;
-    const half = WORLD_RANGE / 2;
+    const half = worldRange / 2;
+    const scale = CANVAS_SIZE / worldRange;
+    // Sample step scales with zoom so the number of sampled cells (and
+    // therefore the per-frame cost) stays roughly constant whether
+    // zoomed in or out, instead of ballooning at wide zoom levels.
+    const sampleStep = Math.max(2, Math.round(BASE_SAMPLE_STEP * (worldRange / DEFAULT_WORLD_RANGE)));
 
     ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     ctx.fillStyle = "#5a8a4a"; // land base — only water/road cells get painted over it below
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
 
-    const startX = Math.floor((playerX - half) / SAMPLE_STEP) * SAMPLE_STEP;
-    const startZ = Math.floor((playerZ - half) / SAMPLE_STEP) * SAMPLE_STEP;
-    const cellPx = SAMPLE_STEP * SCALE + 0.5; // slight overlap so cells tile without seams
+    const startX = Math.floor((playerX - half) / sampleStep) * sampleStep;
+    const startZ = Math.floor((playerZ - half) / sampleStep) * sampleStep;
+    const cellPx = sampleStep * scale + 0.5; // slight overlap so cells tile without seams
 
-    for (let wx = startX; wx <= playerX + half; wx += SAMPLE_STEP) {
-      for (let wz = startZ; wz <= playerZ + half; wz += SAMPLE_STEP) {
+    for (let wx = startX; wx <= playerX + half; wx += sampleStep) {
+      for (let wz = startZ; wz <= playerZ + half; wz += sampleStep) {
         const sample = this.sampleAt(wx, wz);
         if (sample === "land") continue;
         ctx.fillStyle = sample === "water" ? "#3f7fd0" : "#8a8a8a";
-        const sx = CANVAS_SIZE / 2 + (wx - playerX) * SCALE;
-        const sy = CANVAS_SIZE / 2 + (wz - playerZ) * SCALE;
+        const sx = CANVAS_SIZE / 2 + (wx - playerX) * scale;
+        const sy = CANVAS_SIZE / 2 + (wz - playerZ) * scale;
         ctx.fillRect(sx - cellPx / 2, sy - cellPx / 2, cellPx, cellPx);
       }
     }
 
     const markerMargin = 6;
     for (const marker of markers) {
-      const sx = CANVAS_SIZE / 2 + (marker.x - playerX) * SCALE;
-      const sy = CANVAS_SIZE / 2 + (marker.z - playerZ) * SCALE;
+      const sx = CANVAS_SIZE / 2 + (marker.x - playerX) * scale;
+      const sy = CANVAS_SIZE / 2 + (marker.z - playerZ) * scale;
       if (sx < -markerMargin || sx > CANVAS_SIZE + markerMargin || sy < -markerMargin || sy > CANVAS_SIZE + markerMargin) {
         continue;
       }

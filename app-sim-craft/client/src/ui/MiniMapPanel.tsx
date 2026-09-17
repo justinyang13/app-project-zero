@@ -1,4 +1,5 @@
 import type { RefObject } from "react";
+import { useMinimapStore, MINIMAP_ZOOM_LEVELS } from "../state/minimapStore";
 
 const LEGEND: { color: string; label: string }[] = [
   { color: "#8a8a8a", label: "Road" },
@@ -11,6 +12,10 @@ const LEGEND: { color: string; label: string }[] = [
 ];
 
 export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasElement | null> }) {
+  const zoomIndex = useMinimapStore((s) => s.zoomIndex);
+  const zoomIn = useMinimapStore((s) => s.zoomIn);
+  const zoomOut = useMinimapStore((s) => s.zoomOut);
+
   return (
     <div
       style={{
@@ -25,17 +30,47 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
         userSelect: "none",
       }}
     >
-      <canvas
-        ref={canvasRef}
-        style={{
-          width: 160,
-          height: 160,
-          borderRadius: "50%",
-          border: "2px solid rgba(255, 255, 255, 0.6)",
-          boxShadow: "0 1px 6px rgba(0, 0, 0, 0.5)",
-          background: "#5a8a4a",
-        }}
-      />
+      <div style={{ position: "relative", width: 160, height: 160 }}>
+        <canvas
+          ref={canvasRef}
+          style={{
+            width: 160,
+            height: 160,
+            borderRadius: "50%",
+            border: "2px solid rgba(255, 255, 255, 0.6)",
+            boxShadow: "0 1px 6px rgba(0, 0, 0, 0.5)",
+            background: "#5a8a4a",
+          }}
+        />
+        <div
+          style={{
+            position: "absolute",
+            bottom: -4,
+            right: -4,
+            display: "flex",
+            flexDirection: "column",
+            gap: 2,
+            pointerEvents: "auto",
+          }}
+        >
+          <button
+            onClick={zoomIn}
+            disabled={zoomIndex === 0}
+            title="Zoom in (=)"
+            style={zoomButtonStyle(zoomIndex === 0)}
+          >
+            +
+          </button>
+          <button
+            onClick={zoomOut}
+            disabled={zoomIndex === MINIMAP_ZOOM_LEVELS.length - 1}
+            title="Zoom out (-)"
+            style={zoomButtonStyle(zoomIndex === MINIMAP_ZOOM_LEVELS.length - 1)}
+          >
+            −
+          </button>
+        </div>
+      </div>
       <div
         style={{
           display: "flex",
@@ -68,8 +103,25 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           color: "rgba(255, 255, 255, 0.8)",
         }}
       >
-        M: mark spot · B: cycle mode
+        M: mark spot · ZXCV/B: mode · +/-: zoom
       </div>
     </div>
   );
+}
+
+function zoomButtonStyle(disabled: boolean): React.CSSProperties {
+  return {
+    width: 22,
+    height: 22,
+    lineHeight: 1,
+    border: "1px solid rgba(255, 255, 255, 0.6)",
+    borderRadius: "50%",
+    background: disabled ? "rgba(0, 0, 0, 0.3)" : "rgba(0, 0, 0, 0.6)",
+    color: disabled ? "rgba(255, 255, 255, 0.4)" : "#fff",
+    fontFamily: "monospace",
+    fontSize: 13,
+    cursor: disabled ? "default" : "pointer",
+    touchAction: "manipulation",
+    padding: 0,
+  };
 }

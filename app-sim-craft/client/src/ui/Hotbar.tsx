@@ -4,11 +4,11 @@ import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
 import { ToolIcon } from "./ToolIcon";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
-const MODES: { mode: BuildMode; label: string; color: string; icon: () => ReactElement }[] = [
-  { mode: "break", label: "Break", color: "#e0645a", icon: () => <ToolIcon tool="pickaxe" size={20} /> },
-  { mode: "place", label: "Build", color: "#6fbf3f", icon: () => <BuildGlyph /> },
-  { mode: "torch", label: "Torch", color: "#ffb347", icon: () => <TorchGlyph /> },
-  { mode: "flag", label: "Flag", color: "#ff4fd8", icon: () => <FlagGlyph /> },
+const MODES: { mode: BuildMode; label: string; color: string; hotkey: string; icon: () => ReactElement }[] = [
+  { mode: "break", label: "Break", color: "#e0645a", hotkey: "Z", icon: () => <ToolIcon tool="pickaxe" size={20} /> },
+  { mode: "place", label: "Build", color: "#6fbf3f", hotkey: "X", icon: () => <BuildGlyph /> },
+  { mode: "torch", label: "Torch", color: "#ffb347", hotkey: "C", icon: () => <TorchGlyph /> },
+  { mode: "flag", label: "Flag", color: "#ff4fd8", hotkey: "V", icon: () => <FlagGlyph /> },
 ];
 
 function slotButtonStyle(selected: boolean, colorHex: string): React.CSSProperties {
@@ -92,7 +92,7 @@ export function Hotbar() {
           <button
             key={m.mode}
             onClick={() => setMode(m.mode)}
-            title={`${m.label} — left-click to use (cycle with B)`}
+            title={`${m.label} — left-click to use (${m.hotkey}, or cycle with B)`}
             style={{
               width: 48,
               height: 48,

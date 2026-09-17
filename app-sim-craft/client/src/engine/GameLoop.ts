@@ -26,6 +26,7 @@ import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
 import { sampleColumn, biomeKeyFromIndex, sampleBiomeIndexAt } from "./worldgen/terrain";
 import { useHudStore } from "../state/hudStore";
 import { useHotbarStore, HOTBAR_SLOTS } from "../state/hotbarStore";
+import { useMinimapStore } from "../state/minimapStore";
 import { SaveManager } from "../persistence/SaveManager";
 import type { MapMarkerRecord, TorchRecord } from "../persistence/db";
 
@@ -252,12 +253,20 @@ export class GameLoop {
     if (e.code === "KeyB" && !e.repeat) {
       useHotbarStore.getState().cycleMode();
     }
+    // Direct mode hotkeys, alongside B's cycle — Z/X/C/V mirrors the
+    // Hotbar's Break/Build/Torch/Flag button order (see ui/Hotbar.tsx).
+    if (e.code === "KeyZ" && !e.repeat) useHotbarStore.getState().setMode("break");
+    if (e.code === "KeyX" && !e.repeat) useHotbarStore.getState().setMode("place");
+    if (e.code === "KeyC" && !e.repeat) useHotbarStore.getState().setMode("torch");
+    if (e.code === "KeyV" && !e.repeat) useHotbarStore.getState().setMode("flag");
     if (e.code === "KeyE" && !e.repeat) {
       this.toggleDriving();
     }
     if (e.code === "KeyM" && !e.repeat) {
       this.toggleMarkerAtPlayer();
     }
+    if (e.code === "Minus" && !e.repeat) useMinimapStore.getState().zoomOut();
+    if (e.code === "Equal" && !e.repeat) useMinimapStore.getState().zoomIn();
     if (e.code === "F5") {
       // F5's browser default is a page refresh, which would lose the
       // session's in-memory state — preventDefault before it can fire.
@@ -719,7 +728,13 @@ export class GameLoop {
     // than the free-look camera's yaw (see the third-person chase cam
     // above — mouse-look can face anywhere independent of travel).
     const miniMapYaw = this.drivingCar ? this.drivingCar.yaw : bodyYaw;
-    this.miniMap.update(this.player.position.x, this.player.position.z, miniMapYaw, this.buildMiniMapMarkers());
+    this.miniMap.update(
+      this.player.position.x,
+      this.player.position.z,
+      miniMapYaw,
+      this.buildMiniMapMarkers(),
+      useMinimapStore.getState().worldRange,
+    );
 
     this.chunkManager.update(this.player.position.x, this.player.position.z);
     this.trySpawnCreatures();
