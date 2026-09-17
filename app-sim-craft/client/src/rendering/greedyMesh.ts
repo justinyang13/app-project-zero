@@ -3,7 +3,7 @@
 // without a worker). No texture atlas or AO yet (§3's AO note, and
 // [18-visual-art-direction.md]'s atlas are later-phase work) — faces are
 // flat-colored per block, shaded by the merged cell's sky-light level.
-import { AIR_ID, getBlockById } from "../data/blocks";
+import { AIR_ID, WATER_ID, getBlockById } from "../data/blocks";
 import { CHUNK_SIZE } from "../engine/Chunk";
 
 type Axis = 0 | 1 | 2; // 0 = X, 1 = Y, 2 = Z
@@ -30,6 +30,14 @@ export interface MeshedChunk {
   normals: Float32Array;
   colors: Float32Array;
   indices: Uint32Array;
+  // Water faces land in their own buffers instead of the arrays above,
+  // so ChunkManager.ts can give them a separate transparent-material
+  // mesh (see its header comment) rather than baking transparency into
+  // the single opaque terrain mesh/material.
+  waterPositions: Float32Array;
+  waterNormals: Float32Array;
+  waterColors: Float32Array;
+  waterIndices: Uint32Array;
 }
 
 function sampleBlock(x: number, y: number, z: number, blocks: Uint16Array, b: BoundaryLayers): number {
@@ -61,6 +69,10 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
   const normals: number[] = [];
   const colors: number[] = [];
   const indices: number[] = [];
+  const waterPositions: number[] = [];
+  const waterNormals: number[] = [];
+  const waterColors: number[] = [];
+  const waterIndices: number[] = [];
 
   const voxel: [number, number, number] = [0, 0, 0];
   const neighborVoxel: [number, number, number] = [0, 0, 0];
@@ -86,7 +98,15 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
             setVoxel(neighborVoxel, axis, slice + dir, u, v);
             const neighborId = sampleBlock(neighborVoxel[0], neighborVoxel[1], neighborVoxel[2], blocks, boundaries);
             const neighborDef = neighborId === AIR_ID ? null : getBlockById(neighborId);
-            const faceVisible = neighborId === AIR_ID || (neighborDef?.transparentToRender ?? false);
+            // Water-to-water is the one same-block transparent pairing that
+            // needs to NOT count as visible — every other transparentToRender
+            // block (e.g. leaves) keeps its existing behavior. Without this,
+            // a lake's internal horizontal layers (any two vertically
+            // stacked water voxels) would each emit a face; harmless while
+            // water was opaque (invisible, buried inside solid water) but a
+            // visible stack of seams now that water is rendered translucent.
+            const isWaterSeam = blockId === WATER_ID && neighborId === WATER_ID;
+            const faceVisible = !isWaterSeam && (neighborId === AIR_ID || (neighborDef?.transparentToRender ?? false));
             if (!faceVisible) continue;
 
             // Face brightness: prefer the exposing (air) neighbor's own
@@ -145,11 +165,12 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
               }
             }
 
+            const isWater = blockId === WATER_ID;
             emitQuad(
-              positions,
-              normals,
-              colors,
-              indices,
+              isWater ? waterPositions : positions,
+              isWater ? waterNormals : normals,
+              isWater ? waterColors : colors,
+              isWater ? waterIndices : indices,
               axis,
               slice,
               dir,
@@ -170,6 +191,10 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
     normals: new Float32Array(normals),
     colors: new Float32Array(colors),
     indices: new Uint32Array(indices),
+    waterPositions: new Float32Array(waterPositions),
+    waterNormals: new Float32Array(waterNormals),
+    waterColors: new Float32Array(waterColors),
+    waterIndices: new Uint32Array(waterIndices),
   };
 }
 

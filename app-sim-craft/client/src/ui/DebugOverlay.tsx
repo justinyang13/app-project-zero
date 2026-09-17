@@ -23,7 +23,7 @@ Target: ${debug.targetBlock ?? "—"}
 Chunks loaded: ${debug.chunkCount}  pending ops: ${debug.pendingChunkOps}
 Cars: ${debug.carCount}
 Sim tick: ${debug.simTick}  Seed: ${debug.worldSeed}
-Mode: ${debug.flying ? "flying (double-tap Space to land)" : "walking (double-tap Space to fly)"}
+Mode: ${debug.flying ? "flying (double-tap Space to land)" : debug.swimming ? "swimming (Space/Shift to rise/dive)" : "walking (double-tap Space to fly)"}
 View: ${debug.viewMode} person (F5 to switch)
 Pointer lock: ${debug.pointerLocked ? "on" : "off (click to look)"}`;
 }

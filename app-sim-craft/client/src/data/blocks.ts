@@ -24,6 +24,10 @@ export interface BlockDef {
   solid: boolean;
   transparentToRender: boolean;
   gravityAffected: boolean;
+  // Passable to player collision (no walking into a wall) and swum
+  // through rather than walked on — see engine/Player.ts. Only water
+  // today; unset/false for everything else.
+  liquid?: boolean;
   dropTable: DropEntry[];
   color: number; // placeholder flat color until textures land (18-visual-art-direction.md §3)
 }
@@ -147,11 +151,13 @@ export const BLOCKS: BlockDef[] = [
     id: 7,
     key: "water",
     name: "Water",
-    // Rendered as a plain opaque block for now, not a true fluid — no
-    // flow/spread simulation, buoyancy, or swimming yet (that's the full
-    // spec/11-physics-fluids.md system, later-phase work). It fills lake
-    // basins at world-gen time (see engine/worldgen/terrain.ts's
-    // SEA_LEVEL) and can otherwise be placed/mined like any other block.
+    // Rendered as a semi-transparent cube (own mesh/material, see
+    // rendering/greedyMesh.ts and engine/ChunkManager.ts) and swimmable
+    // (`liquid: true` below) — still not a true fluid sim, no flow/
+    // spread or currents (that's the full spec/11-physics-fluids.md
+    // system, later-phase work). It fills lake basins at world-gen time
+    // (see engine/worldgen/terrain.ts's SEA_LEVEL) and can otherwise be
+    // placed/mined like any other block.
     hardness: 0,
     toolType: "none",
     toolTier: 0,
@@ -161,6 +167,7 @@ export const BLOCKS: BlockDef[] = [
     solid: true,
     transparentToRender: true,
     gravityAffected: false,
+    liquid: true,
     dropTable: [{ itemKey: "water", minCount: 1, maxCount: 1, chance: 1 }],
     color: 0x3fa0e8,
   },
@@ -275,4 +282,10 @@ export function getBlockById(id: number): BlockDef {
   const def = byId.get(id);
   if (!def) throw new Error(`Unknown block id: ${id}`);
   return def;
+}
+
+export const WATER_ID = getBlockByKey("water").id;
+
+export function isLiquid(id: number): boolean {
+  return id !== AIR_ID && (byId.get(id)?.liquid ?? false);
 }

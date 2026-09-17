@@ -13,6 +13,10 @@ const api = {
       result.normals.buffer,
       result.colors.buffer,
       result.indices.buffer,
+      result.waterPositions.buffer,
+      result.waterNormals.buffer,
+      result.waterColors.buffer,
+      result.waterIndices.buffer,
     ]);
   },
 };

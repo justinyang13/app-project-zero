@@ -1,12 +1,15 @@
 // Player physics per spec/05-player-mechanics.md §1, §5: AABB-vs-voxel
 // collision resolved axis-by-axis (X, then Z, then Y), fixed-tick gravity
 // and jump, a simple instant-teleport step-up (a simplification of the
-// spec's smooth 1-block auto-step), and a Creative-style fly toggle
-// (§1's "Fly (Creative Mode only)"). Sneak/swim/climb/fall-damage/
-// stamina are out of scope for this pass — see 07-survival-systems.md
-// and 17-game-modes-progression.md for the systems this will plug into
-// once gathered items, food, and Survival/Creative mode selection exist.
+// spec's smooth 1-block auto-step), a Creative-style fly toggle (§1's
+// "Fly (Creative Mode only)"), and basic swimming (liquid blocks are
+// passable rather than solid, with slower movement and gentle buoyancy
+// instead of gravity while submerged). Sneak/climb/fall-damage/stamina
+// are still out of scope for this pass — see 07-survival-systems.md and
+// 17-game-modes-progression.md for the systems this will plug into once
+// gathered items, food, and Survival/Creative mode selection exist.
 import type { World } from "./World";
+import { isLiquid } from "../data/blocks";
 
 export const PLAYER_WIDTH = 0.6;
 export const PLAYER_HEIGHT = 1.8;
@@ -16,6 +19,13 @@ const HALF_WIDTH = PLAYER_WIDTH / 2;
 const WALK_SPEED = 4.3;
 const SPRINT_SPEED = 5.6;
 const FLY_SPEED = 10.8;
+const SWIM_SPEED = 2.6; // water resists movement — slower than even a walk
+const SWIM_VERTICAL_SPEED = 3.0; // deliberate rise/dive while holding flyUp/flyDown in water
+// Buoyancy, not gravity — much weaker downward pull, clamped to a slow
+// drift in either direction, so treading water (no vertical input) sinks
+// gently instead of free-falling or hanging perfectly still.
+const SWIM_GRAVITY = 4;
+const SWIM_DRIFT_TERMINAL = 1.2;
 // Derived from spec's jump height (1.25 blocks) + airtime (~0.6s) via
 // h = v0^2/(2g), airtime = 2*v0/g — see engine/Player.ts commit notes.
 const GRAVITY = 27.8;
@@ -36,6 +46,7 @@ export class Player {
   velocity = { x: 0, y: 0, z: 0 };
   onGround = false;
   flying = false;
+  swimming = false;
 
   private intersectsSolid(world: World, x: number, y: number, z: number): boolean {
     const minX = Math.floor(x - HALF_WIDTH);
@@ -49,7 +60,27 @@ export class Player {
       for (let by = minY; by <= maxY; by++) {
         for (let bz = minZ; bz <= maxZ; bz++) {
           const id = world.getBlock(bx, by, bz);
-          if (id !== 0) return true;
+          // Liquids are swum through, not walked into like a wall — see
+          // isInLiquid below for the swim-state check itself.
+          if (id !== 0 && !isLiquid(id)) return true;
+        }
+      }
+    }
+    return false;
+  }
+
+  private isInLiquid(world: World, x: number, y: number, z: number): boolean {
+    const minX = Math.floor(x - HALF_WIDTH);
+    const maxX = Math.floor(x + HALF_WIDTH);
+    const minY = Math.floor(y);
+    const maxY = Math.floor(y + PLAYER_HEIGHT - 0.001);
+    const minZ = Math.floor(z - HALF_WIDTH);
+    const maxZ = Math.floor(z + HALF_WIDTH);
+
+    for (let bx = minX; bx <= maxX; bx++) {
+      for (let by = minY; by <= maxY; by++) {
+        for (let bz = minZ; bz <= maxZ; bz++) {
+          if (isLiquid(world.getBlock(bx, by, bz))) return true;
         }
       }
     }
@@ -82,7 +113,12 @@ export class Player {
       unstickGuard++;
     }
 
-    const speed = this.flying ? FLY_SPEED : input.sprint ? SPRINT_SPEED : WALK_SPEED;
+    // Flying takes priority over swimming (Creative flight through a lake
+    // shouldn't downgrade to swim speed/buoyancy).
+    this.swimming = !this.flying && this.isInLiquid(world, this.position.x, this.position.y, this.position.z);
+    const swimming = this.swimming;
+
+    const speed = this.flying ? FLY_SPEED : swimming ? SWIM_SPEED : input.sprint ? SPRINT_SPEED : WALK_SPEED;
     let wishX = forwardVec.x * input.forward + rightVec.x * input.right;
     let wishZ = forwardVec.z * input.forward + rightVec.z * input.right;
     let wishY = 0;
@@ -114,6 +150,18 @@ export class Player {
       // looking up/down already contributes — handy for climbing/
       // descending straight while looking level.
       this.velocity.y = wishY * speed + ((input.flyUp ? 1 : 0) - (input.flyDown ? 1 : 0)) * FLY_SPEED;
+    } else if (swimming) {
+      // Reuses flying's Space/Shift vertical keys as swim up/dive down —
+      // holding neither drifts gently instead of free-falling (gravity)
+      // or hanging motionless.
+      const vertical = (input.flyUp ? 1 : 0) - (input.flyDown ? 1 : 0);
+      if (vertical !== 0) {
+        this.velocity.y = vertical * SWIM_VERTICAL_SPEED;
+      } else {
+        this.velocity.y -= SWIM_GRAVITY * dt;
+        if (this.velocity.y < -SWIM_DRIFT_TERMINAL) this.velocity.y = -SWIM_DRIFT_TERMINAL;
+        if (this.velocity.y > SWIM_DRIFT_TERMINAL) this.velocity.y = SWIM_DRIFT_TERMINAL;
+      }
     } else {
       if (this.onGround && input.jump) {
         this.velocity.y = JUMP_VELOCITY;

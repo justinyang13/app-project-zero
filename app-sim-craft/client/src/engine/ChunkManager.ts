@@ -26,6 +26,18 @@ export const MOBILE_RENDER_DISTANCE_COLUMNS = 6;
 const EVICT_MARGIN = 1;
 
 const material = new THREE.MeshLambertMaterial({ vertexColors: true });
+// Water gets its own mesh/material per chunk (see rendering/greedyMesh.ts's
+// waterPositions/etc.) rather than baking transparency into the single
+// opaque terrain material above — depthWrite off avoids z-fighting against
+// the lakebed/walls it's blended over, and DoubleSide keeps the underside
+// of the surface visible while swimming beneath it.
+const waterMaterial = new THREE.MeshLambertMaterial({
+  vertexColors: true,
+  transparent: true,
+  opacity: 0.68,
+  depthWrite: false,
+  side: THREE.DoubleSide,
+});
 
 function columnKey(cx: number, cz: number): string {
   return `${cx},${cz}`;
@@ -53,6 +65,7 @@ export class ChunkManager {
   private readonly terrainPool: WorkerPool<TerrainGenApi>;
   private readonly meshPool: WorkerPool<MeshApi>;
   private readonly meshes = new Map<string, THREE.Mesh>();
+  private readonly waterMeshes = new Map<string, THREE.Mesh>();
   private readonly loadedColumns = new Set<string>();
   private readonly pendingColumns = new Set<string>();
   private readonly pendingMeshes = new Set<string>();
@@ -169,6 +182,12 @@ export class ChunkManager {
         mesh.geometry.dispose();
         this.meshes.delete(chunkKeyStr);
       }
+      const waterMesh = this.waterMeshes.get(chunkKeyStr);
+      if (waterMesh) {
+        this.scene.remove(waterMesh);
+        waterMesh.geometry.dispose();
+        this.waterMeshes.delete(chunkKeyStr);
+      }
       if (chunk.modifiedFromGenerated) void this.saveManager.saveChunkNow(chunk);
       this.world.chunks.delete(chunkKeyStr);
     }
@@ -245,24 +264,48 @@ export class ChunkManager {
       existing.geometry.dispose();
       this.meshes.delete(key);
     }
-    if (result.indices.length === 0) return; // fully-air or fully-buried chunk, nothing to draw
+    const existingWater = this.waterMeshes.get(key);
+    if (existingWater) {
+      this.scene.remove(existingWater);
+      existingWater.geometry.dispose();
+      this.waterMeshes.delete(key);
+    }
 
-    const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
-    geometry.setAttribute("normal", new THREE.BufferAttribute(result.normals, 3));
-    geometry.setAttribute("color", new THREE.BufferAttribute(result.colors, 3));
-    geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
+    if (result.indices.length > 0) {
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
+      geometry.setAttribute("normal", new THREE.BufferAttribute(result.normals, 3));
+      geometry.setAttribute("color", new THREE.BufferAttribute(result.colors, 3));
+      geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
 
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
-    this.scene.add(mesh);
-    this.meshes.set(key, mesh);
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
+      this.scene.add(mesh);
+      this.meshes.set(key, mesh);
+    }
+
+    if (result.waterIndices.length > 0) {
+      const waterGeometry = new THREE.BufferGeometry();
+      waterGeometry.setAttribute("position", new THREE.BufferAttribute(result.waterPositions, 3));
+      waterGeometry.setAttribute("normal", new THREE.BufferAttribute(result.waterNormals, 3));
+      waterGeometry.setAttribute("color", new THREE.BufferAttribute(result.waterColors, 3));
+      waterGeometry.setIndex(new THREE.BufferAttribute(result.waterIndices, 1));
+
+      const waterMesh = new THREE.Mesh(waterGeometry, waterMaterial);
+      waterMesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
+      this.scene.add(waterMesh);
+      this.waterMeshes.set(key, waterMesh);
+    }
   }
 
   dispose(): void {
     this.terrainPool.dispose();
     this.meshPool.dispose();
     for (const mesh of this.meshes.values()) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    for (const mesh of this.waterMeshes.values()) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
     }

@@ -786,6 +786,7 @@ export class GameLoop {
       pendingChunkOps: this.chunkManager.pendingCount,
       carCount: this.cars.length,
       flying: this.player.flying,
+      swimming: this.player.swimming,
       viewMode: this.viewMode,
       timeOfDay,
     });
