@@ -3,6 +3,8 @@
 // without a worker). No texture atlas or AO yet (§3's AO note, and
 // [18-visual-art-direction.md]'s atlas are later-phase work) — faces are
 // flat-colored per block, shaded by the merged cell's sky-light level.
+// Foliage (leaves) is the one exception: it carries UVs so
+// ChunkManager.ts can texture it with an alpha-cutout pattern instead.
 import { AIR_ID, WATER_ID, getBlockById } from "../data/blocks";
 import { CHUNK_SIZE } from "../engine/Chunk";
 
@@ -38,6 +40,15 @@ export interface MeshedChunk {
   waterNormals: Float32Array;
   waterColors: Float32Array;
   waterIndices: Uint32Array;
+  // Foliage (leaf) faces, same split as water — plus UVs (in block
+  // units, not normalized 0..1) so ChunkManager's foliage material can
+  // tile its alpha-cutout leaf texture once per block across a merged
+  // quad instead of stretching one repeat across it.
+  foliagePositions: Float32Array;
+  foliageNormals: Float32Array;
+  foliageColors: Float32Array;
+  foliageUvs: Float32Array;
+  foliageIndices: Uint32Array;
 }
 
 function sampleBlock(x: number, y: number, z: number, blocks: Uint16Array, b: BoundaryLayers): number {
@@ -73,6 +84,11 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
   const waterNormals: number[] = [];
   const waterColors: number[] = [];
   const waterIndices: number[] = [];
+  const foliagePositions: number[] = [];
+  const foliageNormals: number[] = [];
+  const foliageColors: number[] = [];
+  const foliageUvs: number[] = [];
+  const foliageIndices: number[] = [];
 
   const voxel: [number, number, number] = [0, 0, 0];
   const neighborVoxel: [number, number, number] = [0, 0, 0];
@@ -98,15 +114,18 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
             setVoxel(neighborVoxel, axis, slice + dir, u, v);
             const neighborId = sampleBlock(neighborVoxel[0], neighborVoxel[1], neighborVoxel[2], blocks, boundaries);
             const neighborDef = neighborId === AIR_ID ? null : getBlockById(neighborId);
-            // Water-to-water is the one same-block transparent pairing that
-            // needs to NOT count as visible — every other transparentToRender
-            // block (e.g. leaves) keeps its existing behavior. Without this,
-            // a lake's internal horizontal layers (any two vertically
-            // stacked water voxels) would each emit a face; harmless while
-            // water was opaque (invisible, buried inside solid water) but a
-            // visible stack of seams now that water is rendered translucent.
-            const isWaterSeam = blockId === WATER_ID && neighborId === WATER_ID;
-            const faceVisible = !isWaterSeam && (neighborId === AIR_ID || (neighborDef?.transparentToRender ?? false));
+            // A transparentToRender block touching another voxel of its
+            // own exact type (two stacked water voxels, two adjacent
+            // same-color leaf voxels) doesn't count as a visible face —
+            // without this, every such internal seam throughout a lake or
+            // a dense tree canopy would get meshed; harmless while both
+            // rendered as flat opaque colors (buried inside solid-looking
+            // geometry) but a visible stack of seams now that water is
+            // translucent and leaves are alpha-cutout. A *different*
+            // transparentToRender block (e.g. two different leaf colors
+            // touching) still renders its boundary normally.
+            const isSameTransparentSeam = blockId === neighborId && def.transparentToRender;
+            const faceVisible = !isSameTransparentSeam && (neighborId === AIR_ID || (neighborDef?.transparentToRender ?? false));
             if (!faceVisible) continue;
 
             // Face brightness: prefer the exposing (air) neighbor's own
@@ -166,11 +185,13 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
             }
 
             const isWater = blockId === WATER_ID;
+            const isFoliage = getBlockById(blockId).foliage ?? false;
             emitQuad(
-              isWater ? waterPositions : positions,
-              isWater ? waterNormals : normals,
-              isWater ? waterColors : colors,
-              isWater ? waterIndices : indices,
+              isWater ? waterPositions : isFoliage ? foliagePositions : positions,
+              isWater ? waterNormals : isFoliage ? foliageNormals : normals,
+              isWater ? waterColors : isFoliage ? foliageColors : colors,
+              isWater ? waterIndices : isFoliage ? foliageIndices : indices,
+              isFoliage ? foliageUvs : null,
               axis,
               slice,
               dir,
@@ -195,6 +216,11 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
     waterNormals: new Float32Array(waterNormals),
     waterColors: new Float32Array(waterColors),
     waterIndices: new Uint32Array(waterIndices),
+    foliagePositions: new Float32Array(foliagePositions),
+    foliageNormals: new Float32Array(foliageNormals),
+    foliageColors: new Float32Array(foliageColors),
+    foliageUvs: new Float32Array(foliageUvs),
+    foliageIndices: new Uint32Array(foliageIndices),
   };
 }
 
@@ -203,6 +229,7 @@ function emitQuad(
   normals: number[],
   colors: number[],
   indices: number[],
+  uvs: number[] | null,
   axis: Axis,
   slice: number,
   dir: number,
@@ -231,6 +258,11 @@ function emitQuad(
     const g = ((colorHex >> 8) & 0xff) / 255;
     const bl = (colorHex & 0xff) / 255;
     colors.push(r * brightness, g * brightness, bl * brightness);
+
+    // Block-unit (not normalized) UVs — RepeatWrapping on the foliage
+    // texture then tiles it once per block across the merged quad
+    // instead of stretching a single repeat across the whole thing.
+    if (uvs) uvs.push(u, v);
   }
 
   indices.push(baseIndex, baseIndex + 1, baseIndex + 2, baseIndex, baseIndex + 2, baseIndex + 3);

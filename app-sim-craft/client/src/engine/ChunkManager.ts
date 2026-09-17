@@ -11,6 +11,7 @@ import type { TerrainGenApi, GeneratedChunkData } from "../workers/terrain-gen.w
 import type { MeshApi } from "../workers/mesh.worker";
 import type { BoundaryLayers } from "../rendering/greedyMesh";
 import type { SaveManager } from "../persistence/SaveManager";
+import { getLeafTexture } from "../rendering/leafTexture";
 
 // Measured against spec/15-performance.md §1's budget (~10ms of the 16.6ms
 // frame for render+sim) with the debug overlay's frame-time readout: at this
@@ -36,6 +37,18 @@ const waterMaterial = new THREE.MeshLambertMaterial({
   transparent: true,
   opacity: 0.68,
   depthWrite: false,
+  side: THREE.DoubleSide,
+});
+// Foliage (leaves) also gets its own mesh/material — an alpha-cutout
+// texture (see rendering/leafTexture.ts) instead of a flat solid color,
+// tinted per leaf variant by vertexColors same as everything else.
+// alphaTest (not `transparent`) gives crisp cut-out edges with no
+// transparency sort order to get wrong, and DoubleSide so a leaf face
+// doesn't vanish when looked at from inside the canopy.
+const foliageMaterial = new THREE.MeshLambertMaterial({
+  vertexColors: true,
+  map: getLeafTexture(),
+  alphaTest: 0.5,
   side: THREE.DoubleSide,
 });
 
@@ -66,6 +79,7 @@ export class ChunkManager {
   private readonly meshPool: WorkerPool<MeshApi>;
   private readonly meshes = new Map<string, THREE.Mesh>();
   private readonly waterMeshes = new Map<string, THREE.Mesh>();
+  private readonly foliageMeshes = new Map<string, THREE.Mesh>();
   private readonly loadedColumns = new Set<string>();
   private readonly pendingColumns = new Set<string>();
   private readonly pendingMeshes = new Set<string>();
@@ -188,6 +202,12 @@ export class ChunkManager {
         waterMesh.geometry.dispose();
         this.waterMeshes.delete(chunkKeyStr);
       }
+      const foliageMesh = this.foliageMeshes.get(chunkKeyStr);
+      if (foliageMesh) {
+        this.scene.remove(foliageMesh);
+        foliageMesh.geometry.dispose();
+        this.foliageMeshes.delete(chunkKeyStr);
+      }
       if (chunk.modifiedFromGenerated) void this.saveManager.saveChunkNow(chunk);
       this.world.chunks.delete(chunkKeyStr);
     }
@@ -270,6 +290,12 @@ export class ChunkManager {
       existingWater.geometry.dispose();
       this.waterMeshes.delete(key);
     }
+    const existingFoliage = this.foliageMeshes.get(key);
+    if (existingFoliage) {
+      this.scene.remove(existingFoliage);
+      existingFoliage.geometry.dispose();
+      this.foliageMeshes.delete(key);
+    }
 
     if (result.indices.length > 0) {
       const geometry = new THREE.BufferGeometry();
@@ -296,6 +322,20 @@ export class ChunkManager {
       this.scene.add(waterMesh);
       this.waterMeshes.set(key, waterMesh);
     }
+
+    if (result.foliageIndices.length > 0) {
+      const foliageGeometry = new THREE.BufferGeometry();
+      foliageGeometry.setAttribute("position", new THREE.BufferAttribute(result.foliagePositions, 3));
+      foliageGeometry.setAttribute("normal", new THREE.BufferAttribute(result.foliageNormals, 3));
+      foliageGeometry.setAttribute("color", new THREE.BufferAttribute(result.foliageColors, 3));
+      foliageGeometry.setAttribute("uv", new THREE.BufferAttribute(result.foliageUvs, 2));
+      foliageGeometry.setIndex(new THREE.BufferAttribute(result.foliageIndices, 1));
+
+      const foliageMesh = new THREE.Mesh(foliageGeometry, foliageMaterial);
+      foliageMesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
+      this.scene.add(foliageMesh);
+      this.foliageMeshes.set(key, foliageMesh);
+    }
   }
 
   dispose(): void {
@@ -306,6 +346,10 @@ export class ChunkManager {
       mesh.geometry.dispose();
     }
     for (const mesh of this.waterMeshes.values()) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    for (const mesh of this.foliageMeshes.values()) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
     }

@@ -28,6 +28,11 @@ export interface BlockDef {
   // through rather than walked on — see engine/Player.ts. Only water
   // today; unset/false for everything else.
   liquid?: boolean;
+  // Rendered with the procedural alpha-cutout leaf pattern (own
+  // mesh/material, see rendering/leafTexture.ts and
+  // engine/ChunkManager.ts) instead of a flat-colored solid cube. Only
+  // the leaf variants today; unset/false for everything else.
+  foliage?: boolean;
   dropTable: DropEntry[];
   color: number; // placeholder flat color until textures land (18-visual-art-direction.md §3)
 }
@@ -264,6 +269,7 @@ function leafVariant(id: number, key: string, name: string, color: number): Bloc
     solid: true,
     transparentToRender: true,
     gravityAffected: false,
+    foliage: true,
     dropTable: [{ itemKey: "leaves", minCount: 1, maxCount: 1, chance: 0.3 }],
     color,
   };

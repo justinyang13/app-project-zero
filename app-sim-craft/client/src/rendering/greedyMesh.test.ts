@@ -63,6 +63,47 @@ describe("meshChunkGreedy", () => {
     expect(result.indices.length).toBe(6 * 6);
   });
 
+  it("routes a leaf voxel's faces into the foliage buffers, not the opaque ones, with UVs", () => {
+    const { blocks, skyLight } = emptyChunk();
+    const leaves = getBlockByKey("leaves_green").id;
+    blocks[5 | (5 << 5) | (5 << 10)] = leaves;
+
+    const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES);
+    expect(result.indices.length).toBe(0);
+    expect(result.positions.length).toBe(0);
+    expect(result.foliageIndices.length).toBe(36);
+    expect(result.foliagePositions.length / 3).toBe(24);
+    expect(result.foliageUvs.length / 2).toBe(24); // one (u, v) per vertex
+  });
+
+  it("does not emit a face between two touching same-color leaf voxels (merges like a solid block would)", () => {
+    const { blocks, skyLight } = emptyChunk();
+    const green = getBlockByKey("leaves_green").id;
+    blocks[5 | (5 << 5) | (5 << 10)] = green;
+    blocks[6 | (5 << 5) | (5 << 10)] = green; // touching along +X
+
+    const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES);
+    // Same shape as the equivalent solid-block test above: 2 unmerged
+    // end-caps (-X, +X) + 4 merged side pairs = 6 quads, not 12.
+    expect(result.foliageIndices.length).toBe(6 * 6);
+  });
+
+  it("does emit faces on both sides of a boundary between two different-colored leaf voxels", () => {
+    const { blocks, skyLight } = emptyChunk();
+    const green = getBlockByKey("leaves_green").id;
+    const autumn = getBlockByKey("leaves_autumn").id;
+    blocks[5 | (5 << 5) | (5 << 10)] = green;
+    blocks[6 | (5 << 5) | (5 << 10)] = autumn; // touching along +X, different color
+
+    const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES);
+    // Unlike the same-color case, a different-colored neighbor isn't a
+    // seam to hide — both voxels render all 6 faces unmerged (nothing
+    // shares a blockId to merge with), 12 quads total, including both
+    // sides of the boundary they share (you can see through the gaps in
+    // one color's cutout pattern to the other color behind it).
+    expect(result.foliageIndices.length).toBe(12 * 6);
+  });
+
   it("does not render a face against an opaque neighbor-chunk boundary voxel", () => {
     const { blocks, skyLight } = emptyChunk();
     const stone = getBlockByKey("greystone").id;

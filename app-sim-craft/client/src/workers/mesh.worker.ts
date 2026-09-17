@@ -17,6 +17,11 @@ const api = {
       result.waterNormals.buffer,
       result.waterColors.buffer,
       result.waterIndices.buffer,
+      result.foliagePositions.buffer,
+      result.foliageNormals.buffer,
+      result.foliageColors.buffer,
+      result.foliageUvs.buffer,
+      result.foliageIndices.buffer,
     ]);
   },
 };

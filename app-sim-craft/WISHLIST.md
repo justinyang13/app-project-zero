@@ -3,8 +3,7 @@
 Running list of feature/polish ideas, not yet scoped or built. Add to it
 freely; move an item out (or check it off) once it ships.
 
-1. Custom tree-leaf block with a see-through/patterned texture (alpha
-   cutout) instead of a solid block, for more realistic-looking trees
+_(empty — add new ideas above this line)_
 
 ## Shipped
 
@@ -37,3 +36,7 @@ freely; move an item out (or check it off) once it ships.
   actual terrain) is now rejected as an obstacle whenever it implies a
   step taller than ~1 block, the same way they already avoided water —
   they stop and turn instead of snapping up onto a tree, cliff, or wall.
+- Leaves render with a procedural alpha-cutout texture (own mesh/
+  material, tiled once per block across greedy-merged quads via
+  RepeatWrapping) instead of a flat solid-colored cube, so tree canopies
+  read as patterned and see-through rather than a block wall of color.
