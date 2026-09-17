@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GameLoop } from "./engine/GameLoop";
 import { setActiveGameLoop } from "./engine/activeGameLoop";
+import { RENDER_DISTANCE_COLUMNS, MOBILE_RENDER_DISTANCE_COLUMNS } from "./engine/ChunkManager";
 import { DebugOverlay } from "./ui/DebugOverlay";
 import { Hotbar } from "./ui/Hotbar";
 import { Crosshair } from "./ui/Crosshair";
@@ -9,10 +10,12 @@ import { TimeControl } from "./ui/TimeControl";
 import { VehiclePrompt } from "./ui/VehiclePrompt";
 import { MiniMapPanel } from "./ui/MiniMapPanel";
 import { MapSwitcher } from "./ui/MapSwitcher";
-import { CloudSync } from "./ui/CloudSync";
 import { WorldNameModal } from "./ui/WorldNameModal";
+import { TouchControls } from "./ui/TouchControls";
+import { TouchOverrideToggle } from "./ui/TouchOverrideToggle";
 import { finalizeWorldChoice, resolveActiveWorldId, validateWorldName, type WorldResolution } from "./persistence/migration";
 import { useWorldStore } from "./state/worldStore";
+import { isTouchDeviceNow } from "./hooks/useIsTouchDevice";
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -47,7 +50,11 @@ export function App() {
 
     let cancelled = false;
     let loop: GameLoop | null = null;
-    void GameLoop.create(canvas, minimapCanvas, readyWorldId).then((created) => {
+    // Read once at creation time (not the live useIsTouchDevice() hook) —
+    // this only needs to pick an initial render-distance budget, and
+    // ChunkManager isn't built to have its radius change mid-session.
+    const renderDistanceColumns = isTouchDeviceNow() ? MOBILE_RENDER_DISTANCE_COLUMNS : RENDER_DISTANCE_COLUMNS;
+    void GameLoop.create(canvas, minimapCanvas, readyWorldId, renderDistanceColumns).then((created) => {
       if (cancelled) {
         created.dispose();
         return;
@@ -101,7 +108,8 @@ export function App() {
       <VehiclePrompt />
       <MiniMapPanel canvasRef={minimapCanvasRef} />
       <MapSwitcher />
-      <CloudSync />
+      <TouchControls />
+      <TouchOverrideToggle />
     </>
   );
 }

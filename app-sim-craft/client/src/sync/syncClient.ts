@@ -1,9 +1,16 @@
 // Thin fetch wrappers around the self-hosted sync server (see
 // sync-server/). Every function returns a discriminated result instead of
-// throwing, so callers (CloudSync.tsx) can show a specific message for
-// "server unreachable" vs. "no such map" vs. "map too large" instead of
-// one generic failure.
+// throwing, so callers (ui/MapSwitcher.tsx) can show a specific message
+// for "server unreachable" vs. "no such map" vs. "map too large" instead
+// of one generic failure.
 import type { WorldExportBlob } from "../persistence/worldExport";
+
+// Hard-coded to the owner's own Tailscale-only server — this app has no
+// login/registration system, and the server is reachable only from this
+// tailnet, so there's nothing meaningful for a player to configure here.
+// Not a secret (Tailscale itself is the access control), just not a
+// player-facing setting.
+export const SYNC_SERVER_URL = "http://100.64.70.111:4177";
 
 export type SyncErrorKind = "network" | "not-found" | "too-large" | "invalid-name" | "server";
 

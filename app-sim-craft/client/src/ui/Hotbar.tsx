@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import type { BuildMode } from "../state/hotbarStore";
 import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
 import { ToolIcon } from "./ToolIcon";
+import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const MODES: { mode: BuildMode; label: string; color: string; icon: () => ReactElement }[] = [
   { mode: "break", label: "Break", color: "#e0645a", icon: () => <ToolIcon tool="pickaxe" size={20} /> },
@@ -10,11 +11,69 @@ const MODES: { mode: BuildMode; label: string; color: string; icon: () => ReactE
   { mode: "flag", label: "Flag", color: "#ff4fd8", icon: () => <FlagGlyph /> },
 ];
 
+function slotButtonStyle(selected: boolean, colorHex: string): React.CSSProperties {
+  return {
+    width: 48,
+    height: 48,
+    border: selected ? "2px solid #fff" : "2px solid rgba(255,255,255,0.3)",
+    borderRadius: 4,
+    background: colorHex,
+    position: "relative",
+    cursor: "pointer",
+    touchAction: "manipulation",
+    flexShrink: 0,
+  };
+}
+
 export function Hotbar() {
+  const isTouch = useIsTouchDevice();
   const selectedIndex = useHotbarStore((s) => s.selectedIndex);
   const select = useHotbarStore((s) => s.select);
   const mode = useHotbarStore((s) => s.mode);
   const setMode = useHotbarStore((s) => s.setMode);
+
+  if (isTouch) {
+    // Centered-and-wider-than-the-viewport (desktop's layout) doesn't
+    // fit a narrow phone screen at all, let alone leave room for
+    // TouchJoystick.tsx/TouchActionButtons.tsx in both bottom corners —
+    // raised above that row entirely, horizontally scrollable as a
+    // fallback, and the four mode-select icons are dropped (redundant
+    // with TouchActionButtons.tsx's own mode-cycle button and the
+    // primary action button's mode icon) to save width.
+    return (
+      <div
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: "max(240px, calc(env(safe-area-inset-bottom) + 240px))",
+          display: "flex",
+          justifyContent: "center",
+          overflowX: "auto",
+          touchAction: "pan-x",
+          padding: "0 8px",
+        }}
+      >
+        <div style={{ display: "flex", gap: 6, background: "rgba(0, 0, 0, 0.4)", padding: 6, borderRadius: 6 }}>
+          {HOTBAR_SLOTS.map((block, i) => (
+            <button
+              key={block.key}
+              onClick={() => select(i)}
+              style={slotButtonStyle(i === selectedIndex, `#${block.color.toString(16).padStart(6, "0")}`)}
+              title={`${block.name} (breaks with: ${block.toolType === "none" ? "any tool" : block.toolType})`}
+            >
+              <span style={{ position: "absolute", top: 2, left: 4, fontSize: 10, color: "#fff", textShadow: "0 0 2px #000", fontFamily: "monospace" }}>
+                {i + 1}
+              </span>
+              <span style={{ position: "absolute", bottom: 1, right: 1 }}>
+                <ToolIcon tool={block.toolType} />
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -45,6 +104,7 @@ export function Hotbar() {
               borderRadius: 6,
               background: "rgba(0, 0, 0, 0.4)",
               cursor: "pointer",
+              touchAction: "manipulation",
             }}
           >
             {m.icon()}
@@ -73,6 +133,7 @@ export function Hotbar() {
               background: `#${block.color.toString(16).padStart(6, "0")}`,
               position: "relative",
               cursor: "pointer",
+              touchAction: "manipulation",
             }}
             title={`${block.name} (breaks with: ${block.toolType === "none" ? "any tool" : block.toolType})`}
           >

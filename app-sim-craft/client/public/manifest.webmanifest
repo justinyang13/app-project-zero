@@ -1,0 +1,19 @@
+{
+  "name": "SimCraft",
+  "short_name": "SimCraft",
+  "description": "A single-player, browser-based voxel sandbox — build, mine, automate, and explore a procedurally generated world.",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#87ceeb",
+  "theme_color": "#000000",
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

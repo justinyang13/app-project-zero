@@ -18,6 +18,11 @@ import type { SaveManager } from "../persistence/SaveManager";
 // short of the budget — see spec/15-performance.md §3's "Medium" preset,
 // which uses the same 10-chunk radius as its default target.
 export const RENDER_DISTANCE_COLUMNS = 10; // chunk columns in each horizontal direction
+// Mobile GPUs choke on the desktop radius — same streaming/meshing cost
+// per column, but weaker fill-rate/bandwidth. A judgment-call starting
+// point (5-6 columns), easy to retune once real-device frame times are
+// measured; see engine/GameLoop.ts for where this is selected.
+export const MOBILE_RENDER_DISTANCE_COLUMNS = 6;
 const EVICT_MARGIN = 1;
 
 const material = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -52,11 +57,13 @@ export class ChunkManager {
   private readonly pendingColumns = new Set<string>();
   private readonly pendingMeshes = new Set<string>();
   private lastPlayerColumn: { cx: number; cz: number } | null = null;
+  private readonly renderDistanceColumns: number;
 
-  constructor(world: World, scene: THREE.Scene, saveManager: SaveManager) {
+  constructor(world: World, scene: THREE.Scene, saveManager: SaveManager, renderDistanceColumns: number = RENDER_DISTANCE_COLUMNS) {
     this.world = world;
     this.scene = scene;
     this.saveManager = saveManager;
+    this.renderDistanceColumns = renderDistanceColumns;
     this.terrainPool = new WorkerPool<TerrainGenApi>(
       () => new Worker(new URL("../workers/terrain-gen.worker.ts", import.meta.url), { type: "module" }),
       defaultPoolSize(),
@@ -83,8 +90,8 @@ export class ChunkManager {
     this.lastPlayerColumn = { cx, cz };
 
     const needed: { cx: number; cz: number; dist: number }[] = [];
-    for (let dx = -RENDER_DISTANCE_COLUMNS; dx <= RENDER_DISTANCE_COLUMNS; dx++) {
-      for (let dz = -RENDER_DISTANCE_COLUMNS; dz <= RENDER_DISTANCE_COLUMNS; dz++) {
+    for (let dx = -this.renderDistanceColumns; dx <= this.renderDistanceColumns; dx++) {
+      for (let dz = -this.renderDistanceColumns; dz <= this.renderDistanceColumns; dz++) {
         needed.push({ cx: cx + dx, cz: cz + dz, dist: dx * dx + dz * dz });
       }
     }
@@ -97,7 +104,7 @@ export class ChunkManager {
       void this.loadColumn(col.cx, col.cz);
     }
 
-    const evictDistance = RENDER_DISTANCE_COLUMNS + EVICT_MARGIN;
+    const evictDistance = this.renderDistanceColumns + EVICT_MARGIN;
     for (const key of this.loadedColumns) {
       const [lcx, lcz] = key.split(",").map(Number);
       if (Math.abs(lcx - cx) > evictDistance || Math.abs(lcz - cz) > evictDistance) {

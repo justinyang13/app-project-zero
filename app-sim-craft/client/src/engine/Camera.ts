@@ -48,6 +48,32 @@ export class MouseLook {
     camera.quaternion.setFromEuler(euler);
   }
 
+  /**
+   * Applies a raw pixel delta — as PointerLockControls' own mousemove
+   * handler would read from event.movementX/Y — to the camera's
+   * yaw/pitch. Used to feed touch-drag look (engine/GameLoop.ts) with
+   * the exact same sensitivity and clamping mouse-look uses, without
+   * going through the Pointer Lock API (touch has no equivalent concept,
+   * and dragging works fine without locking the cursor).
+   *
+   * Reads pointerSpeed/min/maxPolarAngle straight off `this.controls` so
+   * this stays in sync with actual mouse-look if those are ever tuned —
+   * only MOUSE_SENSITIVITY is a copy, since PointerLockControls doesn't
+   * export its internal 0.002 constant.
+   */
+  applyPointerDelta(camera: THREE.PerspectiveCamera, deltaX: number, deltaY: number): void {
+    const euler = new THREE.Euler().setFromQuaternion(camera.quaternion, "YXZ");
+    euler.y -= deltaX * MouseLook.MOUSE_SENSITIVITY * this.controls.pointerSpeed;
+    euler.x -= deltaY * MouseLook.MOUSE_SENSITIVITY * this.controls.pointerSpeed;
+    const minPitch = Math.PI / 2 - this.controls.maxPolarAngle;
+    const maxPitch = Math.PI / 2 - this.controls.minPolarAngle;
+    euler.x = THREE.MathUtils.clamp(euler.x, minPitch, maxPitch);
+    camera.quaternion.setFromEuler(euler);
+  }
+
+  // Matches PointerLockControls' internal `_MOUSE_SENSITIVITY` constant (three/examples/jsm/controls/PointerLockControls.js) — not exported, so mirrored here.
+  private static readonly MOUSE_SENSITIVITY = 0.002;
+
   dispose(): void {
     this.domElement.removeEventListener("click", this.handleClick);
     this.controls.dispose();

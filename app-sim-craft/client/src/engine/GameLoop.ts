@@ -6,7 +6,7 @@ import * as THREE from "three";
 import { World } from "./World";
 import { MouseLook } from "./Camera";
 import { Player, EYE_HEIGHT, type PlayerInput } from "./Player";
-import { ChunkManager } from "./ChunkManager";
+import { ChunkManager, RENDER_DISTANCE_COLUMNS } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
 import { Creature, findSurfaceY, ALL_SPECIES } from "./Creature";
 import { Car, type CarInput } from "./Car";
@@ -42,6 +42,10 @@ const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0xecf0f1, 0xe67e22];
 
 type ViewMode = "first" | "third";
 
+function clamp1(v: number): number {
+  return Math.max(-1, Math.min(1, v));
+}
+
 export class GameLoop {
   private readonly canvas: HTMLCanvasElement;
   private readonly renderer: THREE.WebGLRenderer;
@@ -75,6 +79,17 @@ export class GameLoop {
   private lastSpaceTapTime = 0;
   private currentTarget: RaycastHit | null = null;
 
+  // Touch-input state (Part A/B/C of the mobile controls feature) — fed
+  // by ui/TouchJoystick.tsx, TouchLookArea.tsx and TouchActionButtons.tsx
+  // via engine/activeGameLoop.ts's handle, the same way the desktop path
+  // populates `pressed` from keydown/keyup. Always zero/false on desktop
+  // (nothing ever calls these setters there), so buildPlayerInput()
+  // combining them with keyboard state below is a no-op on desktop.
+  private touchMoveVector = { x: 0, y: 0 };
+  private touchJumpHeld = false;
+  private touchFlyUpHeld = false;
+  private touchFlyDownHeld = false;
+
   private simTick = 0;
   private accumulator = 0;
   private lastFrameTime = performance.now();
@@ -84,10 +99,15 @@ export class GameLoop {
   private rafHandle = 0;
   private disposed = false;
 
-  static async create(canvas: HTMLCanvasElement, minimapCanvas: HTMLCanvasElement, worldId: string): Promise<GameLoop> {
+  static async create(
+    canvas: HTMLCanvasElement,
+    minimapCanvas: HTMLCanvasElement,
+    worldId: string,
+    renderDistanceColumns: number = RENDER_DISTANCE_COLUMNS,
+  ): Promise<GameLoop> {
     const saveManager = new SaveManager();
     const { seed, playerState } = await saveManager.load(worldId);
-    return new GameLoop(canvas, minimapCanvas, seed, saveManager, playerState);
+    return new GameLoop(canvas, minimapCanvas, seed, saveManager, playerState, renderDistanceColumns);
   }
 
   private constructor(
@@ -96,6 +116,7 @@ export class GameLoop {
     seed: number,
     saveManager: SaveManager,
     playerState: Awaited<ReturnType<SaveManager["load"]>>["playerState"],
+    renderDistanceColumns: number,
   ) {
     this.saveManager = saveManager;
     this.canvas = canvas;
@@ -117,7 +138,7 @@ export class GameLoop {
     this.sky = new Sky(this.scene);
 
     this.world = new World(seed);
-    this.chunkManager = new ChunkManager(this.world, this.scene, saveManager);
+    this.chunkManager = new ChunkManager(this.world, this.scene, saveManager, renderDistanceColumns);
 
     this.player = new Player();
     if (playerState) {
@@ -269,15 +290,9 @@ export class GameLoop {
     // finicky across browsers/embeds), so mouse-look is a bonus on top
     // of building, never a prerequisite for it.
     if (e.button === 0) {
-      // Left click does whichever action the current mode selects (see
-      // hotbarStore.ts) — right-click-to-place alone isn't reliable
-      // across input devices (trackpads, single-button mice), so left
-      // click has to be able to do everything.
-      const mode = useHotbarStore.getState().mode;
-      if (mode === "place") this.placeSelectedBlock();
-      else if (mode === "break") this.breakTargetedBlock();
-      else if (mode === "torch") this.placeTorchAtTarget();
-      else if (mode === "flag") this.placeFlagAtTarget();
+      // Left click does whichever action the current mode selects — see
+      // triggerPrimaryAction, shared with the touch action button below.
+      this.triggerPrimaryAction();
     } else if (e.button === 2) {
       // Right-click is a quick block-place shortcut for the break/place
       // modes only — Torch/Flag don't have a natural second action, so
@@ -287,6 +302,50 @@ export class GameLoop {
       if (mode === "break" || mode === "place") this.placeSelectedBlock();
     }
   };
+
+  /**
+   * Whichever action the current Build/Break mode selects (see
+   * hotbarStore.ts) — shared by desktop's left-click (handleMouseDown
+   * above) and the touch action button (ui/TouchActionButtons.tsx via
+   * engine/activeGameLoop.ts), so both trigger identically instead of
+   * touch inventing its own semantics. Fires once per call, matching
+   * mousedown's own non-repeating behavior — there's no hold-to-mine
+   * mechanic on desktop to replicate.
+   */
+  triggerPrimaryAction(): void {
+    const mode = useHotbarStore.getState().mode;
+    if (mode === "place") this.placeSelectedBlock();
+    else if (mode === "break") this.breakTargetedBlock();
+    else if (mode === "torch") this.placeTorchAtTarget();
+    else if (mode === "flag") this.placeFlagAtTarget();
+  }
+
+  /** Mirrors the desktop double-tap-Space fly toggle — a single tap is enough on touch, see ui/TouchActionButtons.tsx. */
+  toggleFlying(): void {
+    this.player.flying = !this.player.flying;
+  }
+
+  /** Feeds a raw touch-drag pixel delta through the exact same yaw/pitch math mouse-look uses — see Camera.ts's applyPointerDelta. */
+  applyTouchLookDelta(deltaX: number, deltaY: number): void {
+    this.mouseLook.applyPointerDelta(this.camera, deltaX, deltaY);
+  }
+
+  /** {x, y} already in buildPlayerInput()'s forward/right shape (see touchMath.ts's computeJoystickVector) — ui/TouchJoystick.tsx calls this on every drag/release. */
+  setTouchMoveVector(x: number, y: number): void {
+    this.touchMoveVector = { x, y };
+  }
+
+  setTouchJump(held: boolean): void {
+    this.touchJumpHeld = held;
+  }
+
+  setTouchFlyUp(held: boolean): void {
+    this.touchFlyUpHeld = held;
+  }
+
+  setTouchFlyDown(held: boolean): void {
+    this.touchFlyDownHeld = held;
+  }
 
   private overlapsPlayer(bx: number, by: number, bz: number): boolean {
     const p = this.player.position;
@@ -543,14 +602,22 @@ export class GameLoop {
     };
   }
 
+  // Combines keyboard state with touch state (see the touch* fields
+  // above) into the one PlayerInput both desktop and touch ultimately
+  // feed through — not a second input-polling path, just a second
+  // *source* merged into the existing one. On desktop the touch fields
+  // never leave their zero/false defaults, so this combine is inert
+  // there (keyboard's own values pass through unchanged).
   private buildPlayerInput(): PlayerInput {
+    const keyboardForward = (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0);
+    const keyboardRight = (this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0);
     return {
-      forward: (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0),
-      right: (this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0),
-      jump: this.pressed.has("Space"),
+      forward: clamp1(keyboardForward + this.touchMoveVector.y),
+      right: clamp1(keyboardRight + this.touchMoveVector.x),
+      jump: this.pressed.has("Space") || this.touchJumpHeld,
       sprint: this.pressed.has("ControlLeft") || this.pressed.has("ControlRight"),
-      flyUp: this.pressed.has("Space"),
-      flyDown: this.pressed.has("ShiftLeft") || this.pressed.has("ShiftRight"),
+      flyUp: this.pressed.has("Space") || this.touchFlyUpHeld,
+      flyDown: this.pressed.has("ShiftLeft") || this.pressed.has("ShiftRight") || this.touchFlyDownHeld,
     };
   }
 
