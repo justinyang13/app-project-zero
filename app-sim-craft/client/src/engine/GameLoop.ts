@@ -713,9 +713,9 @@ export class GameLoop {
     this.heldItem.update(dt, hotbarState.mode, HOTBAR_SLOTS[hotbarState.selectedIndex], horizontalSpeed);
     this.heldItem.group.visible = activeViewMode === "first" && !driving;
 
-    this.clouds.update(dt, this.player.position.x, this.player.position.z);
     const timeState = useTimeStore.getState();
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
+    this.clouds.update(dt, this.player.position.x, this.player.position.z, timeOfDay);
     this.sky.update(this.player.position, timeOfDay);
     for (const campfire of this.campfires) campfire.update(dt);
     for (const torch of this.torchVisuals) torch.update(dt);

@@ -5,17 +5,12 @@ freely; move an item out (or check it off) once it ships.
 
 1. Street lamps should sit at road-level and actually illuminate the road
 2. Make midnight darker
-3. Clouds should drift/move slowly instead of being static
-4. Clouds should slowly change size/shape and fade in/out over time
-5. Cloud brightness should follow time-of-day world brightness
-6. Custom tree-leaf block with a see-through/patterned texture (alpha
+3. Custom tree-leaf block with a see-through/patterned texture (alpha
    cutout) instead of a solid block, for more realistic-looking trees
-7. Animals should stay grounded — currently can walk over trees; needs
+4. Animals should stay grounded — currently can walk over trees; needs
    proper terrain/obstacle collision so they path around instead
-8. Sunset/dawn sky gradient (soft purple/warm tones) instead of an
+5. Sunset/dawn sky gradient (soft purple/warm tones) instead of an
    abrupt color shift
-9. Clouds should be anchored to world position, not the player — spread
-   across the whole sky instead of only appearing near the player
 
 ## Shipped
 
@@ -27,3 +22,10 @@ freely; move an item out (or check it off) once it ships.
   (liquid blocks are passable, with slower swim movement and gentle
   buoyancy instead of gravity) — depth already varies shallow-to-deep
   from the existing heightmap, now visible through the transparency
+- Clouds drift on their own wind (not just tracking the player), slowly
+  billow/change shape and breathe in and out of opacity, and tint from
+  a dim night shade to bright white following the same day/night curve
+  as the sky and sun/moon lighting. The scatter field now re-centers on
+  the player only when they wander past its edge instead of every
+  frame, so it reads as anchored to the world rather than glued to the
+  camera.

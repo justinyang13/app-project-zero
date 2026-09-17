@@ -35,7 +35,7 @@ function smoothstep(edge0: number, edge1: number, x: number): number {
 }
 
 /** 0 = full night, 1 = full day, with a smooth blend across sunrise/sunset. */
-function dayFactorAt(t: number): number {
+export function dayFactorAt(t: number): number {
   const rising = smoothstep(SUNRISE - TRANSITION, SUNRISE + TRANSITION, t);
   const setting = 1 - smoothstep(SUNSET - TRANSITION, SUNSET + TRANSITION, t);
   return Math.min(rising, setting);
