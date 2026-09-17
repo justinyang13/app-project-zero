@@ -1,8 +1,9 @@
+import type { ReactElement } from "react";
 import type { BuildMode } from "../state/hotbarStore";
 import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
 import { ToolIcon } from "./ToolIcon";
 
-const MODES: { mode: BuildMode; label: string; color: string; icon: () => JSX.Element }[] = [
+const MODES: { mode: BuildMode; label: string; color: string; icon: () => ReactElement }[] = [
   { mode: "break", label: "Break", color: "#e0645a", icon: () => <ToolIcon tool="pickaxe" size={20} /> },
   { mode: "place", label: "Build", color: "#6fbf3f", icon: () => <BuildGlyph /> },
   { mode: "torch", label: "Torch", color: "#ffb347", icon: () => <TorchGlyph /> },
