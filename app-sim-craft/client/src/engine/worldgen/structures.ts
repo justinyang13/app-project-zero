@@ -10,7 +10,7 @@
 import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { getBlockByKey } from "../../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
-import { pointAtProgress, LOOP_PERIMETER, ROAD_WIDTH } from "./roads";
+import { pointAtProgress, LOOP_PERIMETER, ROAD_WIDTH, FLAT_ROAD_Y } from "./roads";
 
 const WALL_ID = getBlockByKey("greystone").id;
 const ROOF_ID = getBlockByKey("roof_tile").id;
@@ -157,7 +157,13 @@ function ensureCache(seed: number): void {
   cachedBridgeDeckY = Math.max(bridgeStart, bridgeEnd, SEA_LEVEL) + 1;
   cachedCastleBaseY = sampleColumn(seed, CASTLE_CENTER.x, CASTLE_CENTER.z).height + 1;
   cachedCampfireYs = CAMPFIRE_SITES.map((site) => sampleColumn(seed, site.x, site.z).height + 1);
-  cachedLampYs = LAMP_SITES.map((site) => sampleColumn(seed, site.x, site.z).height + 1);
+  // Anchored to the loop road's own constant elevation, not the natural
+  // terrain height at the post's shoulder offset — the road itself is
+  // flattened to FLAT_ROAD_Y regardless of terrain (roads.ts), so a
+  // terrain-height anchor would float the post above (or bury it below)
+  // the road wherever a hill was cut down or a lake causewayed over for
+  // it. This is what "sits at road-level" actually means.
+  cachedLampYs = LAMP_SITES.map(() => FLAT_ROAD_Y + 1);
   cachedHouseYs = HOUSE_LOTS.map(
     (lot) => sampleColumn(seed, lot.x + Math.floor(lot.width / 2), lot.z + Math.floor(lot.depth / 2)).height + 1,
   );

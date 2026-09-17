@@ -14,10 +14,25 @@ const TRANSITION = 0.75 / 24; // ~45 real minutes of dawn/dusk blend
 
 const DAY_SKY = new THREE.Color(0x8fd0f0);
 const NIGHT_SKY = new THREE.Color(0x0b1230);
+// Sunrise/sunset used to blend the sky straight from NIGHT_SKY to
+// DAY_SKY, which — since both are blue — just faded from dark blue to
+// light blue with no color shift at all through the transition. This
+// third stop sits at the transition's midpoint (see skyColorAt below)
+// so dawn/dusk actually pass through a warm, soft purple-pink glow
+// before settling into day or night, instead of a flat two-color fade.
+const TWILIGHT_SKY = new THREE.Color(0xcf7f9e);
 const DAY_AMBIENT = 0.95;
-const NIGHT_AMBIENT = 0.22;
+// Low enough that an unlit face reads as genuinely dark at midnight
+// (previously 0.22 — a wash that barely dimmed anything since it stacks
+// with the moon's own directional contribution below) rather than just
+// a slightly dimmer version of daytime. Not 0: a small floor keeps
+// terrain shapes legible instead of going to pure black everywhere the
+// moon isn't directly hitting.
+const NIGHT_AMBIENT = 0.08;
 const DAY_SUN_INTENSITY = 2.6;
-const NIGHT_MOON_INTENSITY = 0.5;
+// Dimmer highlight to match — moonlit faces should still read as
+// moonlit (brighter than the ambient floor), just not near-daylight.
+const NIGHT_MOON_INTENSITY = 0.18;
 const SUN_COLOR = new THREE.Color(0xfff3d0);
 const MOON_COLOR = new THREE.Color(0xaebfe0);
 
@@ -44,6 +59,19 @@ export function dayFactorAt(t: number): number {
 /** True once it's dark enough for headlights (car high-beams, etc.) to matter — outside the sunrise/sunset transition, not just past dusk's midpoint. */
 export function isNight(timeOfDay: number): boolean {
   return dayFactorAt(timeOfDay) < 0.5;
+}
+
+/**
+ * Sky/fog color for a given day factor — a 3-stop gradient (night →
+ * twilight → day) instead of a straight night-to-day fade, so both
+ * sunrise and sunset (day factor rising through or falling through 0.5,
+ * which — see dayFactorAt — lands exactly at each transition's midpoint)
+ * pass through TWILIGHT_SKY's warm glow rather than just a dimmer blue.
+ */
+function skyColorAt(day: number): THREE.Color {
+  return day <= 0.5
+    ? NIGHT_SKY.clone().lerp(TWILIGHT_SKY, day * 2)
+    : TWILIGHT_SKY.clone().lerp(DAY_SKY, (day - 0.5) * 2);
 }
 
 export class Sky {
@@ -121,7 +149,7 @@ export class Sky {
 
     this.ambientLight.intensity = THREE.MathUtils.lerp(NIGHT_AMBIENT, DAY_AMBIENT, day);
 
-    const skyColor = NIGHT_SKY.clone().lerp(DAY_SKY, day);
+    const skyColor = skyColorAt(day);
     if (this.scene.background instanceof THREE.Color) this.scene.background.copy(skyColor);
     if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(skyColor);
   }
