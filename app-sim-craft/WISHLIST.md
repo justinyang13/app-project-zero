@@ -5,8 +5,6 @@ freely; move an item out (or check it off) once it ships.
 
 1. Custom tree-leaf block with a see-through/patterned texture (alpha
    cutout) instead of a solid block, for more realistic-looking trees
-2. Animals should stay grounded — currently can walk over trees; needs
-   proper terrain/obstacle collision so they path around instead
 
 ## Shipped
 
@@ -33,3 +31,9 @@ freely; move an item out (or check it off) once it ships.
   darker (lower night ambient/moon light) instead of a mild dimming, and
   sunset/dawn now pass through a warm, soft purple-pink sky/fog gradient
   instead of fading straight from night-blue to day-blue.
+- Animals now stay grounded around trees instead of teleporting onto
+  their canopy: their ground-height scan (which just finds "the first
+  solid block straight down," so a tree's leaves/trunk read the same as
+  actual terrain) is now rejected as an obstacle whenever it implies a
+  step taller than ~1 block, the same way they already avoided water —
+  they stop and turn instead of snapping up onto a tree, cliff, or wall.

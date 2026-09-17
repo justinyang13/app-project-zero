@@ -3,10 +3,10 @@
 // tables yet — that's Phase 2+ per spec/22-roadmap-milestones.md). This
 // is just enough for ambient, wandering decoration: a species-shaped box
 // mesh, a slow random-walk, and ground-snapping so it doesn't float or
-// sink. No collision with the player or terrain obstacles — a creature
-// that wanders into a wall just turns and tries another direction on its
-// next timer tick, which is enough at this scale to not look obviously
-// broken.
+// sink. No real pathfinding or collision with the player — a creature
+// that wanders into an obstacle (a tree, a cliff, a wall) just turns and
+// tries another direction on its next timer tick, which is enough at
+// this scale to not look obviously broken.
 import * as THREE from "three";
 import type { World } from "./World";
 import { WATER_ID } from "./worldgen/terrain";
@@ -202,6 +202,13 @@ const SPECIES: Record<CreatureSpecies, SpeciesSpec> = {
 
 const GROUND_SEARCH_TOP = 110;
 const GROUND_SEARCH_BOTTOM = 0;
+// A creature can step up onto a low ledge (a curb, a single stair-like
+// block) but not climb a tree trunk, cliff, or wall — findSurfaceY's
+// straight-down scan treats a tree's canopy the same as solid ground
+// (both are just "the first non-air block"), so without this a
+// creature wandering under a tree would snap straight up onto its top
+// instead of being stopped by it like any other obstacle.
+const MAX_STEP_HEIGHT = 1.1;
 
 /**
  * Scans straight down for the first solid voxel; returns its top surface
@@ -253,15 +260,17 @@ export class Creature {
       const nextX = this.position.x + Math.sin(this.yaw) * spec.speed * dt;
       const nextZ = this.position.z + Math.cos(this.yaw) * spec.speed * dt;
       const nextGroundY = findSurfaceY(world, nextX, nextZ);
-      if (nextGroundY !== null) {
+      const blocked = nextGroundY === null || Math.abs(nextGroundY - this.position.y) > MAX_STEP_HEIGHT;
+      if (!blocked) {
         this.position.x = nextX;
         this.position.z = nextZ;
         this.position.y = nextGroundY;
       } else {
-        // Stepping there would mean water (or an unloaded chunk) — treat
-        // it like bumping into a wall: stay put and pick a new direction
-        // on the very next tick instead of waiting out the full timer
-        // facing a lake.
+        // Stepping there would mean water, an unloaded chunk, or a step
+        // too tall to walk up (a tree, a cliff, a wall) — treat it like
+        // bumping into an obstacle: stay put and pick a new direction on
+        // the very next tick instead of waiting out the full timer
+        // facing it.
         this.moving = false;
         this.wanderTimer = 0;
       }
