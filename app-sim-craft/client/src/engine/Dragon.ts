@@ -81,29 +81,33 @@ interface WingParts {
 function buildWing(side: number, boneMat: THREE.Material, membraneMat: THREE.Material): WingParts {
   const pivot = new THREE.Group();
 
-  const upperLen = 11;
-  const foreLen = 14;
+  // Scaled up from the original 11/14/15-block bones — a noticeably
+  // bigger wing silhouette without changing the wing's overall rig
+  // (shoulder/elbow/finger hierarchy, membrane construction).
+  const upperLen = 18;
+  const foreLen = 23;
   // Upper-arm bone, laid out along the pivot's local +/-x axis — BoxGeometry's long axis is
   // depth/Z by default, so it's pitched 90 degrees around Y to point sideways instead.
-  addBox(pivot, 1.3, 1.3, upperLen, boneMat, side * (upperLen / 2), 0, 0, 0, Math.PI / 2, 0);
+  addBox(pivot, 1.7, 1.7, upperLen, boneMat, side * (upperLen / 2), 0, 0, 0, Math.PI / 2, 0);
 
   const elbow = new THREE.Group();
   elbow.position.set(side * upperLen, 0, 0);
   elbow.rotation.z = side > 0 ? -0.35 : 0.35;
   pivot.add(elbow);
 
-  addBox(elbow, 1.0, 1.0, foreLen, boneMat, side * (foreLen / 2), 0, 0, 0, Math.PI / 2, 0);
+  addBox(elbow, 1.3, 1.3, foreLen, boneMat, side * (foreLen / 2), 0, 0, 0, Math.PI / 2, 0);
 
   const fingerCount = 4;
-  const fingerBaseLen = 15;
+  const fingerBaseLen = 25;
+  const fingerStep = 3.6;
   for (let i = 0; i < fingerCount; i++) {
     const spread = (i / (fingerCount - 1) - 0.5) * 1.35; // fan the fingers out from the wrist
-    const len = fingerBaseLen - i * 2.2;
+    const len = fingerBaseLen - i * fingerStep;
     const finger = new THREE.Group();
     finger.position.set(side * foreLen, 0, 0);
     finger.rotation.y = side * (0.15 + i * 0.28);
     finger.rotation.z = spread * 0.5;
-    addBox(finger, 0.55, 0.55, len, boneMat, 0, 0, side * (len / 2), 0, Math.PI / 2, 0);
+    addBox(finger, 0.7, 0.7, len, boneMat, 0, 0, side * (len / 2), 0, Math.PI / 2, 0);
     elbow.add(finger);
   }
 
@@ -113,11 +117,11 @@ function buildWing(side: number, boneMat: THREE.Material, membraneMat: THREE.Mat
   const mainSail = addBox(elbow, foreLen * 0.9, 0.15, fingerBaseLen * 0.85, membraneMat, side * (foreLen * 0.5), 0, side * (fingerBaseLen * 0.32));
   mainSail.rotation.y = side * 0.12;
   for (let i = 0; i < fingerCount - 1; i++) {
-    const lenA = fingerBaseLen - i * 2.2;
-    const lenB = fingerBaseLen - (i + 1) * 2.2;
+    const lenA = fingerBaseLen - i * fingerStep;
+    const lenB = fingerBaseLen - (i + 1) * fingerStep;
     const panel = addBox(
       elbow,
-      3.4,
+      4.6,
       0.12,
       Math.max(lenA, lenB) * 0.92,
       membraneMat,
