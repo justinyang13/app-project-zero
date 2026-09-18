@@ -11,6 +11,15 @@ import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { getBlockByKey } from "../../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
 import { pointAtProgress, LOOP_PERIMETER, ROAD_WIDTH, FLAT_ROAD_Y } from "./roads";
+import {
+  CAVE_BOUNDS,
+  CAVE_FLOOR_DIG,
+  CAVE_MOUTH,
+  CAVE_SPIKE_OFFSETS,
+  CHAMBER_CENTER,
+  MOUNTAIN_CENTER,
+  isCaveVoxel,
+} from "./mountain";
 
 const WALL_ID = getBlockByKey("greystone").id;
 const ROOF_ID = getBlockByKey("roof_tile").id;
@@ -148,6 +157,8 @@ let cachedCastleBaseY = 0;
 let cachedCampfireYs: number[] = [];
 let cachedLampYs: number[] = [];
 let cachedHouseYs: number[] = [];
+let cachedPeakY = 0;
+let cachedCaveFloorY = 0;
 
 function ensureCache(seed: number): void {
   if (cachedSeed === seed) return;
@@ -167,12 +178,22 @@ function ensureCache(seed: number): void {
   cachedHouseYs = HOUSE_LOTS.map(
     (lot) => sampleColumn(seed, lot.x + Math.floor(lot.width / 2), lot.z + Math.floor(lot.depth / 2)).height + 1,
   );
+  cachedPeakY = sampleColumn(seed, MOUNTAIN_CENTER.x, MOUNTAIN_CENTER.z).height;
+  cachedCaveFloorY = sampleColumn(seed, CAVE_MOUTH.x, CAVE_MOUTH.z).height - CAVE_FLOOR_DIG;
 }
 
-/** World-space anchor heights for these structures — exported so GameLoop can place each campfire's flame/light (or lamp's bulb/light) without waiting on chunk load. */
+/** World-space anchor heights for these structures — exported so GameLoop can place each campfire's flame/light (or lamp's bulb/light) without waiting on chunk load. peakY/caveFloorY are the dragon mountain's summit height and its cave's floor height, used to place the giant Dragon and its cave torches. */
 export function getStructureAnchors(
   seed: number,
-): { bridgeDeckY: number; castleBaseY: number; campfireYs: number[]; lampYs: number[]; houseYs: number[] } {
+): {
+  bridgeDeckY: number;
+  castleBaseY: number;
+  campfireYs: number[];
+  lampYs: number[];
+  houseYs: number[];
+  peakY: number;
+  caveFloorY: number;
+} {
   ensureCache(seed);
   return {
     bridgeDeckY: cachedBridgeDeckY,
@@ -180,6 +201,8 @@ export function getStructureAnchors(
     campfireYs: cachedCampfireYs,
     lampYs: cachedLampYs,
     houseYs: cachedHouseYs,
+    peakY: cachedPeakY,
+    caveFloorY: cachedCaveFloorY,
   };
 }
 
@@ -555,6 +578,57 @@ function stampStreetLamps(seed: number, cx: number, cz: number, chunks: Chunk[])
   }
 }
 
+const CAVE_DAIS_RADIUS = 12;
+const CAVE_DAIS_HEIGHT = 3;
+
+/** The dragon's perch: a low, rounded sandstone mound at the chamber's center — raised just enough to read as a deliberate perch rather than bare cave floor. */
+function stampCaveDais(cx: number, cz: number, chunks: Chunk[], floorY: number): void {
+  for (let dx = -CAVE_DAIS_RADIUS; dx <= CAVE_DAIS_RADIUS; dx++) {
+    for (let dz = -CAVE_DAIS_RADIUS; dz <= CAVE_DAIS_RADIUS; dz++) {
+      const d = Math.hypot(dx, dz);
+      if (d > CAVE_DAIS_RADIUS) continue;
+      const mound = Math.round((1 - d / CAVE_DAIS_RADIUS) * CAVE_DAIS_HEIGHT);
+      for (let dy = 0; dy <= mound; dy++) {
+        setWorldVoxel(chunks, cx, cz, CHAMBER_CENTER.x + dx, floorY + dy, CHAMBER_CENTER.z + dz, SANDSTONE_ID);
+      }
+    }
+  }
+}
+
+/** A handful of stubby rock stalagmites scattered around the chamber floor for atmosphere. */
+function stampCaveSpikes(cx: number, cz: number, chunks: Chunk[], floorY: number): void {
+  for (const spike of CAVE_SPIKE_OFFSETS) {
+    const bx = CHAMBER_CENTER.x + spike.x;
+    const bz = CHAMBER_CENTER.z + spike.z;
+    for (let dy = 0; dy < spike.height; dy++) {
+      setWorldVoxel(chunks, cx, cz, bx, floorY + dy, bz, WALL_ID);
+    }
+  }
+}
+
+/** Carves the dragon's cave (a tunnel from the mountain's south flank into a large domed chamber — see worldgen/mountain.ts) out of the solid mountain, then furnishes the chamber with a perch dais and a few stalagmites. Digging only ever removes blocks, so unlike every other stamp here it needs no structureMaxYFor entry — the mountain's own height (folded into terrain.ts's sampleColumn) already reserves enough vertical chunks to contain it. */
+function stampDragonCave(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
+  if (!chunkOverlapsBox(cx, cz, CAVE_BOUNDS.minX, CAVE_BOUNDS.maxX, CAVE_BOUNDS.minZ, CAVE_BOUNDS.maxZ)) return;
+  const { caveFloorY } = getStructureAnchors(seed);
+
+  const minX = Math.max(CAVE_BOUNDS.minX, cx * CHUNK_SIZE);
+  const maxX = Math.min(CAVE_BOUNDS.maxX, cx * CHUNK_SIZE + CHUNK_SIZE - 1);
+  const minZ = Math.max(CAVE_BOUNDS.minZ, cz * CHUNK_SIZE);
+  const maxZ = Math.min(CAVE_BOUNDS.maxZ, cz * CHUNK_SIZE + CHUNK_SIZE - 1);
+  const maxY = caveFloorY + 40;
+
+  for (let wx = minX; wx <= maxX; wx++) {
+    for (let wz = minZ; wz <= maxZ; wz++) {
+      for (let wy = caveFloorY + 1; wy <= maxY; wy++) {
+        if (isCaveVoxel(wx, wy, wz, caveFloorY)) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+      }
+    }
+  }
+
+  stampCaveDais(cx, cz, chunks, caveFloorY);
+  stampCaveSpikes(cx, cz, chunks, caveFloorY);
+}
+
 /** Stamps every fixed structure that overlaps this chunk column. Mutates `chunks` in place. */
 export function stampStructures(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   stampBridge(seed, cx, cz, chunks);
@@ -564,4 +638,5 @@ export function stampStructures(seed: number, cx: number, cz: number, chunks: Ch
   stampCampfires(seed, cx, cz, chunks);
   stampStreetLamps(seed, cx, cz, chunks);
   stampResidentialArea(seed, cx, cz, chunks);
+  stampDragonCave(seed, cx, cz, chunks);
 }

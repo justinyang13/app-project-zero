@@ -2,6 +2,7 @@ import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 import { getActiveGameLoop } from "../engine/activeGameLoop";
 import { useHudStore } from "../state/hudStore";
 import { useHotbarStore, type BuildMode } from "../state/hotbarStore";
+import { ToolIcon } from "./ToolIcon";
 
 // All touch targets are >=44px per the platform accessibility minimum
 // (Apple HIG / WCAG 2.5.5) — see each button's width/height below.
@@ -19,7 +20,7 @@ const BUTTON_STYLE_BASE: React.CSSProperties = {
   zIndex: 10,
 };
 
-const MODE_LABELS: Record<BuildMode, string> = { break: "⛏", tunnel: "🕳", place: "▦", torch: "🔥", flag: "🚩" };
+const MODE_LABELS: Record<BuildMode, string> = { break: "⛏", tunnel: "", place: "▦", torch: "🔥", flag: "🚩" };
 
 /**
  * Bottom-right cluster: jump, fly toggle (+ up/down while flying), the
@@ -59,7 +60,7 @@ export function TouchActionButtons() {
         style={{ ...BUTTON_STYLE_BASE, position: "fixed", bottom: safeBottom, right: safeRight, width: 64, height: 64, fontSize: 26 }}
         title={mode === "tunnel" ? `${mode} (hold)` : `${mode} (tap)`}
       >
-        {MODE_LABELS[mode]}
+        {mode === "tunnel" ? <ToolIcon tool="shovel" size={26} /> : MODE_LABELS[mode]}
       </button>
 
       {/* Jump — held, matching Space's hold-to-jump behavior. */}

@@ -9,6 +9,8 @@ import { Player, EYE_HEIGHT, type PlayerInput } from "./Player";
 import { ChunkManager, RENDER_DISTANCE_COLUMNS } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
 import { Creature, findSurfaceY, ALL_SPECIES } from "./Creature";
+import { Fish, findNearbyWaterSpots, sampleRandom, ALL_FISH_SPECIES } from "./Fish";
+import { Dragon } from "./Dragon";
 import { Car, type CarInput } from "./Car";
 import { pointAtProgress, LOOP_PERIMETER, FLAT_ROAD_Y } from "./worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
@@ -21,6 +23,7 @@ import { StreetLamp } from "./StreetLamp";
 import { Torch } from "./Torch";
 import { Flag } from "./Flag";
 import { CAMPFIRE_SITES, CASTLE_CENTER, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "./worldgen/structures";
+import { CAVE_TORCH_OFFSETS, CHAMBER_CENTER } from "./worldgen/mountain";
 import { MiniMap, type MiniMapMarker } from "./MiniMap";
 import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
 import { sampleColumn, biomeKeyFromIndex, sampleBiomeIndexAt } from "./worldgen/terrain";
@@ -61,6 +64,10 @@ export class GameLoop {
   private readonly highlightMesh: THREE.LineSegments;
   private readonly creatures: Creature[] = [];
   private creaturesSpawned = false;
+  private readonly fish: Fish[] = [];
+  private fishSpawned = false;
+  private readonly dragon: Dragon;
+  private readonly caveTorches: Torch[];
   private readonly cars: Car[] = [];
   private carsSpawned = false;
   private drivingCar: Car | null = null;
@@ -179,12 +186,20 @@ export class GameLoop {
     this.clouds = new Clouds();
     this.scene.add(this.clouds.group);
 
-    const { campfireYs, lampYs } = getStructureAnchors(seed);
+    const { campfireYs, lampYs, peakY, caveFloorY } = getStructureAnchors(seed);
     this.campfires = CAMPFIRE_SITES.map((site, i) => new CampfireVisual(site.x, campfireYs[i], site.z));
     for (const campfire of this.campfires) this.scene.add(campfire.group);
 
     this.streetLamps = LAMP_SITES.map((site, i) => new StreetLamp(site.x, lampYs[i], site.z, LAMP_POST_HEIGHT));
     for (const lamp of this.streetLamps) this.scene.add(lamp.group);
+
+    this.dragon = new Dragon(caveFloorY, peakY);
+    this.scene.add(this.dragon.mesh);
+
+    this.caveTorches = CAVE_TORCH_OFFSETS.map(
+      (offset) => new Torch(CHAMBER_CENTER.x + offset.x, caveFloorY, CHAMBER_CENTER.z + offset.z),
+    );
+    for (const torch of this.caveTorches) this.scene.add(torch.group);
 
     this.syncFlagVisuals();
     this.syncTorchVisuals();
@@ -475,11 +490,71 @@ export class GameLoop {
     }
   }
 
-  /** Landmark + live-creature markers for the minimap. Cheap to rebuild every frame — a handful of fixed points plus one per creature. */
+  // Same "wait for the world to exist" gating as trySpawnCreatures. Scans
+  // for actual nearby water (findNearbyWaterSpots) rather than throwing
+  // random darts at the map — swimmable water is a small fraction of the
+  // surface, so a handful of random points almost always misses even a
+  // real, nearby lake entirely (verified empirically: under 1% hit rate
+  // at this search radius). A handful of fish per lake found reads as a
+  // small school rather than one lone fish per body of water.
+  private trySpawnFish(): void {
+    if (this.fishSpawned || this.chunkManager.pendingCount > 0 || this.chunkManager.loadedChunkCount === 0) {
+      return;
+    }
+    this.fishSpawned = true;
+
+    const origin = this.player.position;
+    const spots = findNearbyWaterSpots(this.world, origin.x, origin.z, 55, 150);
+    for (const spot of sampleRandom(spots, 18)) {
+      if (this.fish.length >= GameLoop.MAX_FISH) break;
+      this.spawnFishAt(spot);
+    }
+  }
+
+  private spawnFishAt(spot: { x: number; z: number; top: number; bottom: number }): void {
+    const species = ALL_FISH_SPECIES[Math.floor(Math.random() * ALL_FISH_SPECIES.length)];
+    const y = spot.bottom + 0.3 + Math.random() * Math.max(0, spot.top - spot.bottom - 0.7);
+    const fish = new Fish(species, spot.x + Math.random(), y, spot.z + Math.random());
+    this.fish.push(fish);
+    this.scene.add(fish.mesh);
+  }
+
+  private static readonly MAX_FISH = 40;
+  private static readonly FISH_SPAWN_INTERVAL = 6; // seconds
+  private static readonly FISH_DESPAWN_RADIUS = 90;
+  private fishSpawnTimer = 0;
+
+  private updateAmbientFish(dt: number): void {
+    for (let i = this.fish.length - 1; i >= 0; i--) {
+      const f = this.fish[i];
+      const dist = Math.hypot(f.position.x - this.player.position.x, f.position.z - this.player.position.z);
+      if (dist <= GameLoop.FISH_DESPAWN_RADIUS) continue;
+      this.scene.remove(f.mesh);
+      f.dispose();
+      this.fish.splice(i, 1);
+    }
+
+    if (!this.fishSpawned) return; // wait for the initial batch first
+    this.fishSpawnTimer -= dt;
+    if (this.fishSpawnTimer > 0) return;
+    this.fishSpawnTimer = GameLoop.FISH_SPAWN_INTERVAL;
+    if (this.fish.length >= GameLoop.MAX_FISH) return;
+
+    const spots = findNearbyWaterSpots(this.world, this.player.position.x, this.player.position.z, 40, 60);
+    const spawnCount = 1 + Math.floor(Math.random() * 3);
+    for (const spot of sampleRandom(spots, spawnCount)) {
+      if (this.fish.length >= GameLoop.MAX_FISH) break;
+      this.spawnFishAt(spot);
+    }
+  }
+
+  /** Landmark + live-creature markers for the minimap. Cheap to rebuild every frame — a handful of fixed points plus one per creature/fish. */
   private buildMiniMapMarkers(): MiniMapMarker[] {
     const markers: MiniMapMarker[] = [{ x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, kind: "castle" }];
+    markers.push({ x: this.dragon.position.x, z: this.dragon.position.z, kind: "dragon" });
     for (const site of CAMPFIRE_SITES) markers.push({ x: site.x, z: site.z, kind: "campfire" });
     for (const creature of this.creatures) markers.push({ x: creature.position.x, z: creature.position.z, kind: "creature" });
+    for (const f of this.fish) markers.push({ x: f.position.x, z: f.position.z, kind: "fish" });
     for (const marker of this.customMarkers) markers.push({ x: marker.x, z: marker.z, kind: "custom" });
     for (const torch of this.torchRecords) markers.push({ x: torch.x, z: torch.z, kind: "torch" });
     return markers;
@@ -708,6 +783,7 @@ export class GameLoop {
         this.player.tick(SIM_DT, this.world, this.buildPlayerInput(), forward3D, axes.right);
       }
       for (const creature of this.creatures) creature.tick(SIM_DT, this.world);
+      for (const f of this.fish) f.tick(SIM_DT, this.world);
       for (const car of this.cars) {
         if (car === this.drivingCar || car.parked) continue;
         car.tickAI(SIM_DT, this.world);
@@ -751,7 +827,9 @@ export class GameLoop {
     this.sky.update(this.player.position, timeOfDay);
     for (const campfire of this.campfires) campfire.update(dt);
     for (const torch of this.torchVisuals) torch.update(dt);
+    for (const torch of this.caveTorches) torch.update(dt);
     for (const flag of this.flagVisuals) flag.update(dt);
+    this.dragon.update(dt);
     const dark = isNight(timeOfDay);
     for (const car of this.cars) car.setHeadlightsOn(dark);
     for (const lamp of this.streetLamps) lamp.setOn(dark);
@@ -771,6 +849,8 @@ export class GameLoop {
     this.chunkManager.update(this.player.position.x, this.player.position.z);
     this.trySpawnCreatures();
     this.updateAmbientCreatures(dt);
+    this.trySpawnFish();
+    this.updateAmbientFish(dt);
     this.trySpawnCars();
 
     useHudStore
@@ -895,6 +975,10 @@ export class GameLoop {
       this.scene.remove(creature.mesh);
       creature.dispose();
     }
+    for (const f of this.fish) {
+      this.scene.remove(f.mesh);
+      f.dispose();
+    }
     for (const car of this.cars) {
       this.scene.remove(car.mesh);
       car.dispose();
@@ -913,6 +997,12 @@ export class GameLoop {
     for (const lamp of this.streetLamps) {
       this.scene.remove(lamp.group);
       lamp.dispose();
+    }
+    this.scene.remove(this.dragon.mesh);
+    this.dragon.dispose();
+    for (const torch of this.caveTorches) {
+      this.scene.remove(torch.group);
+      torch.dispose();
     }
     for (const flag of this.flagVisuals) {
       this.scene.remove(flag.group);

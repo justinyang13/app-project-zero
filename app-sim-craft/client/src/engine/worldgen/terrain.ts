@@ -12,6 +12,7 @@ import { getBlockByKey } from "../../data/blocks";
 import { placeTrees } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
 import { isRoadColumn, FLAT_ROAD_Y } from "./roads";
+import { mountainHeightBoost } from "./mountain";
 
 const SALT_TEMPERATURE = 0x5eed01;
 const SALT_HEIGHT = 0x5eed02;
@@ -41,7 +42,8 @@ export function sampleColumn(seed: number, worldX: number, worldZ: number): Colu
   const biome = pickBiome(temperature);
 
   const detail = fbm2D(heightNoise, worldX, worldZ, 4, 1 / 96, 0.5);
-  const height = Math.round(biome.heightBase + detail * biome.heightAmplitude);
+  const height =
+    Math.round(biome.heightBase + detail * biome.heightAmplitude) + mountainHeightBoost(seed, worldX, worldZ);
 
   return { height, biome };
 }
