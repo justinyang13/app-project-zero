@@ -30,6 +30,10 @@ const FLAP_SPEED = 2.6; // rad/sec
 const FLAP_AMPLITUDE = 0.62;
 const BANK_ANGLE = 0.22;
 
+const BREATH_DURATION = 2.4;
+const BREATH_MIN_INTERVAL = 7;
+const BREATH_MAX_INTERVAL = 16;
+
 interface Vec3 {
   x: number;
   y: number;
@@ -135,6 +139,54 @@ function buildWing(side: number, boneMat: THREE.Material, membraneMat: THREE.Mat
   return { pivot };
 }
 
+interface FireBreathParts {
+  group: THREE.Group;
+  light: THREE.PointLight;
+}
+
+// Bright near the mouth, cooling to a dull ember red at the far tip —
+// same gradient idea as a real flame, just stretched into a long jet
+// instead of Torch/CampfireVisual's short upward lick.
+const FIRE_COLORS = [0xfff3b0, 0xffd24a, 0xff8c2a, 0xd94a1a, 0x8a2a12];
+
+/**
+ * A tapering stream of translucent cones plus a warm point light — the
+ * fire-breath counterpart to Torch/CampfireVisual's flicker-cone flames,
+ * just much longer and aimed forward out of the mouth instead of
+ * straight up. Built once (like every other body part) and toggled by
+ * Dragon.updateFireBreath's visibility/scale, not rebuilt per breath.
+ */
+function buildFireBreath(): FireBreathParts {
+  const group = new THREE.Group();
+
+  let z = 0.4;
+  const segments = FIRE_COLORS.length;
+  for (let i = 0; i < segments; i++) {
+    const t = i / (segments - 1);
+    const radius = lerp(1.15, 0.12, t);
+    const length = lerp(1.7, 2.3, t);
+    const mat = new THREE.MeshBasicMaterial({
+      color: FIRE_COLORS[i],
+      transparent: true,
+      opacity: lerp(0.95, 0.35, t),
+    });
+    const cone = new THREE.Mesh(new THREE.ConeGeometry(radius, length, 10), mat);
+    // Apex points away from the mouth (+Z) so the stream narrows into the
+    // distance; the wide base faces back toward the source.
+    cone.rotation.x = Math.PI / 2;
+    cone.position.z = z + length / 2;
+    group.add(cone);
+    z += length * 0.7; // overlap segments so the stream reads as continuous, not stacked cones
+  }
+
+  const light = new THREE.PointLight(0xff8c2a, 0, 16, 2);
+  light.position.z = z * 0.4;
+  group.add(light);
+
+  group.visible = false;
+  return { group, light };
+}
+
 interface DragonMeshParts {
   group: THREE.Group;
   leftWing: WingParts;
@@ -142,6 +194,7 @@ interface DragonMeshParts {
   tailPivot: THREE.Group;
   neckPivot: THREE.Group;
   jaw: THREE.Mesh;
+  fireBreath: FireBreathParts;
 }
 
 function buildDragonMesh(): DragonMeshParts {
@@ -208,6 +261,10 @@ function buildDragonMesh(): DragonMeshParts {
     addBox(head, 0.4, 2, 0.4, hornMat, sx * 1.6, 2.3, 1.6, -0.5, 0, sx * 0.5); // secondary smaller horn
   }
 
+  const fireBreath = buildFireBreath();
+  fireBreath.group.position.set(0, -0.05, 7.2); // just past the snout tip, between the jaws
+  head.add(fireBreath.group);
+
   // Legs: hind legs are noticeably heavier (haunches) than the front legs, matching a typical
   // wyvern-ish stance where the back legs carry most of the weight. Each leg hangs straight down
   // from its hip attachment (torso-local y=0, since `torso` itself already carries the LEG_HEIGHT
@@ -270,7 +327,7 @@ function buildDragonMesh(): DragonMeshParts {
   rightWing.pivot.position.set(2.6, 7.2, 3);
   torso.add(rightWing.pivot);
 
-  return { group, leftWing, rightWing, tailPivot, neckPivot, jaw };
+  return { group, leftWing, rightWing, tailPivot, neckPivot, jaw, fireBreath };
 }
 
 export class Dragon {
@@ -284,6 +341,11 @@ export class Dragon {
   private restTimer = 8 + Math.random() * 20; // first launch comes fairly soon so the player doesn't have to wait long to see it fly
   private flapPhase = 0;
   private idlePhase = Math.random() * Math.PI * 2;
+
+  private breathing = false;
+  private breathElapsed = 0;
+  private breathTimer = 3 + Math.random() * 5; // first breath comes soon after spawn
+  private firePhase = 0;
 
   private readonly parts: DragonMeshParts;
   private readonly perch: Vec3;
@@ -390,8 +452,45 @@ export class Dragon {
     this.parts.neckPivot.rotation.y = Math.sin(this.idlePhase * 0.35) * 0.12;
     this.parts.neckPivot.rotation.x = wingOpenness > 0.5 ? 0.1 : Math.sin(this.idlePhase * 0.2) * 0.05;
 
+    // Fire breath: only while perched or actually flying — not mid
+    // launch/landing, where the dragon is transiting the tunnel and a jet
+    // of flame would clip oddly through the cave walls.
+    const canBreathe = this.state === "perched" || this.state === "flying";
+    if (this.breathing) {
+      this.breathElapsed += dt;
+      if (this.breathElapsed >= BREATH_DURATION || !canBreathe) {
+        this.breathing = false;
+        this.breathTimer = BREATH_MIN_INTERVAL + Math.random() * (BREATH_MAX_INTERVAL - BREATH_MIN_INTERVAL);
+      }
+    } else if (canBreathe) {
+      this.breathTimer -= dt;
+      if (this.breathTimer <= 0) {
+        this.breathing = true;
+        this.breathElapsed = 0;
+      }
+    }
+    this.updateFireBreath(dt);
+    this.parts.jaw.rotation.x = this.breathing ? -0.2 * Math.min(1, this.breathElapsed / 0.2) : 0;
+
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
     this.mesh.rotation.set(0, this.yaw, this.bank);
+  }
+
+  private updateFireBreath(dt: number): void {
+    const fire = this.parts.fireBreath;
+    fire.group.visible = this.breathing;
+    if (!this.breathing) {
+      fire.light.intensity = 0;
+      return;
+    }
+    this.firePhase += dt * 16;
+    const flicker = 1 + Math.sin(this.firePhase) * 0.18 + Math.sin(this.firePhase * 2.6) * 0.1;
+    // Quick fade in/out rather than an abrupt pop when the breath starts/ends.
+    const fadeIn = Math.min(1, this.breathElapsed / 0.25);
+    const fadeOut = Math.min(1, (BREATH_DURATION - this.breathElapsed) / 0.35);
+    const envelope = Math.max(0, Math.min(fadeIn, fadeOut));
+    fire.group.scale.set(flicker, flicker, envelope);
+    fire.light.intensity = 7 * envelope;
   }
 
   dispose(): void {
