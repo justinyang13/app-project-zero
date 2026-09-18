@@ -22,7 +22,7 @@ export function VehiclePrompt() {
         whiteSpace: "nowrap",
       }}
     >
-      {prompt === "enter" ? "Press E to drive" : "Press E to exit vehicle"}
+      {prompt}
     </div>
   );
 }

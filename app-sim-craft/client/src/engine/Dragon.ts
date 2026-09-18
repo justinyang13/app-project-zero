@@ -34,6 +34,24 @@ const BREATH_DURATION = 2.4;
 const BREATH_MIN_INTERVAL = 7;
 const BREATH_MAX_INTERVAL = 16;
 
+// Player-ridden flight — an arcade throttle/steer/climb scheme, the same
+// idea as Car's driven mode (CarInput) but in 3D since the dragon isn't
+// confined to a road or the ground.
+const RIDE_MAX_SPEED = 26; // blocks/sec
+const RIDE_REVERSE_MAX_SPEED = 8;
+const RIDE_ACCEL = 16;
+const RIDE_FRICTION = 10;
+const RIDE_TURN_RATE = 1.6; // radians/sec
+const RIDE_CLIMB_SPEED = 14; // blocks/sec
+const RIDE_BANK_ANGLE = 0.5;
+const DISMOUNT_NEAR_PERCH_DIST = 3; // close enough to the dais that landing is skipped in favor of just settling there directly
+
+export interface DragonRideInput {
+  throttle: number; // -1..1
+  steer: number; // -1..1
+  climb: number; // -1..1
+}
+
 interface Vec3 {
   x: number;
   y: number;
@@ -347,10 +365,23 @@ export class Dragon {
   private breathTimer = 3 + Math.random() * 5; // first breath comes soon after spawn
   private firePhase = 0;
 
+  // True while the player has mounted it — see mount()/dismount() below.
+  // While ridden, update() runs tickRidden's player-controlled movement
+  // instead of the perched/launching/flying/landing state machine, which
+  // stays frozen at whatever state it was in (dismount() resumes it
+  // sensibly rather than wherever it happened to be paused).
+  ridden = false;
+  private rideSpeed = 0;
+
   private readonly parts: DragonMeshParts;
   private readonly perch: Vec3;
   private readonly mouthGround: Vec3;
   private readonly skyJoin: Vec3;
+  // The landing arc's start point — normally this.skyJoin (see the
+  // "flying" state below), but dismount() points it at wherever the
+  // player actually left the dragon, so a landing flown after a ride
+  // arcs back from there instead of teleporting to the sky-circle first.
+  private landingStart: Vec3;
 
   constructor(caveFloorY: number, peakY: number) {
     this.parts = buildDragonMesh();
@@ -361,9 +392,48 @@ export class Dragon {
     this.mouthGround = { x: CAVE_MOUTH.x, y: caveFloorY + 2, z: CAVE_MOUTH.z };
     const flightAltitude = peakY + DRAGON_FLIGHT_ALTITUDE_ABOVE_PEAK;
     this.skyJoin = { x: MOUNTAIN_CENTER.x, y: flightAltitude, z: MOUNTAIN_CENTER.z + DRAGON_FLIGHT_RADIUS };
+    this.landingStart = this.skyJoin;
 
     this.position = { ...this.perch };
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+  }
+
+  /** Player mounts up — called by GameLoop once it's confirmed the player is within range. */
+  mount(): void {
+    this.ridden = true;
+    this.rideSpeed = 0;
+  }
+
+  /** Player dismounts. Close to the dais already, it just settles there; otherwise it flies itself home via the normal landing arc, now starting from wherever it actually is instead of the sky-circle. */
+  dismount(): void {
+    this.ridden = false;
+    const distFromPerch = Math.hypot(this.position.x - this.perch.x, this.position.y - this.perch.y, this.position.z - this.perch.z);
+    if (distFromPerch < DISMOUNT_NEAR_PERCH_DIST) {
+      this.state = "perched";
+      this.stateTime = 0;
+      this.restTimer = 20 + Math.random() * 40;
+    } else {
+      this.landingStart = { ...this.position };
+      this.state = "landing";
+      this.stateTime = 0;
+    }
+  }
+
+  private tickRidden(dt: number, input: DragonRideInput): void {
+    if (input.throttle !== 0) {
+      this.rideSpeed += input.throttle * RIDE_ACCEL * dt;
+    } else if (this.rideSpeed !== 0) {
+      const decel = RIDE_FRICTION * dt;
+      this.rideSpeed = Math.abs(this.rideSpeed) <= decel ? 0 : this.rideSpeed - Math.sign(this.rideSpeed) * decel;
+    }
+    this.rideSpeed = THREE.MathUtils.clamp(this.rideSpeed, -RIDE_REVERSE_MAX_SPEED, RIDE_MAX_SPEED);
+
+    this.yaw -= input.steer * RIDE_TURN_RATE * dt;
+    this.bank = THREE.MathUtils.clamp(-input.steer * RIDE_BANK_ANGLE, -RIDE_BANK_ANGLE, RIDE_BANK_ANGLE);
+
+    this.position.x += Math.sin(this.yaw) * this.rideSpeed * dt;
+    this.position.z += Math.cos(this.yaw) * this.rideSpeed * dt;
+    this.position.y += input.climb * RIDE_CLIMB_SPEED * dt;
   }
 
   private circlePoint(theta: number, altitude: number): Vec3 {
@@ -381,62 +451,71 @@ export class Dragon {
     this.yaw = Math.atan2(dx, dz);
   }
 
-  update(dt: number): void {
-    this.stateTime += dt;
+  update(dt: number, rideInput?: DragonRideInput): void {
     this.idlePhase += dt;
     let wingOpenness = 0;
 
-    if (this.state === "perched") {
-      this.restTimer -= dt;
-      this.position = { ...this.perch };
-      this.bank = 0;
-      // Slow idle sway — a faint breathing/settling motion rather than a dead statue.
-      this.yaw = Math.PI + Math.sin(this.idlePhase * 0.15) * 0.25;
-      wingOpenness = 0;
-      if (this.restTimer <= 0) {
-        this.state = "launching";
-        this.stateTime = 0;
-      }
-    } else if (this.state === "launching") {
-      const u = smoothstep(this.stateTime / LAUNCH_DURATION);
-      const pos = bezier(this.perch, this.mouthGround, this.skyJoin, u);
-      const posAhead = bezier(this.perch, this.mouthGround, this.skyJoin, Math.min(1, u + 0.01));
-      this.position = pos;
-      this.facePoints(pos, posAhead);
-      wingOpenness = smoothstep((u - 0.3) / 0.5);
-      this.bank = 0;
-      if (this.stateTime >= LAUNCH_DURATION) {
-        this.state = "flying";
-        this.stateTime = 0;
-      }
-    } else if (this.state === "flying") {
-      const theta = (this.stateTime / LOOP_PERIOD) * Math.PI * 2;
-      const bob = Math.sin(this.stateTime * 0.6) * 1.5;
-      const pos = this.circlePoint(theta, this.skyJoin.y + bob);
-      const posAhead = this.circlePoint(theta + 0.02, this.skyJoin.y + bob);
-      this.position = pos;
-      this.facePoints(pos, posAhead);
-      this.bank = BANK_ANGLE;
-      wingOpenness = 1;
-      const loopsDone = this.stateTime / LOOP_PERIOD;
-      const nearSouthPoint = Math.abs(((theta % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) < 0.12;
-      if (this.stateTime >= FLY_MIN_DURATION && loopsDone >= 1 && nearSouthPoint) {
-        this.state = "landing";
-        this.stateTime = 0;
-      }
+    if (this.ridden && rideInput) {
+      this.tickRidden(dt, rideInput);
+      // Keeps flapping even while slow/hovering under player control, not
+      // fully folded the way idle-perched wings are.
+      const speedFrac = Math.min(1, Math.abs(this.rideSpeed) / RIDE_MAX_SPEED);
+      wingOpenness = 0.55 + speedFrac * 0.45;
     } else {
-      // landing
-      const u = smoothstep(this.stateTime / LANDING_DURATION);
-      const pos = bezier(this.skyJoin, this.mouthGround, this.perch, u);
-      const posAhead = bezier(this.skyJoin, this.mouthGround, this.perch, Math.min(1, u + 0.01));
-      this.position = pos;
-      this.facePoints(pos, posAhead);
-      wingOpenness = 1 - smoothstep((u - 0.5) / 0.45);
-      this.bank = 0;
-      if (this.stateTime >= LANDING_DURATION) {
-        this.state = "perched";
-        this.stateTime = 0;
-        this.restTimer = 30 + Math.random() * 60;
+      this.stateTime += dt;
+      if (this.state === "perched") {
+        this.restTimer -= dt;
+        this.position = { ...this.perch };
+        this.bank = 0;
+        // Slow idle sway — a faint breathing/settling motion rather than a dead statue.
+        this.yaw = Math.PI + Math.sin(this.idlePhase * 0.15) * 0.25;
+        wingOpenness = 0;
+        if (this.restTimer <= 0) {
+          this.state = "launching";
+          this.stateTime = 0;
+        }
+      } else if (this.state === "launching") {
+        const u = smoothstep(this.stateTime / LAUNCH_DURATION);
+        const pos = bezier(this.perch, this.mouthGround, this.skyJoin, u);
+        const posAhead = bezier(this.perch, this.mouthGround, this.skyJoin, Math.min(1, u + 0.01));
+        this.position = pos;
+        this.facePoints(pos, posAhead);
+        wingOpenness = smoothstep((u - 0.3) / 0.5);
+        this.bank = 0;
+        if (this.stateTime >= LAUNCH_DURATION) {
+          this.state = "flying";
+          this.stateTime = 0;
+        }
+      } else if (this.state === "flying") {
+        const theta = (this.stateTime / LOOP_PERIOD) * Math.PI * 2;
+        const bob = Math.sin(this.stateTime * 0.6) * 1.5;
+        const pos = this.circlePoint(theta, this.skyJoin.y + bob);
+        const posAhead = this.circlePoint(theta + 0.02, this.skyJoin.y + bob);
+        this.position = pos;
+        this.facePoints(pos, posAhead);
+        this.bank = BANK_ANGLE;
+        wingOpenness = 1;
+        const loopsDone = this.stateTime / LOOP_PERIOD;
+        const nearSouthPoint = Math.abs(((theta % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) < 0.12;
+        if (this.stateTime >= FLY_MIN_DURATION && loopsDone >= 1 && nearSouthPoint) {
+          this.landingStart = { ...this.position };
+          this.state = "landing";
+          this.stateTime = 0;
+        }
+      } else {
+        // landing
+        const u = smoothstep(this.stateTime / LANDING_DURATION);
+        const pos = bezier(this.landingStart, this.mouthGround, this.perch, u);
+        const posAhead = bezier(this.landingStart, this.mouthGround, this.perch, Math.min(1, u + 0.01));
+        this.position = pos;
+        this.facePoints(pos, posAhead);
+        wingOpenness = 1 - smoothstep((u - 0.5) / 0.45);
+        this.bank = 0;
+        if (this.stateTime >= LANDING_DURATION) {
+          this.state = "perched";
+          this.stateTime = 0;
+          this.restTimer = 30 + Math.random() * 60;
+        }
       }
     }
 
@@ -452,10 +531,10 @@ export class Dragon {
     this.parts.neckPivot.rotation.y = Math.sin(this.idlePhase * 0.35) * 0.12;
     this.parts.neckPivot.rotation.x = wingOpenness > 0.5 ? 0.1 : Math.sin(this.idlePhase * 0.2) * 0.05;
 
-    // Fire breath: only while perched or actually flying — not mid
-    // launch/landing, where the dragon is transiting the tunnel and a jet
-    // of flame would clip oddly through the cave walls.
-    const canBreathe = this.state === "perched" || this.state === "flying";
+    // Fire breath: while ridden, or while perched/actually flying on its
+    // own — not mid launch/landing, where the dragon is transiting the
+    // tunnel and a jet of flame would clip oddly through the cave walls.
+    const canBreathe = this.ridden || this.state === "perched" || this.state === "flying";
     if (this.breathing) {
       this.breathElapsed += dt;
       if (this.breathElapsed >= BREATH_DURATION || !canBreathe) {

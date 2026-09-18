@@ -22,7 +22,11 @@ export interface DebugSnapshot {
   timeOfDay: number; // fraction of a day, [0, 1) — whatever Sky is actually rendering right now
 }
 
-export type VehiclePrompt = "enter" | "exit" | null;
+// A ready-to-display message rather than an "enter"/"exit" enum — there
+// are now two very different things to mount (a car, the dragon), each
+// wanting its own wording, and a free-text prompt scales to that without
+// the store needing to know what each vehicle is called.
+export type VehiclePrompt = string | null;
 
 interface HudState {
   debugVisible: boolean;

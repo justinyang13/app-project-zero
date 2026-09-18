@@ -10,7 +10,7 @@ import { ChunkManager, RENDER_DISTANCE_COLUMNS } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
 import { Creature, findSurfaceY, ALL_SPECIES } from "./Creature";
 import { Fish, findNearbyWaterSpots, sampleRandom, ALL_FISH_SPECIES } from "./Fish";
-import { Dragon } from "./Dragon";
+import { Dragon, type DragonRideInput } from "./Dragon";
 import { Car, type CarInput } from "./Car";
 import { pointAtProgress, LOOP_PERIMETER, FLAT_ROAD_Y } from "./worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
@@ -41,6 +41,9 @@ const THIRD_PERSON_DISTANCE = 4.5;
 const THIRD_PERSON_UP_OFFSET = 1.0;
 const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped position
 const ENTER_VEHICLE_RANGE = 3;
+const DRAGON_MOUNT_RANGE = 14; // generous — the dragon is huge and often airborne, unlike a parked car
+const DRAGON_RIDE_EYE_HEIGHT = 8; // roughly shoulder/neck height on its back
+const DRAGON_RIDE_THIRD_PERSON_DISTANCE = 18; // pulled back further than a car's chase cam so the whole dragon fits in view
 const CAR_COUNT = 6;
 const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0xecf0f1, 0xe67e22];
 const TUNNEL_INTERVAL = 0.15; // seconds between auto-breaks while holding Tunnel mode's primary action
@@ -267,9 +270,12 @@ export class GameLoop {
       if (now - this.lastSpaceTapTime < 300) {
         // While driving, double-tap Space is nitro instead of the fly
         // toggle — flying isn't meaningful for a car, so the same
-        // gesture is free to mean something else in that context.
+        // gesture is free to mean something else in that context. While
+        // riding the dragon, Space is already climb (buildDragonRideInput)
+        // and the player's own flying state is inert (position is glued
+        // to the dragon), so the tap is simply ignored there.
         if (this.drivingCar) this.drivingCar.activateNitro();
-        else this.player.flying = !this.player.flying;
+        else if (!this.dragon.ridden) this.player.flying = !this.player.flying;
       }
       this.lastSpaceTapTime = now;
     }
@@ -288,7 +294,7 @@ export class GameLoop {
     if (e.code === "KeyC" && !e.repeat) useHotbarStore.getState().setMode("torch");
     if (e.code === "KeyV" && !e.repeat) useHotbarStore.getState().setMode("flag");
     if (e.code === "KeyE" && !e.repeat) {
-      this.toggleDriving();
+      this.handleInteractKey();
     }
     if (e.code === "KeyM" && !e.repeat) {
       this.toggleMarkerAtPlayer();
@@ -621,6 +627,55 @@ export class GameLoop {
     }
   }
 
+  /** True when the player is close enough (3D — the dragon is often airborne) to mount it. */
+  private canMountDragon(): boolean {
+    const d = this.dragon.position;
+    const p = this.player.position;
+    return Math.hypot(d.x - p.x, d.y - p.y, d.z - p.z) < DRAGON_MOUNT_RANGE;
+  }
+
+  /** E's dragon counterpart to toggleDriving — cars take priority when both are in range (matches findNearbyEnterableCar being checked first in handleInteractKey below). */
+  private toggleDragonRide(): void {
+    if (this.dragon.ridden) {
+      this.dragon.dismount();
+      // Step off to the side, re-grounded independently — same idea as
+      // toggleDriving's car exit, except a dragon dismounted mid-flight
+      // has no ground under it at all, so falling back is preferred to
+      // an uncontrolled plummet.
+      const exitX = this.dragon.position.x + Math.sin(this.dragon.mesh.rotation.y + Math.PI / 2) * 4;
+      const exitZ = this.dragon.position.z + Math.cos(this.dragon.mesh.rotation.y + Math.PI / 2) * 4;
+      const groundY = findSurfaceY(this.world, exitX, exitZ);
+      if (groundY !== null && this.dragon.position.y - groundY < 20) {
+        this.player.position = { x: exitX, y: groundY, z: exitZ };
+        this.player.flying = false;
+      } else {
+        this.player.position = { x: exitX, y: this.dragon.position.y, z: exitZ };
+        this.player.flying = true;
+      }
+      this.player.velocity = { x: 0, y: 0, z: 0 };
+      return;
+    }
+
+    if (this.canMountDragon()) this.dragon.mount();
+  }
+
+  /** Routes E to whichever mount makes sense right now: exit/dismount whatever the player is already on, otherwise a nearby car (matches the old car-only behavior) before falling back to the dragon. */
+  private handleInteractKey(): void {
+    if (this.drivingCar) {
+      this.toggleDriving();
+      return;
+    }
+    if (this.dragon.ridden) {
+      this.toggleDragonRide();
+      return;
+    }
+    if (this.findNearbyEnterableCar()) {
+      this.toggleDriving();
+      return;
+    }
+    this.toggleDragonRide();
+  }
+
   private static readonly MARKER_TOGGLE_RANGE = 3;
   private static readonly TORCH_TOGGLE_RANGE = 1.5;
 
@@ -718,6 +773,14 @@ export class GameLoop {
     };
   }
 
+  private buildDragonRideInput(): DragonRideInput {
+    return {
+      throttle: (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0),
+      steer: (this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0),
+      climb: (this.pressed.has("Space") ? 1 : 0) - (this.pressed.has("ShiftLeft") || this.pressed.has("ShiftRight") ? 1 : 0),
+    };
+  }
+
   // Combines keyboard state with touch state (see the touch* fields
   // above) into the one PlayerInput both desktop and touch ultimately
   // feed through — not a second input-polling path, just a second
@@ -779,6 +842,11 @@ export class GameLoop {
         // and save-on-exit) glued to the car while it's being driven.
         this.player.position = { ...this.drivingCar.position };
         this.player.velocity = { x: 0, y: 0, z: 0 };
+      } else if (this.dragon.ridden) {
+        // Movement itself is applied once per frame below (Dragon.update,
+        // same cadence its autonomous flight already uses) — skip the
+        // player's own ground/gravity physics here so nothing fights it.
+        this.player.velocity = { x: 0, y: 0, z: 0 };
       } else {
         this.player.tick(SIM_DT, this.world, this.buildPlayerInput(), forward3D, axes.right);
       }
@@ -793,33 +861,50 @@ export class GameLoop {
       steps++;
     }
 
+    // Dragon movement happens here — once per rendered frame, the same
+    // cadence its autonomous flight already used — rather than inside the
+    // fixed SIM_DT loop above, so one Dragon.update call handles both
+    // player-ridden and autonomous motion without splitting the state
+    // machine across two call sites. Runs before the camera/eye math below
+    // so a ridden frame's camera follows where the dragon actually ends up
+    // this frame, not last frame's position.
+    if (this.dragon.ridden) {
+      this.dragon.update(dt, this.buildDragonRideInput());
+      this.player.position = { ...this.dragon.position };
+      this.player.velocity = { x: 0, y: 0, z: 0 };
+    } else {
+      this.dragon.update(dt);
+    }
+
     const driving = this.drivingCar !== null;
-    // Driving always uses the third-person chase cam — there's no
-    // in-cabin first-person view of the car's interior — but mouse-look
-    // still free-rotates the camera around that anchor same as on foot.
-    const activeViewMode: ViewMode = driving ? "third" : this.viewMode;
+    const ridingDragon = this.dragon.ridden;
+    // Driving/riding always uses the third-person chase cam — there's no
+    // in-cabin (or in-saddle) first-person view — but mouse-look still
+    // free-rotates the camera around that anchor same as on foot.
+    const activeViewMode: ViewMode = driving || ridingDragon ? "third" : this.viewMode;
     const eyeX = this.player.position.x;
-    const eyeY = this.player.position.y + (driving ? DRIVING_EYE_HEIGHT : EYE_HEIGHT);
+    const eyeY = this.player.position.y + (ridingDragon ? DRAGON_RIDE_EYE_HEIGHT : driving ? DRIVING_EYE_HEIGHT : EYE_HEIGHT);
     const eyeZ = this.player.position.z;
     if (activeViewMode === "first") {
       this.camera.position.set(eyeX, eyeY, eyeZ);
     } else {
       const forward = new THREE.Vector3();
       this.camera.getWorldDirection(forward);
+      const distance = ridingDragon ? DRAGON_RIDE_THIRD_PERSON_DISTANCE : THIRD_PERSON_DISTANCE;
       this.camera.position
         .set(eyeX, eyeY, eyeZ)
-        .addScaledVector(forward, -THIRD_PERSON_DISTANCE)
+        .addScaledVector(forward, -distance)
         .add(new THREE.Vector3(0, THIRD_PERSON_UP_OFFSET, 0));
     }
 
     const bodyYaw = new THREE.Euler().setFromQuaternion(this.camera.quaternion, "YXZ").y;
     const horizontalSpeed = Math.hypot(this.player.velocity.x, this.player.velocity.z);
     this.playerModel.update(this.player.position, bodyYaw, horizontalSpeed, dt);
-    this.playerModel.visible = activeViewMode === "third" && !driving;
+    this.playerModel.visible = activeViewMode === "third" && !driving && !ridingDragon;
 
     const hotbarState = useHotbarStore.getState();
     this.heldItem.update(dt, hotbarState.mode, HOTBAR_SLOTS[hotbarState.selectedIndex], horizontalSpeed);
-    this.heldItem.group.visible = activeViewMode === "first" && !driving;
+    this.heldItem.group.visible = activeViewMode === "first" && !driving && !ridingDragon;
 
     const timeState = useTimeStore.getState();
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
@@ -829,15 +914,15 @@ export class GameLoop {
     for (const torch of this.torchVisuals) torch.update(dt);
     for (const torch of this.caveTorches) torch.update(dt);
     for (const flag of this.flagVisuals) flag.update(dt);
-    this.dragon.update(dt);
     const dark = isNight(timeOfDay);
     for (const car of this.cars) car.setHeadlightsOn(dark);
     for (const lamp of this.streetLamps) lamp.setOn(dark);
 
-    // While driving, point the arrow at the car's actual heading rather
-    // than the free-look camera's yaw (see the third-person chase cam
-    // above — mouse-look can face anywhere independent of travel).
-    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw : bodyYaw;
+    // While driving or riding, point the arrow at the vehicle's actual
+    // heading rather than the free-look camera's yaw (see the
+    // third-person chase cam above — mouse-look can face anywhere
+    // independent of travel).
+    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw : ridingDragon ? this.dragon.mesh.rotation.y : bodyYaw;
     this.miniMap.update(
       this.player.position.x,
       this.player.position.z,
@@ -855,7 +940,17 @@ export class GameLoop {
 
     useHudStore
       .getState()
-      .setVehiclePrompt(driving ? "exit" : this.findNearbyEnterableCar() ? "enter" : null);
+      .setVehiclePrompt(
+        driving
+          ? "Press E to exit vehicle"
+          : ridingDragon
+            ? "Press E to dismount"
+            : this.findNearbyEnterableCar()
+              ? "Press E to drive"
+              : this.canMountDragon()
+                ? "Press E to mount the dragon"
+                : null,
+      );
 
     this.currentTarget = this.computeTargetHit();
     if (this.currentTarget) {
