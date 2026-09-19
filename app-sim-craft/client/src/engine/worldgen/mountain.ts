@@ -93,6 +93,13 @@ export const DRAGON_PERCH = { x: CHAMBER_CENTER.x, z: CHAMBER_CENTER.z };
 export const DRAGON_FLIGHT_RADIUS = MOUNTAIN_RADIUS + 44;
 export const DRAGON_FLIGHT_ALTITUDE_ABOVE_PEAK = 30;
 
+// The crimson dragon roosts on a flattened platform at the very summit and
+// circles the mountain the other way, wider and higher than the cave
+// dragon (see engine/Dragon.ts's createDragons).
+export const SUMMIT_ROOST_RADIUS = 10;
+export const SUMMIT_DRAGON_FLIGHT_RADIUS = MOUNTAIN_RADIUS + 90;
+export const SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK = 60;
+
 /** Torch positions ringing the chamber wall, evenly spaced — see GameLoop's landmark Torch visuals (always lit, same as CAMPFIRE_SITES). */
 export const CAVE_TORCH_OFFSETS: { x: number; z: number }[] = Array.from({ length: 6 }, (_, i) => {
   const angle = (i / 6) * Math.PI * 2;

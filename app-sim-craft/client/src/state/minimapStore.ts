@@ -10,11 +10,18 @@ interface MinimapState {
   worldRange: number;
   zoomIn: () => void;
   zoomOut: () => void;
+  // The full-screen overview map (ui/FullMap.tsx), toggled with M.
+  fullMapOpen: boolean;
+  toggleFullMap: () => void;
+  closeFullMap: () => void;
 }
 
 export const useMinimapStore = create<MinimapState>((set) => ({
   zoomIndex: DEFAULT_ZOOM_INDEX,
   worldRange: MINIMAP_ZOOM_LEVELS[DEFAULT_ZOOM_INDEX],
+  fullMapOpen: false,
+  toggleFullMap: () => set((s) => ({ fullMapOpen: !s.fullMapOpen })),
+  closeFullMap: () => set({ fullMapOpen: false }),
   zoomIn: () =>
     set((s) => {
       const zoomIndex = Math.max(0, s.zoomIndex - 1);

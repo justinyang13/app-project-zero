@@ -9,8 +9,18 @@ import { Player, EYE_HEIGHT, type PlayerInput } from "./Player";
 import { ChunkManager, RENDER_DISTANCE_COLUMNS } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
 import { Creature, findSurfaceY, ALL_SPECIES } from "./Creature";
-import { Fish, findNearbyWaterSpots, sampleRandom, ALL_FISH_SPECIES } from "./Fish";
-import { Dragon, type DragonRideInput } from "./Dragon";
+import {
+  Fish,
+  findNearbyWaterSpots,
+  sampleRandom,
+  pickSwimY,
+  spawnDepthFor,
+  ALL_FISH_SPECIES,
+  BIG_AQUATIC_SPECIES,
+} from "./Fish";
+import { Dragon, createDragons } from "./Dragon";
+import type { Rideable, RideInput } from "./Rideable";
+import { DEEP_LAKE_CENTER, DEEP_LAKE_RADIUS } from "./worldgen/deepLake";
 import { Car, type CarInput } from "./Car";
 import { pointAtProgress, LOOP_PERIMETER, FLAT_ROAD_Y } from "./worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
@@ -41,12 +51,9 @@ const THIRD_PERSON_DISTANCE = 4.5;
 const THIRD_PERSON_UP_OFFSET = 1.0;
 const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped position
 const ENTER_VEHICLE_RANGE = 3;
-const DRAGON_MOUNT_RANGE = 14; // generous — the dragon is huge and often airborne, unlike a parked car
-const DRAGON_RIDE_EYE_HEIGHT = 8; // roughly shoulder/neck height on its back
-const DRAGON_RIDE_THIRD_PERSON_DISTANCE = 18; // pulled back further than a car's chase cam so the whole dragon fits in view
 const CAR_COUNT = 6;
 const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0xecf0f1, 0xe67e22];
-const TUNNEL_INTERVAL = 0.15; // seconds between auto-breaks while holding Tunnel mode's primary action
+const HOLD_REPEAT_INTERVAL = 0.15; // seconds between repeats while the primary action is held down
 
 type ViewMode = "first" | "third";
 
@@ -69,7 +76,12 @@ export class GameLoop {
   private creaturesSpawned = false;
   private readonly fish: Fish[] = [];
   private fishSpawned = false;
-  private readonly dragon: Dragon;
+  private readonly dragons: Dragon[];
+  // Whatever the player is currently riding (an animal, a shark/whale, the
+  // dragon) — cars are separate (drivingCar) since they're on rails and
+  // have their own AI/parking rules.
+  private mounted: Rideable | null = null;
+  private lastMapYaw = 0;
   private readonly caveTorches: Torch[];
   private readonly cars: Car[] = [];
   private carsSpawned = false;
@@ -103,11 +115,10 @@ export class GameLoop {
   private touchFlyDownHeld = false;
 
   // Whether the primary action (left mouse / the touch action button) is
-  // currently held down — only Tunnel mode reads this (see the frame
-  // loop's tunnelCooldown countdown below); every other mode still fires
-  // once per triggerPrimaryAction call, same as before.
+  // currently held down — every mode repeats its action while it is (see
+  // the frame loop's holdCooldown countdown below).
   private primaryActionHeld = false;
-  private tunnelCooldown = 0;
+  private holdCooldown = 0;
 
   private simTick = 0;
   private accumulator = 0;
@@ -196,8 +207,8 @@ export class GameLoop {
     this.streetLamps = LAMP_SITES.map((site, i) => new StreetLamp(site.x, lampYs[i], site.z, LAMP_POST_HEIGHT));
     for (const lamp of this.streetLamps) this.scene.add(lamp.group);
 
-    this.dragon = new Dragon(caveFloorY, peakY);
-    this.scene.add(this.dragon.mesh);
+    this.dragons = createDragons(caveFloorY, peakY);
+    for (const dragon of this.dragons) this.scene.add(dragon.mesh);
 
     this.caveTorches = CAVE_TORCH_OFFSETS.map(
       (offset) => new Torch(CHAMBER_CENTER.x + offset.x, caveFloorY, CHAMBER_CENTER.z + offset.z),
@@ -216,8 +227,8 @@ export class GameLoop {
     document.addEventListener("visibilitychange", this.handleBeforeUnload);
     canvas.addEventListener("mousedown", this.handleMouseDown);
     // On window, not canvas — releasing the button after dragging off
-    // the canvas (or off-screen entirely) must still stop Tunnel mode
-    // from digging forever.
+    // the canvas (or off-screen entirely) must still stop a held action
+    // from repeating forever.
     window.addEventListener("mouseup", this.handleMouseUp);
     canvas.addEventListener("contextmenu", this.handleContextMenu);
     canvas.addEventListener("wheel", this.handleWheel);
@@ -256,6 +267,18 @@ export class GameLoop {
     // the canvas out of view the moment the player tries to jump —
     // preventDefault on every game-control key avoids that class of bug.
     if (GameLoop.GAME_KEYS.has(e.code)) e.preventDefault();
+    if (e.code === "KeyM" && !e.repeat) {
+      // Full-screen map: M opens and closes it. While it's open the rest
+      // of the game keys are ignored (below) so WASD etc. don't move the
+      // player around behind the overlay.
+      useMinimapStore.getState().toggleFullMap();
+      this.pressed.clear();
+      return;
+    }
+    if (useMinimapStore.getState().fullMapOpen) {
+      if (e.code === "Escape") useMinimapStore.getState().closeFullMap();
+      return;
+    }
     this.pressed.add(e.code);
     if (e.code === "F3") {
       e.preventDefault();
@@ -271,11 +294,13 @@ export class GameLoop {
         // While driving, double-tap Space is nitro instead of the fly
         // toggle — flying isn't meaningful for a car, so the same
         // gesture is free to mean something else in that context. While
-        // riding the dragon, Space is already climb (buildDragonRideInput)
-        // and the player's own flying state is inert (position is glued
-        // to the dragon), so the tap is simply ignored there.
+        // riding the dragon it's turbo; on any other mount Space is already
+        // climb (buildRideInput) and the player's own flying state is
+        // inert (position is glued to the mount), so the tap is ignored.
         if (this.drivingCar) this.drivingCar.activateNitro();
-        else if (!this.dragon.ridden) this.player.flying = !this.player.flying;
+        else if (this.mounted) {
+          if (this.mounted instanceof Dragon) this.mounted.toggleTurbo();
+        } else this.player.flying = !this.player.flying;
       }
       this.lastSpaceTapTime = now;
     }
@@ -289,14 +314,13 @@ export class GameLoop {
     // Direct mode hotkeys, alongside B's cycle — Z/X/C/V mirrors the
     // Hotbar's Break/Build/Torch/Flag button order (see ui/Hotbar.tsx).
     if (e.code === "KeyZ" && !e.repeat) useHotbarStore.getState().setMode("break");
-    if (e.code === "KeyT" && !e.repeat) useHotbarStore.getState().setMode("tunnel");
     if (e.code === "KeyX" && !e.repeat) useHotbarStore.getState().setMode("place");
     if (e.code === "KeyC" && !e.repeat) useHotbarStore.getState().setMode("torch");
     if (e.code === "KeyV" && !e.repeat) useHotbarStore.getState().setMode("flag");
     if (e.code === "KeyE" && !e.repeat) {
       this.handleInteractKey();
     }
-    if (e.code === "KeyM" && !e.repeat) {
+    if (e.code === "KeyK" && !e.repeat) {
       this.toggleMarkerAtPlayer();
     }
     if (e.code === "Minus" && !e.repeat) useMinimapStore.getState().zoomOut();
@@ -335,8 +359,7 @@ export class GameLoop {
     if (e.button === 0) {
       // Left click does whichever action the current mode selects — see
       // triggerPrimaryAction, shared with the touch action button below.
-      // Held state only matters to Tunnel mode (see setPrimaryActionHeld),
-      // but it's harmless to always track it.
+      // Held state drives the repeat-while-held loop in frame().
       this.primaryActionHeld = true;
       this.triggerPrimaryAction();
     } else if (e.button === 2) {
@@ -364,22 +387,23 @@ export class GameLoop {
    * above) and the touch action button (ui/TouchActionButtons.tsx via
    * engine/activeGameLoop.ts), so both trigger identically instead of
    * touch inventing its own semantics. Fires once per call, matching
-   * mousedown's own non-repeating behavior for every mode except
-   * Tunnel, whose continued digging while held is driven by the frame
-   * loop's tunnelCooldown countdown instead (see frame() below) — this
-   * call still breaks the first block immediately rather than waiting
-   * out that cooldown, and resets it so the two don't double up.
+   * mousedown's own single fire; continued repeats while the button is
+   * held come from the frame loop's holdCooldown countdown (see frame()
+   * below), which calls back in with `isRepeat`. The initial call acts
+   * immediately rather than waiting out that cooldown, and resets it so
+   * the two don't double up.
+   *
+   * Torch/Flag are toggles on the first press (pressing on an existing
+   * one removes it), but a *repeat* only ever adds — otherwise holding
+   * the button over one spot would flip it on and off every interval.
    */
-  triggerPrimaryAction(): void {
+  triggerPrimaryAction(isRepeat = false): void {
     const mode = useHotbarStore.getState().mode;
     if (mode === "place") this.placeSelectedBlock();
     else if (mode === "break") this.breakTargetedBlock();
-    else if (mode === "tunnel") {
-      this.breakTargetedBlock();
-      this.tunnelCooldown = TUNNEL_INTERVAL;
-    }
-    else if (mode === "torch") this.placeTorchAtTarget();
-    else if (mode === "flag") this.placeFlagAtTarget();
+    else if (mode === "torch") this.placeTorchAtTarget(isRepeat);
+    else if (mode === "flag") this.placeFlagAtTarget(isRepeat);
+    this.holdCooldown = HOLD_REPEAT_INTERVAL;
   }
 
   /** Mirrors the desktop double-tap-Space fly toggle — a single tap is enough on touch, see ui/TouchActionButtons.tsx. */
@@ -519,10 +543,41 @@ export class GameLoop {
 
   private spawnFishAt(spot: { x: number; z: number; top: number; bottom: number }): void {
     const species = ALL_FISH_SPECIES[Math.floor(Math.random() * ALL_FISH_SPECIES.length)];
-    const y = spot.bottom + 0.3 + Math.random() * Math.max(0, spot.top - spot.bottom - 0.7);
-    const fish = new Fish(species, spot.x + Math.random(), y, spot.z + Math.random());
+    this.addFish(new Fish(species, spot.x + Math.random(), pickSwimY(species, spot), spot.z + Math.random()));
+  }
+
+  private addFish(fish: Fish): void {
     this.fish.push(fish);
     this.scene.add(fish.mesh);
+  }
+
+  // Sharks and whales only live in the deep lake (worldgen/deepLake.ts) —
+  // nowhere else is deep enough — so instead of the ambient near-the-player
+  // scan they're topped back up to a fixed headcount by scanning the lake
+  // itself, whenever the player is anywhere near it. Exempt from MAX_FISH
+  // (that cap is about the swarm of tiny ones) and from the tighter
+  // despawn radius below, so one doesn't vanish the moment the player
+  // paddles across a lake that's wider than the reef fish's 90 blocks.
+  private static readonly BIG_AQUATIC_TARGETS = { shark: 5, whale: 2 } as const;
+  private static readonly BIG_AQUATIC_DESPAWN_RADIUS = 320;
+
+  private topUpBigAquatics(): void {
+    const p = this.player.position;
+    if (Math.hypot(p.x - DEEP_LAKE_CENTER.x, p.z - DEEP_LAKE_CENTER.z) > DEEP_LAKE_RADIUS + 120) return;
+    for (const species of BIG_AQUATIC_SPECIES) {
+      const have = this.fish.filter((f) => f.species === species).length;
+      if (have >= GameLoop.BIG_AQUATIC_TARGETS[species]) continue;
+      const spots = findNearbyWaterSpots(
+        this.world,
+        DEEP_LAKE_CENTER.x,
+        DEEP_LAKE_CENTER.z,
+        DEEP_LAKE_RADIUS,
+        200,
+        spawnDepthFor(species),
+      );
+      const [spot] = sampleRandom(spots, 1);
+      if (spot) this.addFish(new Fish(species, spot.x + Math.random(), pickSwimY(species, spot), spot.z + Math.random()));
+    }
   }
 
   private static readonly MAX_FISH = 40;
@@ -534,7 +589,7 @@ export class GameLoop {
     for (let i = this.fish.length - 1; i >= 0; i--) {
       const f = this.fish[i];
       const dist = Math.hypot(f.position.x - this.player.position.x, f.position.z - this.player.position.z);
-      if (dist <= GameLoop.FISH_DESPAWN_RADIUS) continue;
+      if (dist <= (f.isBig ? GameLoop.BIG_AQUATIC_DESPAWN_RADIUS : GameLoop.FISH_DESPAWN_RADIUS)) continue;
       this.scene.remove(f.mesh);
       f.dispose();
       this.fish.splice(i, 1);
@@ -544,6 +599,7 @@ export class GameLoop {
     this.fishSpawnTimer -= dt;
     if (this.fishSpawnTimer > 0) return;
     this.fishSpawnTimer = GameLoop.FISH_SPAWN_INTERVAL;
+    this.topUpBigAquatics();
     if (this.fish.length >= GameLoop.MAX_FISH) return;
 
     const spots = findNearbyWaterSpots(this.world, this.player.position.x, this.player.position.z, 40, 60);
@@ -554,10 +610,21 @@ export class GameLoop {
     }
   }
 
+  /** What the full-screen map (ui/FullMap.tsx) needs each frame it's open: the seed to sample terrain from, where the player is and which way they face, and the live landmark markers (not the swarm of creatures/fish). */
+  getMapSnapshot(): { seed: number; playerX: number; playerZ: number; playerYaw: number; markers: MiniMapMarker[] } {
+    return {
+      seed: this.world.seed,
+      playerX: this.player.position.x,
+      playerZ: this.player.position.z,
+      playerYaw: this.lastMapYaw,
+      markers: this.buildMiniMapMarkers().filter((m) => m.kind !== "creature" && m.kind !== "fish" && m.kind !== "torch"),
+    };
+  }
+
   /** Landmark + live-creature markers for the minimap. Cheap to rebuild every frame — a handful of fixed points plus one per creature/fish. */
   private buildMiniMapMarkers(): MiniMapMarker[] {
     const markers: MiniMapMarker[] = [{ x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, kind: "castle" }];
-    markers.push({ x: this.dragon.position.x, z: this.dragon.position.z, kind: "dragon" });
+    for (const dragon of this.dragons) markers.push({ x: dragon.position.x, z: dragon.position.z, kind: "dragon" });
     for (const site of CAMPFIRE_SITES) markers.push({ x: site.x, z: site.z, kind: "campfire" });
     for (const creature of this.creatures) markers.push({ x: creature.position.x, z: creature.position.z, kind: "creature" });
     for (const f of this.fish) markers.push({ x: f.position.x, z: f.position.z, kind: "fish" });
@@ -627,65 +694,71 @@ export class GameLoop {
     }
   }
 
-  /** True when the player is close enough (3D — the dragon is often airborne) to mount it. */
-  private canMountDragon(): boolean {
-    const d = this.dragon.position;
+  /** Nearest rideable animal/creature/dragon within its own mount range (3D — the dragon and the sea life aren't on the ground), or null. */
+  private findNearbyRideable(): Rideable | null {
+    let nearest: Rideable | null = null;
+    let nearestDist = Infinity;
     const p = this.player.position;
-    return Math.hypot(d.x - p.x, d.y - p.y, d.z - p.z) < DRAGON_MOUNT_RANGE;
-  }
-
-  /** E's dragon counterpart to toggleDriving — cars take priority when both are in range (matches findNearbyEnterableCar being checked first in handleInteractKey below). */
-  private toggleDragonRide(): void {
-    if (this.dragon.ridden) {
-      this.dragon.dismount();
-      // Step off to the side, re-grounded independently — same idea as
-      // toggleDriving's car exit, except a dragon dismounted mid-flight
-      // has no ground under it at all, so falling back is preferred to
-      // an uncontrolled plummet.
-      const exitX = this.dragon.position.x + Math.sin(this.dragon.mesh.rotation.y + Math.PI / 2) * 4;
-      const exitZ = this.dragon.position.z + Math.cos(this.dragon.mesh.rotation.y + Math.PI / 2) * 4;
-      const groundY = findSurfaceY(this.world, exitX, exitZ);
-      if (groundY !== null && this.dragon.position.y - groundY < 20) {
-        this.player.position = { x: exitX, y: groundY, z: exitZ };
-        this.player.flying = false;
-      } else {
-        this.player.position = { x: exitX, y: this.dragon.position.y, z: exitZ };
-        this.player.flying = true;
+    const consider = (r: Rideable): void => {
+      if (!r.rideable || r.ridden) return;
+      const d = Math.hypot(r.position.x - p.x, r.position.y - p.y, r.position.z - p.z);
+      if (d < r.mountRange && d < nearestDist) {
+        nearest = r;
+        nearestDist = d;
       }
-      this.player.velocity = { x: 0, y: 0, z: 0 };
-      return;
-    }
-
-    if (this.canMountDragon()) this.dragon.mount();
+    };
+    for (const dragon of this.dragons) consider(dragon);
+    for (const creature of this.creatures) consider(creature);
+    for (const f of this.fish) consider(f);
+    return nearest;
   }
 
-  /** Routes E to whichever mount makes sense right now: exit/dismount whatever the player is already on, otherwise a nearby car (matches the old car-only behavior) before falling back to the dragon. */
+  private mountRideable(target: Rideable): void {
+    this.mounted = target;
+    target.mount();
+    // Riding isn't flying — drop the player's own fly toggle so it isn't
+    // still on when they step off a grounded mount.
+    this.player.flying = false;
+  }
+
+  private dismountRideable(): void {
+    const mount = this.mounted;
+    if (!mount) return;
+    const spot = mount.dismount(this.world);
+    this.mounted = null;
+    this.player.position = { x: spot.x, y: spot.y, z: spot.z };
+    this.player.flying = spot.flying;
+    this.player.velocity = { x: 0, y: 0, z: 0 };
+  }
+
+  /** Routes E: get off whatever the player is on; otherwise hop in a nearby car (the original behavior), else climb onto the nearest rideable animal/dragon. */
   private handleInteractKey(): void {
     if (this.drivingCar) {
       this.toggleDriving();
       return;
     }
-    if (this.dragon.ridden) {
-      this.toggleDragonRide();
+    if (this.mounted) {
+      this.dismountRideable();
       return;
     }
     if (this.findNearbyEnterableCar()) {
       this.toggleDriving();
       return;
     }
-    this.toggleDragonRide();
+    const target = this.findNearbyRideable();
+    if (target) this.mountRideable(target);
   }
 
   private static readonly MARKER_TOGGLE_RANGE = 3;
   private static readonly TORCH_TOGGLE_RANGE = 1.5;
 
-  /** M toggles a custom minimap marker at the player's current spot — same toggle Flag build mode uses at the raycast target instead (see placeFlagAtTarget). Saved immediately (not just on unload) so a remembered spot survives a crash or hard-close. */
+  /** K toggles a custom minimap marker at the player's current spot — same toggle Flag build mode uses at the raycast target instead (see placeFlagAtTarget). Saved immediately (not just on unload) so a remembered spot survives a crash or hard-close. */
   private toggleMarkerAtPlayer(): void {
     this.toggleMarkerAt(this.player.position.x, this.player.position.y, this.player.position.z);
   }
 
   /** Removes the nearest marker within range, or drops a new one — shared by the M key (at the player) and Flag build mode (at the raycast target). */
-  private toggleMarkerAt(x: number, y: number, z: number): void {
+  private toggleMarkerAt(x: number, y: number, z: number, addOnly = false): void {
     let nearestIndex = -1;
     let nearestDist = GameLoop.MARKER_TOGGLE_RANGE;
     for (let i = 0; i < this.customMarkers.length; i++) {
@@ -698,6 +771,7 @@ export class GameLoop {
     }
 
     if (nearestIndex >= 0) {
+      if (addOnly) return;
       this.customMarkers.splice(nearestIndex, 1);
     } else {
       this.customMarkers.push({ x, y, z, label: `Marker ${this.customMarkers.length + 1}` });
@@ -707,10 +781,10 @@ export class GameLoop {
   }
 
   /** Flag build mode: drop/pick up a flag (and its minimap marker) at whatever block the player is looking at. */
-  private placeFlagAtTarget(): void {
+  private placeFlagAtTarget(addOnly = false): void {
     if (!this.currentTarget) return;
     const { x, y, z } = this.currentTarget.placeAt;
-    this.toggleMarkerAt(x + 0.5, y, z + 0.5);
+    this.toggleMarkerAt(x + 0.5, y, z + 0.5, addOnly);
   }
 
   private syncFlagVisuals(): void {
@@ -727,13 +801,13 @@ export class GameLoop {
   }
 
   /** Torch build mode: place/remove a portable light at whatever block the player is looking at. */
-  private placeTorchAtTarget(): void {
+  private placeTorchAtTarget(addOnly = false): void {
     if (!this.currentTarget) return;
     const { x, y, z } = this.currentTarget.placeAt;
-    this.toggleTorchAt(x, y, z);
+    this.toggleTorchAt(x, y, z, addOnly);
   }
 
-  private toggleTorchAt(x: number, y: number, z: number): void {
+  private toggleTorchAt(x: number, y: number, z: number, addOnly = false): void {
     let nearestIndex = -1;
     let nearestDist = GameLoop.TORCH_TOGGLE_RANGE;
     for (let i = 0; i < this.torchRecords.length; i++) {
@@ -746,6 +820,7 @@ export class GameLoop {
     }
 
     if (nearestIndex >= 0) {
+      if (addOnly) return;
       this.torchRecords.splice(nearestIndex, 1);
     } else {
       this.torchRecords.push({ x, y, z });
@@ -773,7 +848,7 @@ export class GameLoop {
     };
   }
 
-  private buildDragonRideInput(): DragonRideInput {
+  private buildRideInput(): RideInput {
     return {
       throttle: (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0),
       steer: (this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0),
@@ -842,9 +917,9 @@ export class GameLoop {
         // and save-on-exit) glued to the car while it's being driven.
         this.player.position = { ...this.drivingCar.position };
         this.player.velocity = { x: 0, y: 0, z: 0 };
-      } else if (this.dragon.ridden) {
-        // Movement itself is applied once per frame below (Dragon.update,
-        // same cadence its autonomous flight already uses) — skip the
+      } else if (this.mounted) {
+        // Movement itself is applied once per frame below (tickRide, same
+        // cadence the dragon's autonomous flight already uses) — skip the
         // player's own ground/gravity physics here so nothing fights it.
         this.player.velocity = { x: 0, y: 0, z: 0 };
       } else {
@@ -861,36 +936,36 @@ export class GameLoop {
       steps++;
     }
 
-    // Dragon movement happens here — once per rendered frame, the same
-    // cadence its autonomous flight already used — rather than inside the
-    // fixed SIM_DT loop above, so one Dragon.update call handles both
-    // player-ridden and autonomous motion without splitting the state
-    // machine across two call sites. Runs before the camera/eye math below
-    // so a ridden frame's camera follows where the dragon actually ends up
-    // this frame, not last frame's position.
-    if (this.dragon.ridden) {
-      this.dragon.update(dt, this.buildDragonRideInput());
-      this.player.position = { ...this.dragon.position };
+    // Ridden movement happens here — once per rendered frame, the same
+    // cadence the dragon's autonomous flight already used — rather than
+    // inside the fixed SIM_DT loop above. Runs before the camera/eye math
+    // below so a ridden frame's camera follows where the mount actually
+    // ends up this frame, not last frame's position. (The dragon's own
+    // update() doubles as its tickRide, so it's only ticked separately
+    // when it isn't the one being ridden.)
+    if (this.mounted) {
+      this.mounted.tickRide(dt, this.world, this.buildRideInput());
+      this.player.position = { ...this.mounted.position };
       this.player.velocity = { x: 0, y: 0, z: 0 };
-    } else {
-      this.dragon.update(dt);
     }
+    for (const dragon of this.dragons) if (dragon !== this.mounted) dragon.update(dt);
 
     const driving = this.drivingCar !== null;
-    const ridingDragon = this.dragon.ridden;
+    const mount = this.mounted;
+    const riding = mount !== null;
     // Driving/riding always uses the third-person chase cam — there's no
     // in-cabin (or in-saddle) first-person view — but mouse-look still
     // free-rotates the camera around that anchor same as on foot.
-    const activeViewMode: ViewMode = driving || ridingDragon ? "third" : this.viewMode;
+    const activeViewMode: ViewMode = driving || riding ? "third" : this.viewMode;
     const eyeX = this.player.position.x;
-    const eyeY = this.player.position.y + (ridingDragon ? DRAGON_RIDE_EYE_HEIGHT : driving ? DRIVING_EYE_HEIGHT : EYE_HEIGHT);
+    const eyeY = this.player.position.y + (mount ? mount.rideEyeHeight : driving ? DRIVING_EYE_HEIGHT : EYE_HEIGHT);
     const eyeZ = this.player.position.z;
     if (activeViewMode === "first") {
       this.camera.position.set(eyeX, eyeY, eyeZ);
     } else {
       const forward = new THREE.Vector3();
       this.camera.getWorldDirection(forward);
-      const distance = ridingDragon ? DRAGON_RIDE_THIRD_PERSON_DISTANCE : THIRD_PERSON_DISTANCE;
+      const distance = mount ? mount.rideCameraDistance : THIRD_PERSON_DISTANCE;
       this.camera.position
         .set(eyeX, eyeY, eyeZ)
         .addScaledVector(forward, -distance)
@@ -899,12 +974,12 @@ export class GameLoop {
 
     const bodyYaw = new THREE.Euler().setFromQuaternion(this.camera.quaternion, "YXZ").y;
     const horizontalSpeed = Math.hypot(this.player.velocity.x, this.player.velocity.z);
-    this.playerModel.update(this.player.position, bodyYaw, horizontalSpeed, dt);
-    this.playerModel.visible = activeViewMode === "third" && !driving && !ridingDragon;
+    this.playerModel.update(this.player.position, bodyYaw, horizontalSpeed, dt, this.player.flying);
+    this.playerModel.visible = activeViewMode === "third" && !driving && !riding;
 
     const hotbarState = useHotbarStore.getState();
     this.heldItem.update(dt, hotbarState.mode, HOTBAR_SLOTS[hotbarState.selectedIndex], horizontalSpeed);
-    this.heldItem.group.visible = activeViewMode === "first" && !driving && !ridingDragon;
+    this.heldItem.group.visible = activeViewMode === "first" && !driving && !riding;
 
     const timeState = useTimeStore.getState();
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
@@ -922,7 +997,8 @@ export class GameLoop {
     // heading rather than the free-look camera's yaw (see the
     // third-person chase cam above — mouse-look can face anywhere
     // independent of travel).
-    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw : ridingDragon ? this.dragon.mesh.rotation.y : bodyYaw;
+    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw : mount ? mount.rideYaw : bodyYaw;
+    this.lastMapYaw = miniMapYaw;
     this.miniMap.update(
       this.player.position.x,
       this.player.position.z,
@@ -938,17 +1014,18 @@ export class GameLoop {
     this.updateAmbientFish(dt);
     this.trySpawnCars();
 
+    const rideTarget = driving || mount ? null : this.findNearbyEnterableCar() ? null : this.findNearbyRideable();
     useHudStore
       .getState()
       .setVehiclePrompt(
         driving
           ? "Press E to exit vehicle"
-          : ridingDragon
+          : mount
             ? "Press E to dismount"
             : this.findNearbyEnterableCar()
               ? "Press E to drive"
-              : this.canMountDragon()
-                ? "Press E to mount the dragon"
+              : rideTarget
+                ? `Press E to ride the ${rideTarget.rideName}`
                 : null,
       );
 
@@ -964,18 +1041,15 @@ export class GameLoop {
       this.highlightMesh.visible = false;
     }
 
-    // Tunnel mode's hold-to-keep-digging: re-checked every frame against
-    // the just-recomputed currentTarget above, so breaking through one
+    // Hold-to-repeat for every mode: re-checked every frame against the
+    // just-recomputed currentTarget above, so e.g. breaking through one
     // block immediately continues into whatever's now exposed behind it
     // instead of needing a fresh click per block.
-    if (this.primaryActionHeld && useHotbarStore.getState().mode === "tunnel") {
-      this.tunnelCooldown -= dt;
-      if (this.tunnelCooldown <= 0) {
-        this.breakTargetedBlock();
-        this.tunnelCooldown = TUNNEL_INTERVAL;
-      }
+    if (this.primaryActionHeld) {
+      this.holdCooldown -= dt;
+      if (this.holdCooldown <= 0) this.triggerPrimaryAction(true);
     } else {
-      this.tunnelCooldown = 0;
+      this.holdCooldown = 0;
     }
 
     this.renderer.render(this.scene, this.camera);
@@ -1093,8 +1167,10 @@ export class GameLoop {
       this.scene.remove(lamp.group);
       lamp.dispose();
     }
-    this.scene.remove(this.dragon.mesh);
-    this.dragon.dispose();
+    for (const dragon of this.dragons) {
+      this.scene.remove(dragon.mesh);
+      dragon.dispose();
+    }
     for (const torch of this.caveTorches) {
       this.scene.remove(torch.group);
       torch.dispose();

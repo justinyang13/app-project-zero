@@ -116,8 +116,17 @@ export class Car {
       this.yaw -= input.steer * DRIVEN_TURN_RATE * turnScale * dt;
     }
 
-    this.position.x += Math.sin(this.yaw) * this.speed * dt;
-    this.position.z += Math.cos(this.yaw) * this.speed * dt;
+    const nextX = this.position.x + Math.sin(this.yaw) * this.speed * dt;
+    const nextZ = this.position.z + Math.cos(this.yaw) * this.speed * dt;
+    // findSurfaceY reports water (and not-yet-loaded ground) as "no
+    // ground", so a car can't be driven into a lake — it just stops at the
+    // shore instead of skimming across the surface.
+    if (findSurfaceY(world, nextX, nextZ) === null) {
+      this.speed = 0;
+    } else {
+      this.position.x = nextX;
+      this.position.z = nextZ;
+    }
 
     this.snapToGround(world);
   }

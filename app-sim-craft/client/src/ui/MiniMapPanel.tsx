@@ -15,6 +15,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
   const zoomIndex = useMinimapStore((s) => s.zoomIndex);
   const zoomIn = useMinimapStore((s) => s.zoomIn);
   const zoomOut = useMinimapStore((s) => s.zoomOut);
+  const toggleFullMap = useMinimapStore((s) => s.toggleFullMap);
 
   return (
     <div
@@ -103,8 +104,26 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           color: "rgba(255, 255, 255, 0.8)",
         }}
       >
-        M: mark spot · ZTXCV/B: mode · +/-: zoom
+        M: full map · K: mark spot · ZTXCV/B: mode · +/-: zoom
       </div>
+      <button
+        onClick={toggleFullMap}
+        title="Open the full-screen world map (M)"
+        style={{
+          pointerEvents: "auto",
+          padding: "2px 8px",
+          background: "rgba(0, 0, 0, 0.6)",
+          border: "1px solid rgba(255, 255, 255, 0.5)",
+          borderRadius: 3,
+          color: "#fff",
+          fontFamily: "monospace",
+          fontSize: 10,
+          cursor: "pointer",
+          touchAction: "manipulation",
+        }}
+      >
+        Full map
+      </button>
     </div>
   );
 }

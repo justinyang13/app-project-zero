@@ -38,6 +38,57 @@ const MOON_COLOR = new THREE.Color(0xaebfe0);
 
 const ORBIT_RADIUS = 300;
 
+const STAR_RADIUS = 280;
+const STAR_COUNT = 1500;
+const BRIGHT_STAR_COUNT = 160;
+
+/** Tiny deterministic PRNG so the constellations are the same every session (mulberry32). */
+function mulberry32(seed: number): () => number {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Scatters `count` points uniformly over a sphere, each a slightly different shade of white-blue-yellow. */
+function buildStarField(count: number, size: number, seed: number): THREE.Points {
+  const rand = mulberry32(seed);
+  const positions = new Float32Array(count * 3);
+  const colors = new Float32Array(count * 3);
+  const tint = new THREE.Color();
+  for (let i = 0; i < count; i++) {
+    const u = rand() * 2 - 1;
+    const phi = rand() * Math.PI * 2;
+    const r = Math.sqrt(1 - u * u);
+    positions.set([r * Math.cos(phi) * STAR_RADIUS, u * STAR_RADIUS, r * Math.sin(phi) * STAR_RADIUS], i * 3);
+    tint.setHSL(rand() < 0.5 ? 0.6 : 0.12, 0.35 * rand(), 0.75 + rand() * 0.25);
+    colors.set([tint.r, tint.g, tint.b], i * 3);
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("color", new THREE.BufferAttribute(colors, 3));
+  // Additive, unlit, fixed pixel size, drawn first with no depth test:
+  // terrain (and the sun/moon) simply paint over them, so distant
+  // mountains still silhouette against the stars, and fading a star out
+  // is just scaling its color toward black (adding nothing to the sky).
+  const material = new THREE.PointsMaterial({
+    size,
+    sizeAttenuation: false,
+    vertexColors: true,
+    fog: false,
+    depthTest: false,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.renderOrder = -1000;
+  points.frustumCulled = false;
+  return points;
+}
+
 /** Fraction of the day elapsed right now, in [0, 1) — a pure read of the real clock. */
 export function getSystemTimeOfDay(): number {
   const now = new Date();
@@ -80,9 +131,21 @@ export class Sky {
   private readonly sunMesh: THREE.Mesh;
   private readonly moonMesh: THREE.Mesh;
   private readonly scene: THREE.Scene;
+  private readonly stars: THREE.Group;
+  private readonly dimStars: THREE.Points;
+  private readonly brightStars: THREE.Points;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+
+    // Many dim pinpricks plus a scattering of larger bright ones; the
+    // whole dome follows the player and turns slowly with the time of day.
+    this.dimStars = buildStarField(STAR_COUNT, 2.2, 0x57a125);
+    this.brightStars = buildStarField(BRIGHT_STAR_COUNT, 3.8, 0x9b3c1f);
+    this.stars = new THREE.Group();
+    this.stars.add(this.dimStars, this.brightStars);
+    this.stars.visible = false;
+    scene.add(this.stars);
 
     this.skyLight = new THREE.DirectionalLight(SUN_COLOR, DAY_SUN_INTENSITY);
     scene.add(this.skyLight);
@@ -149,13 +212,28 @@ export class Sky {
 
     this.ambientLight.intensity = THREE.MathUtils.lerp(NIGHT_AMBIENT, DAY_AMBIENT, day);
 
+    // Stars fade in through dusk and out through dawn, hidden entirely by day.
+    const starLevel = THREE.MathUtils.clamp(1 - day * 2.2, 0, 1);
+    this.stars.visible = starLevel > 0.01;
+    if (this.stars.visible) {
+      this.stars.position.set(playerPosition.x, playerPosition.y, playerPosition.z);
+      this.stars.rotation.z = t * Math.PI * 2; // the sky turns once a day, the same way the sun and moon orbit
+      const twinkle = 0.85 + 0.15 * Math.sin(performance.now() * 0.0013);
+      (this.dimStars.material as THREE.PointsMaterial).color.setScalar(starLevel * twinkle);
+      (this.brightStars.material as THREE.PointsMaterial).color.setScalar(starLevel * (1.05 - 0.15 * twinkle));
+    }
+
     const skyColor = skyColorAt(day);
     if (this.scene.background instanceof THREE.Color) this.scene.background.copy(skyColor);
     if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(skyColor);
   }
 
   dispose(): void {
-    this.scene.remove(this.skyLight, this.skyLight.target, this.ambientLight, this.sunMesh, this.moonMesh);
+    this.scene.remove(this.skyLight, this.skyLight.target, this.ambientLight, this.sunMesh, this.moonMesh, this.stars);
+    for (const field of [this.dimStars, this.brightStars]) {
+      field.geometry.dispose();
+      (field.material as THREE.Material).dispose();
+    }
     this.sunMesh.geometry.dispose();
     this.moonMesh.geometry.dispose();
   }

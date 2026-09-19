@@ -6,7 +6,6 @@ import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const MODES: { mode: BuildMode; label: string; color: string; hotkey: string; icon: () => ReactElement }[] = [
   { mode: "break", label: "Break", color: "#e0645a", hotkey: "Z", icon: () => <ToolIcon tool="pickaxe" size={20} /> },
-  { mode: "tunnel", label: "Tunnel", color: "#b98ae0", hotkey: "T", icon: () => <ToolIcon tool="shovel" size={20} /> },
   { mode: "place", label: "Build", color: "#6fbf3f", hotkey: "X", icon: () => <BuildGlyph /> },
   { mode: "torch", label: "Torch", color: "#ffb347", hotkey: "C", icon: () => <TorchGlyph /> },
   { mode: "flag", label: "Flag", color: "#ff4fd8", hotkey: "V", icon: () => <FlagGlyph /> },
@@ -93,11 +92,7 @@ export function Hotbar() {
           <button
             key={m.mode}
             onClick={() => setMode(m.mode)}
-            title={
-              m.mode === "tunnel"
-                ? `${m.label} — hold left-click to dig continuously (${m.hotkey}, or cycle with B)`
-                : `${m.label} — left-click to use (${m.hotkey}, or cycle with B)`
-            }
+            title={`${m.label} — hold left-click to keep going (${m.hotkey}, or cycle with B)`}
             style={{
               width: 48,
               height: 48,

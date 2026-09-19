@@ -10,6 +10,7 @@ import { TimeControl } from "./ui/TimeControl";
 import { VehiclePrompt } from "./ui/VehiclePrompt";
 import { MiniMapPanel } from "./ui/MiniMapPanel";
 import { MapSwitcher } from "./ui/MapSwitcher";
+import { FullMap } from "./ui/FullMap";
 import { WorldNameModal } from "./ui/WorldNameModal";
 import { TouchControls } from "./ui/TouchControls";
 import { TouchOverrideToggle } from "./ui/TouchOverrideToggle";
@@ -108,6 +109,7 @@ export function App() {
       <VehiclePrompt />
       <MiniMapPanel canvasRef={minimapCanvasRef} />
       <MapSwitcher />
+      <FullMap />
       <TouchControls />
       <TouchOverrideToggle />
     </>

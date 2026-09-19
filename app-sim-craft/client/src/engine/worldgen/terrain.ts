@@ -13,6 +13,7 @@ import { placeTrees } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
 import { isRoadColumn, FLAT_ROAD_Y } from "./roads";
 import { mountainHeightBoost } from "./mountain";
+import { deepLakeHeight } from "./deepLake";
 
 const SALT_TEMPERATURE = 0x5eed01;
 const SALT_HEIGHT = 0x5eed02;
@@ -28,6 +29,10 @@ const ROAD_ID = getBlockByKey("asphalt").id;
 // flow simulation yet, see the water BlockDef's own note).
 export const SEA_LEVEL = 64;
 
+// Vertical room above the tallest column reserved for trees — the tallest
+// pine (worldgen/trees.ts) tops out 16 blocks above its ground.
+const TREE_HEADROOM = 18;
+
 export interface ColumnSample {
   height: number;
   biome: BiomeDef;
@@ -42,8 +47,9 @@ export function sampleColumn(seed: number, worldX: number, worldZ: number): Colu
   const biome = pickBiome(temperature);
 
   const detail = fbm2D(heightNoise, worldX, worldZ, 4, 1 / 96, 0.5);
-  const height =
+  const naturalHeight =
     Math.round(biome.heightBase + detail * biome.heightAmplitude) + mountainHeightBoost(seed, worldX, worldZ);
+  const height = deepLakeHeight(naturalHeight, worldX, worldZ, SEA_LEVEL);
 
   return { height, biome };
 }
@@ -72,12 +78,13 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
     }
   }
 
-  // +8 headroom above the tallest column so a tree's trunk+canopy never
+  // Headroom above the tallest column (TREE_HEADROOM — enough for a tall
+  // pine) so a tree's trunk+canopy never
   // needs a vertical chunk that wasn't allocated (see worldgen/trees.ts),
   // plus whatever a fixed structure overlapping this chunk needs (a
   // castle tower reaches well above typical terrain — see
   // worldgen/structures.ts).
-  const maxCy = maxChunkYFor(Math.max(maxHeight + 8, SEA_LEVEL, FLAT_ROAD_Y, structureMaxYFor(seed, cx, cz)));
+  const maxCy = maxChunkYFor(Math.max(maxHeight + TREE_HEADROOM, SEA_LEVEL, FLAT_ROAD_Y, structureMaxYFor(seed, cx, cz)));
   const chunks: Chunk[] = [];
   for (let cy = 0; cy <= maxCy; cy++) chunks.push(new Chunk({ cx, cy, cz }));
 

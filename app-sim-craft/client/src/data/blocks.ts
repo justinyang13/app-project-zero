@@ -253,6 +253,8 @@ export const BLOCKS: BlockDef[] = [
     dropTable: [{ itemKey: "asphalt", minCount: 1, maxCount: 1, chance: 1 }],
     color: 0x3c3c3e,
   },
+  leafVariant(16, "leaves_pine", "Pine Needles", 0x143f28),
+  leafVariant(17, "leaves_cherry", "Cherry Blossom", 0xf4a3c6),
 ];
 
 function leafVariant(id: number, key: string, name: string, color: number): BlockDef {

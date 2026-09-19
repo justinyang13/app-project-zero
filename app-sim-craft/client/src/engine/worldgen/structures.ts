@@ -18,6 +18,7 @@ import {
   CAVE_SPIKE_OFFSETS,
   CHAMBER_CENTER,
   MOUNTAIN_CENTER,
+  SUMMIT_ROOST_RADIUS,
   isCaveVoxel,
 } from "./mountain";
 
@@ -629,6 +630,29 @@ function stampDragonCave(seed: number, cx: number, cz: number, chunks: Chunk[]):
   stampCaveSpikes(cx, cz, chunks, caveFloorY);
 }
 
+const SUMMIT_CLEARANCE_RADIUS = SUMMIT_ROOST_RADIUS + 6;
+const SUMMIT_CLEARANCE_HEIGHT = 46; // room for a folded-winged, long-necked dragon plus its fire
+
+/** Flattens the mountain's very top into a round stone roost for the crimson dragon and clears the air above it, so the jagged ridge noise can't poke through the perched dragon. Only ever fills below/at the summit height and removes above it, so like the cave it needs no structureMaxYFor entry. */
+function stampSummitRoost(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
+  const r = SUMMIT_CLEARANCE_RADIUS;
+  if (!chunkOverlapsBox(cx, cz, MOUNTAIN_CENTER.x - r, MOUNTAIN_CENTER.x + r, MOUNTAIN_CENTER.z - r, MOUNTAIN_CENTER.z + r)) return;
+  const { peakY } = getStructureAnchors(seed);
+  for (let dx = -r; dx <= r; dx++) {
+    for (let dz = -r; dz <= r; dz++) {
+      const d = Math.hypot(dx, dz);
+      if (d > r) continue;
+      const wx = MOUNTAIN_CENTER.x + dx;
+      const wz = MOUNTAIN_CENTER.z + dz;
+      if (d <= SUMMIT_ROOST_RADIUS) {
+        for (let wy = peakY - 8; wy < peakY; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, WALL_ID);
+        setWorldVoxel(chunks, cx, cz, wx, peakY, wz, SANDSTONE_ID);
+      }
+      for (let wy = peakY + 1; wy <= peakY + SUMMIT_CLEARANCE_HEIGHT; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
+    }
+  }
+}
+
 /** Stamps every fixed structure that overlaps this chunk column. Mutates `chunks` in place. */
 export function stampStructures(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   stampBridge(seed, cx, cz, chunks);
@@ -639,4 +663,5 @@ export function stampStructures(seed: number, cx: number, cz: number, chunks: Ch
   stampStreetLamps(seed, cx, cz, chunks);
   stampResidentialArea(seed, cx, cz, chunks);
   stampDragonCave(seed, cx, cz, chunks);
+  stampSummitRoost(seed, cx, cz, chunks);
 }

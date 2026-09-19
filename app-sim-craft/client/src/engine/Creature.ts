@@ -10,6 +10,7 @@
 import * as THREE from "three";
 import type { World } from "./World";
 import { WATER_ID } from "./worldgen/terrain";
+import type { DismountSpot, Rideable, RideInput } from "./Rideable";
 
 export type CreatureSpecies =
   | "llama"
@@ -232,22 +233,117 @@ export function findSurfaceY(world: World, x: number, z: number): number | null 
   return null;
 }
 
-export class Creature {
+// Anything smaller than this (cat, rabbit, chicken, duck — about the size
+// of the tiny reef fish) is too small to sit on; everything from a fox up
+// can be ridden.
+const MIN_RIDEABLE_BODY_LENGTH = 0.55;
+const RIDE_SPEED_FACTOR = 3.6; // ridden speed = species wander speed * this, floored below
+const RIDE_MIN_SPEED = 5;
+const RIDE_ACCEL = 10;
+const RIDE_FRICTION = 8;
+const RIDE_TURN_RATE = 2.6; // radians/sec
+
+interface AnimatedLeg {
+  pivot: THREE.Group;
+  phaseOffset: number;
+}
+
+export class Creature implements Rideable {
   readonly species: CreatureSpecies;
   readonly mesh: THREE.Group;
   position: { x: number; y: number; z: number };
+  ridden = false;
   private yaw = Math.random() * Math.PI * 2;
   private wanderTimer = Math.random() * 3;
   private moving = false;
+  private rideSpeed = 0;
+  private walkPhase = 0;
+  private readonly legs: AnimatedLeg[];
 
   constructor(species: CreatureSpecies, x: number, y: number, z: number) {
     this.species = species;
     this.position = { x, y, z };
-    this.mesh = buildMesh(species);
+    const built = buildMesh(species);
+    this.mesh = built.group;
+    this.legs = built.legs;
     this.mesh.position.set(x, y, z);
   }
 
+  get rideable(): boolean {
+    return SPECIES[this.species].bodySize[2] >= MIN_RIDEABLE_BODY_LENGTH;
+  }
+  get rideName(): string {
+    return this.species;
+  }
+  readonly mountRange = 3.2;
+  get rideEyeHeight(): number {
+    const spec = SPECIES[this.species];
+    return spec.legHeight + spec.bodySize[1] + 0.7;
+  }
+  get rideCameraDistance(): number {
+    return 4.5 + SPECIES[this.species].bodySize[2] * 2.5;
+  }
+  get rideYaw(): number {
+    return this.yaw;
+  }
+
+  mount(): void {
+    this.ridden = true;
+    this.rideSpeed = 0;
+    this.moving = false;
+  }
+
+  dismount(world: World): DismountSpot {
+    this.ridden = false;
+    this.rideSpeed = 0;
+    this.wanderTimer = 0; // go back to wandering right away
+    const x = this.position.x + Math.sin(this.yaw + Math.PI / 2) * 1.6;
+    const z = this.position.z + Math.cos(this.yaw + Math.PI / 2) * 1.6;
+    return { x, y: findSurfaceY(world, x, z) ?? this.position.y, z, flying: false };
+  }
+
+  /** Player-steered ground movement: same throttle/steer feel as Car's driven mode, with the same "can't walk onto water or up a cliff" rules the wander AI follows. */
+  tickRide(dt: number, world: World, input: RideInput): void {
+    const maxSpeed = Math.max(RIDE_MIN_SPEED, SPECIES[this.species].speed * RIDE_SPEED_FACTOR);
+    if (input.throttle !== 0) {
+      this.rideSpeed += input.throttle * RIDE_ACCEL * dt;
+    } else if (this.rideSpeed !== 0) {
+      const decel = RIDE_FRICTION * dt;
+      this.rideSpeed = Math.abs(this.rideSpeed) <= decel ? 0 : this.rideSpeed - Math.sign(this.rideSpeed) * decel;
+    }
+    this.rideSpeed = THREE.MathUtils.clamp(this.rideSpeed, -maxSpeed * 0.4, maxSpeed);
+
+    // Can pivot slowly even from a standstill, unlike a car.
+    const turnScale = Math.max(0.35, Math.min(Math.abs(this.rideSpeed) / 3, 1)) * (this.rideSpeed < 0 ? -1 : 1);
+    this.yaw -= input.steer * RIDE_TURN_RATE * turnScale * dt;
+
+    const nextX = this.position.x + Math.sin(this.yaw) * this.rideSpeed * dt;
+    const nextZ = this.position.z + Math.cos(this.yaw) * this.rideSpeed * dt;
+    let moved = false;
+    for (const [tx, tz] of [
+      [nextX, nextZ],
+      [nextX, this.position.z], // slide along a wall instead of stopping dead
+      [this.position.x, nextZ],
+    ]) {
+      const groundY = findSurfaceY(world, tx, tz);
+      if (groundY !== null && Math.abs(groundY - this.position.y) <= MAX_STEP_HEIGHT) {
+        this.position.x = tx;
+        this.position.z = tz;
+        this.position.y = groundY;
+        moved = true;
+        break;
+      }
+    }
+    if (!moved) this.rideSpeed = 0;
+
+    this.animateLegs(dt, Math.abs(this.rideSpeed));
+    this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+    this.mesh.rotation.y = this.yaw;
+  }
+
   tick(dt: number, world: World): void {
+    if (this.ridden) return; // tickRide owns it while the player is on it
+
     this.wanderTimer -= dt;
     if (this.wanderTimer <= 0) {
       this.wanderTimer = 2 + Math.random() * 4;
@@ -255,8 +351,8 @@ export class Creature {
       if (this.moving) this.yaw = Math.random() * Math.PI * 2;
     }
 
+    const spec = SPECIES[this.species];
     if (this.moving) {
-      const spec = SPECIES[this.species];
       const nextX = this.position.x + Math.sin(this.yaw) * spec.speed * dt;
       const nextZ = this.position.z + Math.cos(this.yaw) * spec.speed * dt;
       const nextGroundY = findSurfaceY(world, nextX, nextZ);
@@ -276,8 +372,19 @@ export class Creature {
       }
     }
 
+    this.animateLegs(dt, this.moving ? spec.speed : 0);
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
     this.mesh.rotation.y = this.yaw;
+  }
+
+  /** Diagonal-pair leg swing, amplitude and cadence scaled by how fast it's actually moving; settles back to standing when still. */
+  private animateLegs(dt: number, speed: number): void {
+    const amp = Math.min(1, speed / 3) * 0.7;
+    this.walkPhase += dt * (2 + speed * 1.8);
+    for (const leg of this.legs) {
+      const target = Math.sin(this.walkPhase + leg.phaseOffset) * amp;
+      leg.pivot.rotation.x += (target - leg.pivot.rotation.x) * Math.min(1, dt * 14);
+    }
   }
 
   dispose(): void {
@@ -289,7 +396,7 @@ export class Creature {
   }
 }
 
-function buildMesh(species: CreatureSpecies): THREE.Group {
+function buildMesh(species: CreatureSpecies): { group: THREE.Group; legs: AnimatedLeg[] } {
   const spec = SPECIES[species];
   const group = new THREE.Group();
 
@@ -323,11 +430,19 @@ function buildMesh(species: CreatureSpecies): THREE.Group {
   const legGeom = new THREE.BoxGeometry(legRadius, spec.legHeight, legRadius);
   const legOffsetX = spec.bodySize[0] / 2 - legRadius / 2;
   const legOffsetZ = spec.bodySize[2] / 2 - legRadius / 2;
+  // Each leg hangs from a hip pivot at the belly line so it can swing
+  // (diagonal pairs move together, like a real walk) instead of being a
+  // rigid post.
+  const legs: AnimatedLeg[] = [];
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
+      const pivot = new THREE.Group();
+      pivot.position.set(sx * legOffsetX, spec.legHeight, sz * legOffsetZ);
       const leg = new THREE.Mesh(legGeom, legMat);
-      leg.position.set(sx * legOffsetX, spec.legHeight / 2, sz * legOffsetZ);
-      group.add(leg);
+      leg.position.y = -spec.legHeight / 2;
+      pivot.add(leg);
+      group.add(pivot);
+      legs.push({ pivot, phaseOffset: sx * sz > 0 ? 0 : Math.PI });
     }
   }
 
@@ -337,5 +452,5 @@ function buildMesh(species: CreatureSpecies): THREE.Group {
     group.add(tail);
   }
 
-  return group;
+  return { group, legs };
 }
