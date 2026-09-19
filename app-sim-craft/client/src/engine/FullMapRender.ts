@@ -4,16 +4,15 @@
 // uses — so like the minimap it needs no loaded chunks and shows terrain
 // the player has never visited. The world itself is unbounded, so "the
 // entire map" here means this whole landmark region rather than infinity.
-// Sampling is spread across animation frames (see startTerrainRender) so
-// opening the map never freezes the game.
+// Painting happens in background workers (engine/fullMapCache.ts,
+// workers/map-render.worker.ts) so the map never freezes the game.
 import { sampleColumn, SEA_LEVEL } from "./worldgen/terrain";
 import { isRoadColumn } from "./worldgen/roads";
+import { DEEP_LAKE_FLOOR_Y } from "./worldgen/deepLake";
 
-export const FULL_MAP_HALF_RANGE = 420; // blocks either side of the origin
+export const FULL_MAP_HALF_RANGE = 560; // blocks either side of the origin
 export const FULL_MAP_STEP = 2; // blocks per map pixel
 export const FULL_MAP_PIXELS = (FULL_MAP_HALF_RANGE * 2) / FULL_MAP_STEP;
-
-const ROWS_PER_SLICE = 14;
 
 function mix(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -32,11 +31,11 @@ const BIOME_LAND: Record<string, [number, number, number]> = {
 /** One map pixel's color for a world column. */
 export function terrainColor(seed: number, wx: number, wz: number): [number, number, number] {
   const { height, biome } = sampleColumn(seed, wx, wz);
+  if (isRoadColumn(wx, wz)) return [120, 120, 124]; // roads are flattened above water too (a causeway across the lake)
   if (height < SEA_LEVEL) {
-    const depth = Math.min(1, (SEA_LEVEL - height) / 26); // the deep lake reaches 26 below sea level
+    const depth = Math.min(1, (SEA_LEVEL - height) / (SEA_LEVEL - DEEP_LAKE_FLOOR_Y)); // the deep lake is the deepest water
     return [mix(84, 22, depth), mix(158, 58, depth), mix(228, 140, depth)];
   }
-  if (isRoadColumn(wx, wz)) return [120, 120, 124];
   const base = BIOME_LAND[biome.key] ?? BIOME_LAND.meadow;
   // Relief shading: higher ground is lighter, and the mountain's upper slopes blend to bare rock and snow.
   const rise = Math.max(0, height - SEA_LEVEL);
@@ -50,52 +49,4 @@ export function terrainColor(seed: number, wx: number, wz: number): [number, num
     color = [mix(color[0], 246, snow), mix(color[1], 248, snow), mix(color[2], 252, snow)];
   }
   return color;
-}
-
-export interface TerrainRender {
-  canvas: HTMLCanvasElement;
-  cancel: () => void;
-}
-
-/** Paints the terrain into an offscreen canvas a slice of rows at a time; `onProgress` fires after each slice (0..1) so the UI can repaint. */
-export function startTerrainRender(seed: number, onProgress: (fraction: number) => void): TerrainRender {
-  const canvas = document.createElement("canvas");
-  canvas.width = FULL_MAP_PIXELS;
-  canvas.height = FULL_MAP_PIXELS;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) throw new Error("FullMap: 2D canvas context unavailable");
-  ctx.fillStyle = "#1b2a3a";
-  ctx.fillRect(0, 0, FULL_MAP_PIXELS, FULL_MAP_PIXELS);
-
-  let row = 0;
-  let cancelled = false;
-  const slice = (): void => {
-    if (cancelled) return;
-    const rows = Math.min(ROWS_PER_SLICE, FULL_MAP_PIXELS - row);
-    const img = ctx.createImageData(FULL_MAP_PIXELS, rows);
-    for (let r = 0; r < rows; r++) {
-      const wz = -FULL_MAP_HALF_RANGE + (row + r) * FULL_MAP_STEP;
-      for (let c = 0; c < FULL_MAP_PIXELS; c++) {
-        const wx = -FULL_MAP_HALF_RANGE + c * FULL_MAP_STEP;
-        const [red, green, blue] = terrainColor(seed, wx, wz);
-        const i = (r * FULL_MAP_PIXELS + c) * 4;
-        img.data[i] = red;
-        img.data[i + 1] = green;
-        img.data[i + 2] = blue;
-        img.data[i + 3] = 255;
-      }
-    }
-    ctx.putImageData(img, 0, row);
-    row += rows;
-    onProgress(row / FULL_MAP_PIXELS);
-    if (row < FULL_MAP_PIXELS) requestAnimationFrame(slice);
-  };
-  requestAnimationFrame(slice);
-
-  return {
-    canvas,
-    cancel: () => {
-      cancelled = true;
-    },
-  };
 }

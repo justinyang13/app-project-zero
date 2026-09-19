@@ -9,6 +9,7 @@
 // GameLoop.ts's header comment).
 import { sampleColumn, SEA_LEVEL } from "./worldgen/terrain";
 import { isRoadColumn } from "./worldgen/roads";
+import { DRAGON_ARROW, LANDMARKS } from "./landmarks";
 
 const CANVAS_SIZE = 160; // px, square
 const DEFAULT_WORLD_RANGE = 128; // world blocks shown across the canvas, before zoom
@@ -35,6 +36,8 @@ const MARKER_STYLE: Record<MiniMapMarkerKind, { color: string; radius: number; s
   fish: { color: "#5adcff", radius: 1.5, shape: "circle" },
 };
 
+const ARROW_BADGE_RADIUS = 7;
+
 export class MiniMap {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly seed: number;
@@ -59,7 +62,7 @@ export class MiniMap {
     if (this.sampleCache.size > MAX_CACHE_ENTRIES) this.sampleCache.clear();
 
     const height = sampleColumn(this.seed, wx, wz).height;
-    const sample: TerrainSample = height < SEA_LEVEL ? "water" : isRoadColumn(wx, wz) ? "road" : "land";
+    const sample: TerrainSample = isRoadColumn(wx, wz) ? "road" : height < SEA_LEVEL ? "water" : "land"; // the road is flattened above water too — a causeway
     this.sampleCache.set(key, sample);
     return sample;
   }
@@ -127,6 +130,8 @@ export class MiniMap {
       }
     }
 
+    this.drawEdgeArrows(playerX, playerZ, scale, markers);
+
     // Player arrow: always dead-center, rotates to face the camera's yaw.
     ctx.save();
     ctx.translate(CANVAS_SIZE / 2, CANVAS_SIZE / 2);
@@ -149,5 +154,63 @@ export class MiniMap {
     ctx.beginPath();
     ctx.arc(CANVAS_SIZE / 2, CANVAS_SIZE / 2, CANVAS_SIZE / 2 - 1, 0, Math.PI * 2);
     ctx.stroke();
+  }
+
+  /** For every landmark (and the nearest live dragon) that's off the map, a lettered badge on the rim pointing toward it, so you always know which way to head. */
+  private drawEdgeArrows(playerX: number, playerZ: number, scale: number, markers: MiniMapMarker[]): void {
+    const ctx = this.ctx;
+    const center = CANVAS_SIZE / 2;
+    const targets: { x: number; z: number; letter: string; color: string }[] = [...LANDMARKS];
+    let nearestDragon: MiniMapMarker | null = null;
+    let nearestDist = Infinity;
+    for (const m of markers) {
+      if (m.kind !== "dragon") continue;
+      const d = Math.hypot(m.x - playerX, m.z - playerZ);
+      if (d < nearestDist) {
+        nearestDist = d;
+        nearestDragon = m;
+      }
+    }
+    if (nearestDragon) targets.push({ x: nearestDragon.x, z: nearestDragon.z, ...DRAGON_ARROW });
+
+    const badgeDist = center - ARROW_BADGE_RADIUS - 6;
+    ctx.font = "bold 9px monospace";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    for (const t of targets) {
+      const dx = t.x - playerX;
+      const dz = t.z - playerZ;
+      // Still on the map (or close enough that its own marker/terrain shows) — no arrow needed.
+      if (Math.hypot(dx, dz) * scale < center - 4) continue;
+      const angle = Math.atan2(dz, dx);
+      const bx = center + Math.cos(angle) * badgeDist;
+      const by = center + Math.sin(angle) * badgeDist;
+
+      ctx.save();
+      ctx.translate(bx, by);
+      ctx.rotate(angle);
+      ctx.beginPath();
+      ctx.moveTo(ARROW_BADGE_RADIUS + 5, 0);
+      ctx.lineTo(ARROW_BADGE_RADIUS - 1, -4);
+      ctx.lineTo(ARROW_BADGE_RADIUS - 1, 4);
+      ctx.closePath();
+      ctx.fillStyle = t.color;
+      ctx.strokeStyle = "#101010";
+      ctx.lineWidth = 1;
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+
+      ctx.beginPath();
+      ctx.arc(bx, by, ARROW_BADGE_RADIUS, 0, Math.PI * 2);
+      ctx.fillStyle = "rgba(16, 16, 16, 0.75)";
+      ctx.fill();
+      ctx.strokeStyle = t.color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = t.color;
+      ctx.fillText(t.letter, bx, by + 0.5);
+    }
+    ctx.textBaseline = "alphabetic";
   }
 }

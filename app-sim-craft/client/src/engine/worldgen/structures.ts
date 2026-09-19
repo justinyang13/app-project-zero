@@ -16,6 +16,7 @@ import {
   CAVE_FLOOR_DIG,
   CAVE_MOUTH,
   CAVE_SPIKE_OFFSETS,
+  GREEN_DRAGON_PERCH,
   CHAMBER_CENTER,
   MOUNTAIN_CENTER,
   SUMMIT_ROOST_RADIUS,
@@ -35,6 +36,8 @@ const BRIDGE_HALF_WIDTH = 1;
 
 export const CASTLE_CENTER = { x: -34, z: -20 };
 const CASTLE_HALF_SIZE = 8;
+/** Just outside the castle's gate (the gap in its +z wall), where the minimap's "back to castle" button drops the player. */
+export const CASTLE_GATE_SPAWN = { x: CASTLE_CENTER.x + 0.5, z: CASTLE_CENTER.z + CASTLE_HALF_SIZE + 4 };
 const CASTLE_WALL_HEIGHT = 7;
 const CASTLE_TOWER_EXTRA = 6;
 const TOWER_HALF = 1;
@@ -583,14 +586,20 @@ const CAVE_DAIS_RADIUS = 12;
 const CAVE_DAIS_HEIGHT = 3;
 
 /** The dragon's perch: a low, rounded sandstone mound at the chamber's center — raised just enough to read as a deliberate perch rather than bare cave floor. */
-function stampCaveDais(cx: number, cz: number, chunks: Chunk[], floorY: number): void {
+function stampCaveDais(
+  cx: number,
+  cz: number,
+  chunks: Chunk[],
+  floorY: number,
+  center: { x: number; z: number } = CHAMBER_CENTER,
+): void {
   for (let dx = -CAVE_DAIS_RADIUS; dx <= CAVE_DAIS_RADIUS; dx++) {
     for (let dz = -CAVE_DAIS_RADIUS; dz <= CAVE_DAIS_RADIUS; dz++) {
       const d = Math.hypot(dx, dz);
       if (d > CAVE_DAIS_RADIUS) continue;
       const mound = Math.round((1 - d / CAVE_DAIS_RADIUS) * CAVE_DAIS_HEIGHT);
       for (let dy = 0; dy <= mound; dy++) {
-        setWorldVoxel(chunks, cx, cz, CHAMBER_CENTER.x + dx, floorY + dy, CHAMBER_CENTER.z + dz, SANDSTONE_ID);
+        setWorldVoxel(chunks, cx, cz, center.x + dx, floorY + dy, center.z + dz, SANDSTONE_ID);
       }
     }
   }
@@ -627,6 +636,7 @@ function stampDragonCave(seed: number, cx: number, cz: number, chunks: Chunk[]):
   }
 
   stampCaveDais(cx, cz, chunks, caveFloorY);
+  stampCaveDais(cx, cz, chunks, caveFloorY, GREEN_DRAGON_PERCH);
   stampCaveSpikes(cx, cz, chunks, caveFloorY);
 }
 

@@ -2,7 +2,7 @@
 // semicircular turns) — instead of an infinite tiling grid. It's pure
 // geometry (no seed dependency, no noise), so both world-gen (terrain.ts
 // flattens every column under it to FLAT_ROAD_Y, cutting through hills
-// and filling over water so the loop is genuinely flat rather than a
+// and bridging over water so the loop is genuinely flat rather than a
 // surface paint that still follows the terrain) and runtime code (Car's
 // driving AI, the minimap) can query the exact same shape everywhere.
 export const ROAD_WIDTH = 7;
@@ -28,6 +28,16 @@ function distanceToLoop(x: number, z: number): number {
   }
   const turnCenterX = x > STRAIGHT_HALF_LENGTH ? STRAIGHT_HALF_LENGTH : -STRAIGHT_HALF_LENGTH;
   return Math.abs(Math.hypot(x - turnCenterX, z) - TURN_RADIUS);
+}
+
+// Where the road crosses water it becomes a bridge, with a deck a little
+// wider than the roadway so the street lamps (which stand just off its
+// shoulder) have something to stand on.
+const BRIDGE_DECK_HALF_WIDTH = ROAD_HALF_WIDTH + 3;
+
+/** True if this world column falls within a bridge deck's width (the road plus its shoulders) — only meaningful where the terrain under it is water. */
+export function isBridgeDeckColumn(worldX: number, worldZ: number): boolean {
+  return distanceToLoop(worldX, worldZ) <= BRIDGE_DECK_HALF_WIDTH;
 }
 
 /** True if this world column falls within the loop road's width. */

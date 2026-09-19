@@ -1,10 +1,12 @@
 // The giant landmark dragons — not part of the ambient Creature.ts roster
 // (species table, wander AI, ground-snapping — see that file's own notes
-// on scope). There are two, sharing everything but a DragonConfig: the
+// on scope). There are three, sharing everything but a DragonConfig: the
 // original lives in the cave carved into worldgen/mountain.ts's mountain,
 // resting on the chamber's dais and periodically launching out through
-// the cave mouth to circle the peak; the crimson one roosts on a platform
-// at the summit and circles wider and higher, the other way round.
+// the cave mouth to circle the peak; the green-winged one shares that cave
+// (its own dais across the chamber) and flies a wider, higher circuit; the
+// crimson one roosts on a platform at the summit and circles wider and
+// higher still, the other way round.
 // Position/orientation are driven by a small explicit state machine keyed
 // on elapsed time within the current state, not a physics or pathfinding
 // system — good enough for a scripted, decorative flight loop that always
@@ -19,6 +21,9 @@ import {
   DRAGON_FLIGHT_ALTITUDE_ABOVE_PEAK,
   DRAGON_FLIGHT_RADIUS,
   DRAGON_PERCH,
+  GREEN_DRAGON_ALTITUDE_ABOVE_PEAK,
+  GREEN_DRAGON_FLIGHT_RADIUS,
+  GREEN_DRAGON_PERCH,
   MOUNTAIN_CENTER,
   SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK,
   SUMMIT_DRAGON_FLIGHT_RADIUS,
@@ -34,7 +39,7 @@ interface DragonPalette {
   horn: number;
   wingBone: number;
   wingDark: number; // membrane at the veins/arm
-  wingRed: number; // membrane toward the trailing edge
+  wingRed: number; // membrane toward the trailing edge (the palette's main wing color — green for the green-winged dragon)
   eye: number;
   glowAccents: boolean; // red glowing scale plates, chest gem and tail fin
 }
@@ -49,6 +54,14 @@ const BROWN_PALETTE: DragonPalette = {
   wingRed: 0xc41818,
   eye: 0xd6ff4a,
   glowAccents: false,
+};
+
+// The original's brown body with green wings.
+const GREEN_WING_PALETTE: DragonPalette = {
+  ...BROWN_PALETTE,
+  wingBone: 0x1f3a1a,
+  wingDark: 0x06280c,
+  wingRed: 0x34c94e,
 };
 
 const CRIMSON_PALETTE: DragonPalette = {
@@ -78,7 +91,7 @@ export interface DragonConfig {
   firstLaunchDelay: number;
 }
 
-/** The two dragons of the mountain, built from the anchors getStructureAnchors reports. */
+/** The three dragons of the mountain, built from the anchors getStructureAnchors reports. */
 export function createDragons(caveFloorY: number, peakY: number): Dragon[] {
   return [
     new Dragon({
@@ -93,6 +106,19 @@ export function createDragons(caveFloorY: number, peakY: number): Dragon[] {
       startTheta: 0,
       direction: 1,
       firstLaunchDelay: 8 + Math.random() * 20,
+    }),
+    new Dragon({
+      name: "green dragon",
+      palette: GREEN_WING_PALETTE,
+      perch: { x: GREEN_DRAGON_PERCH.x, y: caveFloorY + 3, z: GREEN_DRAGON_PERCH.z },
+      perchYaw: Math.PI,
+      waypoint: { x: CAVE_MOUTH.x, y: caveFloorY + 2, z: CAVE_MOUTH.z },
+      flightCenter: MOUNTAIN_CENTER,
+      flightRadius: GREEN_DRAGON_FLIGHT_RADIUS,
+      flightAltitude: peakY + GREEN_DRAGON_ALTITUDE_ABOVE_PEAK,
+      startTheta: Math.PI,
+      direction: 1,
+      firstLaunchDelay: 30 + Math.random() * 25,
     }),
     new Dragon({
       name: "crimson dragon",
@@ -140,6 +166,7 @@ const RIDE_FRICTION = 10;
 const RIDE_TURN_RATE = 1.6; // radians/sec
 const RIDE_CLIMB_SPEED = 14; // blocks/sec
 const RIDE_BANK_ANGLE = 0.5;
+const RIDE_GROUND_SEARCH_DEPTH = 40; // how far below its feet a ridden dragon looks for ground to stop a dive on
 const DISMOUNT_NEAR_PERCH_DIST = 3; // close enough to the dais that landing is skipped in favor of just settling there directly
 
 // Double-tap Space while riding toggles turbo: 400x the normal top speed
@@ -462,15 +489,20 @@ export class Dragon implements Rideable {
   ridden = false;
   turbo = false;
   private rideSpeed = 0;
-  // 0 → 1 as the player mounts: drives the lowered neck and the faded
-  // neck/head, eased so mounting doesn't snap the pose.
+  // 0 → 1 as the player mounts: drives the lowered neck, eased so mounting
+  // doesn't snap the pose.
   private rideBlend = 0;
+  // 0 → 1 while the rider is in first person: drives the faded neck/head
+  // (see animateNeckAndHead) — in third person they stay solid.
+  private firstPersonBlend = 0;
+  private firstPerson = false;
 
   readonly rideable = true;
   readonly rideName: string;
   readonly mountRange = 14; // generous — it's huge and often airborne, unlike a parked car
   readonly rideEyeHeight = RIDE_EYE_HEIGHT;
   readonly rideCameraDistance = RIDE_CAMERA_DISTANCE;
+  readonly supportsFirstPerson = true;
   get rideYaw(): number {
     return this.yaw;
   }
@@ -505,6 +537,17 @@ export class Dragon implements Rideable {
 
     this.position = { ...this.perch };
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
+  }
+
+  setFirstPersonView(on: boolean): void {
+    this.firstPerson = on;
+  }
+
+  /** Eyes at the top of the skull, between the brow horns — the head is mostly see-through in this view (see animateNeckAndHead). */
+  firstPersonEye(): Vec3 {
+    this.mesh.updateMatrixWorld(true); // children's world matrices are otherwise a frame stale (they refresh at render)
+    const eye = this.parts.head.localToWorld(new THREE.Vector3(0, 1.9, 2.6));
+    return { x: eye.x, y: eye.y, z: eye.z };
   }
 
   /** Player mounts up — called by GameLoop once it's confirmed the player is within range. */
@@ -559,11 +602,11 @@ export class Dragon implements Rideable {
     return spot;
   }
 
-  tickRide(dt: number, _world: World, input: RideInput): void {
-    this.update(dt, input);
+  tickRide(dt: number, world: World, input: RideInput): void {
+    this.update(dt, input, world);
   }
 
-  private tickRidden(dt: number, input: RideInput): void {
+  private tickRidden(dt: number, input: RideInput, world: World | undefined): void {
     const boost = this.turbo ? TURBO_MULTIPLIER : 1;
     if (input.throttle !== 0) {
       this.rideSpeed += input.throttle * RIDE_ACCEL * boost * dt;
@@ -579,6 +622,20 @@ export class Dragon implements Rideable {
     this.position.x += Math.sin(this.yaw) * this.rideSpeed * dt;
     this.position.z += Math.cos(this.yaw) * this.rideSpeed * dt;
     this.position.y += input.climb * RIDE_CLIMB_SPEED * dt;
+
+    // Diving stops at the ground: nearest solid block at or below the
+    // dragon's feet (searched downward from where it is, so the cave's
+    // ceiling above it isn't mistaken for ground).
+    if (world) {
+      const x = Math.floor(this.position.x);
+      const z = Math.floor(this.position.z);
+      for (let y = Math.floor(this.position.y); y >= this.position.y - RIDE_GROUND_SEARCH_DEPTH; y--) {
+        if (world.getBlock(x, y, z) !== 0) {
+          if (this.position.y < y + 1) this.position.y = y + 1;
+          break;
+        }
+      }
+    }
   }
 
   private circlePoint(theta: number, altitude: number): Vec3 {
@@ -596,12 +653,12 @@ export class Dragon implements Rideable {
     this.yaw = Math.atan2(dx, dz);
   }
 
-  update(dt: number, rideInput?: RideInput): void {
+  update(dt: number, rideInput?: RideInput, world?: World): void {
     this.idlePhase += dt;
     let wingOpenness = 0;
 
     if (this.ridden && rideInput) {
-      this.tickRidden(dt, rideInput);
+      this.tickRidden(dt, rideInput, world);
       // Keeps flapping even while slow/hovering under player control, not
       // fully folded the way idle-perched wings are.
       const speedFrac = Math.min(1, Math.abs(this.rideSpeed) / RIDE_MAX_SPEED);
@@ -678,6 +735,7 @@ export class Dragon implements Rideable {
 
     this.parts.tailPivot.rotation.y = Math.sin(this.idlePhase * 0.5) * 0.18 * (1 - wingOpenness * 0.5) + this.bank * -0.6;
     this.rideBlend += ((this.ridden ? 1 : 0) - this.rideBlend) * Math.min(1, dt * 4);
+    this.firstPersonBlend += ((this.ridden && this.firstPerson ? 1 : 0) - this.firstPersonBlend) * Math.min(1, dt * 8);
     const flyBlend = smoothstep((wingOpenness - 0.15) / 0.6); // 0 perched -> 1 airborne
     this.animateLegs(flyBlend);
     this.animateNeckAndHead(flyBlend);
@@ -723,8 +781,8 @@ export class Dragon implements Rideable {
    * (stronger in flight, tied to the wingbeat) and the head counter-bobs
    * and looks around — idly when perched, less so airborne. Breathing
    * fire rears the head up. While ridden the neck drops forward-and-down
-   * and the head levels out, and neck/head fade to mostly see-through so
-   * they can't fill the rider's view (see rideBlend).
+   * and the head levels out; in first person the neck/head also fade to mostly
+   * see-through so they can't fill the rider's view (see firstPersonBlend).
    */
   private animateNeckAndHead(flyBlend: number): void {
     const breathEnv = this.breathing ? Math.min(1, this.breathElapsed / 0.3, (BREATH_DURATION - this.breathElapsed) / 0.4) : 0;
@@ -746,7 +804,7 @@ export class Dragon implements Rideable {
     head.rotation.y = Math.sin(this.idlePhase * 0.3) * 0.4 * (1 - flyBlend) + Math.sin(this.idlePhase * 0.9) * 0.05;
     head.rotation.z = Math.sin(this.idlePhase * 0.23) * 0.08;
 
-    const opacity = lerp(1, 0.16, rideBlend);
+    const opacity = lerp(1, 0.16, this.firstPersonBlend);
     for (const mat of this.parts.fadeMats) {
       const transparent = opacity < 0.999;
       if (mat.opacity !== opacity) mat.opacity = opacity;

@@ -32,7 +32,7 @@ import { CampfireVisual } from "./CampfireVisual";
 import { StreetLamp } from "./StreetLamp";
 import { Torch } from "./Torch";
 import { Flag } from "./Flag";
-import { CAMPFIRE_SITES, CASTLE_CENTER, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "./worldgen/structures";
+import { CAMPFIRE_SITES, CASTLE_CENTER, CASTLE_GATE_SPAWN, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "./worldgen/structures";
 import { CAVE_TORCH_OFFSETS, CHAMBER_CENTER } from "./worldgen/mountain";
 import { MiniMap, type MiniMapMarker } from "./MiniMap";
 import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
@@ -49,6 +49,9 @@ const MAX_SIM_STEPS_PER_FRAME = 5;
 const ARROW_PAN_SPEED = 2.2; // radians/sec
 const THIRD_PERSON_DISTANCE = 4.5;
 const THIRD_PERSON_UP_OFFSET = 1.0;
+const BIG_AQUATIC_SPAWN_SCAN_RADIUS = 110; // blocks around the player to look for deep water to spawn a shark/whale in
+const MIN_RIDE_ZOOM = 0.5; // multiplier on a mount's own chase-cam distance, adjusted with the mouse wheel
+const MAX_RIDE_ZOOM = 6;
 const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped position
 const ENTER_VEHICLE_RANGE = 3;
 const CAR_COUNT = 6;
@@ -81,6 +84,10 @@ export class GameLoop {
   // dragon) — cars are separate (drivingCar) since they're on rails and
   // have their own AI/parking rules.
   private mounted: Rideable | null = null;
+  private rideCameraZoom = 1;
+  private viewModeBeforeMount: ViewMode | null = null;
+  // Set by teleportToCastle: the player is held in place (no gravity) until the destination's terrain has streamed in, then snapped onto the ground.
+  private teleportPending: { x: number; z: number } | null = null;
   private lastMapYaw = 0;
   private readonly caveTorches: Torch[];
   private readonly cars: Car[] = [];
@@ -243,6 +250,14 @@ export class GameLoop {
   private handleContextMenu = (e: Event): void => e.preventDefault();
 
   private handleWheel = (e: WheelEvent): void => {
+    if (this.mounted) {
+      // The hotbar is idle while riding, so the wheel zooms the chase cam
+      // instead: scroll down to pull back (far enough to see the whole
+      // dragon), up to come in.
+      const step = Math.max(-100, Math.min(100, e.deltaY));
+      this.rideCameraZoom = Math.max(MIN_RIDE_ZOOM, Math.min(MAX_RIDE_ZOOM, this.rideCameraZoom * Math.exp(step * 0.0015)));
+      return;
+    }
     useHotbarStore.getState().cycle(Math.sign(e.deltaY));
   };
 
@@ -268,17 +283,13 @@ export class GameLoop {
     // preventDefault on every game-control key avoids that class of bug.
     if (GameLoop.GAME_KEYS.has(e.code)) e.preventDefault();
     if (e.code === "KeyM" && !e.repeat) {
-      // Full-screen map: M opens and closes it. While it's open the rest
-      // of the game keys are ignored (below) so WASD etc. don't move the
-      // player around behind the overlay.
+      // Full-screen map: M opens and closes it. It's a non-blocking
+      // overlay (ui/FullMap.tsx), so the player keeps moving underneath —
+      // don't clear held keys or ignore game input while it's open.
       useMinimapStore.getState().toggleFullMap();
-      this.pressed.clear();
       return;
     }
-    if (useMinimapStore.getState().fullMapOpen) {
-      if (e.code === "Escape") useMinimapStore.getState().closeFullMap();
-      return;
-    }
+    if (e.code === "Escape") useMinimapStore.getState().closeFullMap();
     this.pressed.add(e.code);
     if (e.code === "F3") {
       e.preventDefault();
@@ -320,6 +331,7 @@ export class GameLoop {
     if (e.code === "KeyE" && !e.repeat) {
       this.handleInteractKey();
     }
+    if (e.code === "KeyH" && !e.repeat) this.teleportToCastle();
     if (e.code === "KeyK" && !e.repeat) {
       this.toggleMarkerAtPlayer();
     }
@@ -563,18 +575,13 @@ export class GameLoop {
 
   private topUpBigAquatics(): void {
     const p = this.player.position;
-    if (Math.hypot(p.x - DEEP_LAKE_CENTER.x, p.z - DEEP_LAKE_CENTER.z) > DEEP_LAKE_RADIUS + 120) return;
+    if (Math.hypot(p.x - DEEP_LAKE_CENTER.x, p.z - DEEP_LAKE_CENTER.z) > DEEP_LAKE_RADIUS + 40) return;
     for (const species of BIG_AQUATIC_SPECIES) {
       const have = this.fish.filter((f) => f.species === species).length;
       if (have >= GameLoop.BIG_AQUATIC_TARGETS[species]) continue;
-      const spots = findNearbyWaterSpots(
-        this.world,
-        DEEP_LAKE_CENTER.x,
-        DEEP_LAKE_CENTER.z,
-        DEEP_LAKE_RADIUS,
-        200,
-        spawnDepthFor(species),
-      );
+      // Scan around the player (where chunks are actually loaded), not the
+      // lake's center, which can be far outside the loaded area now that the lake is so wide.
+      const spots = findNearbyWaterSpots(this.world, p.x, p.z, BIG_AQUATIC_SPAWN_SCAN_RADIUS, 200, spawnDepthFor(species));
       const [spot] = sampleRandom(spots, 1);
       if (spot) this.addFish(new Fish(species, spot.x + Math.random(), pickSwimY(species, spot), spot.z + Math.random()));
     }
@@ -716,16 +723,37 @@ export class GameLoop {
   private mountRideable(target: Rideable): void {
     this.mounted = target;
     target.mount();
+    // Chase cam to start with (the whole mount in view); F5 switches to
+    // looking out from its head, for mounts that support it.
+    this.viewModeBeforeMount = this.viewMode;
+    this.viewMode = "third";
     // Riding isn't flying — drop the player's own fly toggle so it isn't
     // still on when they step off a grounded mount.
     this.player.flying = false;
+  }
+
+  /** Sends the player to just outside the castle gate, dropping whatever they were driving or riding. */
+  teleportToCastle(): void {
+    if (this.drivingCar) this.toggleDriving();
+    if (this.mounted) this.dismountRideable();
+    const { x, z } = CASTLE_GATE_SPAWN;
+    const { castleBaseY } = getStructureAnchors(this.world.seed);
+    this.player.position = { x, y: castleBaseY + 2, z };
+    this.player.velocity = { x: 0, y: 0, z: 0 };
+    this.player.flying = false;
+    this.camera.rotation.set(0, 0, 0, "YXZ"); // facing -z, toward the castle
+    this.teleportPending = { x, z };
+    this.chunkManager.update(x, z); // start streaming the destination right away
   }
 
   private dismountRideable(): void {
     const mount = this.mounted;
     if (!mount) return;
     const spot = mount.dismount(this.world);
+    mount.setFirstPersonView?.(false);
     this.mounted = null;
+    if (this.viewModeBeforeMount) this.viewMode = this.viewModeBeforeMount;
+    this.viewModeBeforeMount = null;
     this.player.position = { x: spot.x, y: spot.y, z: spot.z };
     this.player.flying = spot.flying;
     this.player.velocity = { x: 0, y: 0, z: 0 };
@@ -850,9 +878,18 @@ export class GameLoop {
 
   private buildRideInput(): RideInput {
     return {
-      throttle: (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0),
-      steer: (this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0),
-      climb: (this.pressed.has("Space") ? 1 : 0) - (this.pressed.has("ShiftLeft") || this.pressed.has("ShiftRight") ? 1 : 0),
+      throttle: clamp1((this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0) + this.touchMoveVector.y),
+      steer: clamp1((this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0) + this.touchMoveVector.x),
+      // Same up/down keys as free flight: Space climbs, Shift (or Ctrl) descends.
+      climb:
+        (this.pressed.has("Space") || this.touchJumpHeld || this.touchFlyUpHeld ? 1 : 0) -
+        (this.pressed.has("ShiftLeft") ||
+        this.pressed.has("ShiftRight") ||
+        this.pressed.has("ControlLeft") ||
+        this.pressed.has("ControlRight") ||
+        this.touchFlyDownHeld
+          ? 1
+          : 0),
     };
   }
 
@@ -917,6 +954,16 @@ export class GameLoop {
         // and save-on-exit) glued to the car while it's being driven.
         this.player.position = { ...this.drivingCar.position };
         this.player.velocity = { x: 0, y: 0, z: 0 };
+      } else if (this.teleportPending) {
+        // Hold still (no gravity) until the destination's ground exists, so
+        // a long jump doesn't drop the player through unloaded terrain.
+        const { x, z } = this.teleportPending;
+        const groundY = findSurfaceY(this.world, x, z);
+        if (groundY !== null) {
+          this.player.position = { x, y: groundY, z };
+          this.teleportPending = null;
+        }
+        this.player.velocity = { x: 0, y: 0, z: 0 };
       } else if (this.mounted) {
         // Movement itself is applied once per frame below (tickRide, same
         // cadence the dragon's autonomous flight already uses) — skip the
@@ -953,19 +1000,25 @@ export class GameLoop {
     const driving = this.drivingCar !== null;
     const mount = this.mounted;
     const riding = mount !== null;
-    // Driving/riding always uses the third-person chase cam — there's no
-    // in-cabin (or in-saddle) first-person view — but mouse-look still
-    // free-rotates the camera around that anchor same as on foot.
-    const activeViewMode: ViewMode = driving || riding ? "third" : this.viewMode;
+    // Driving and riding use the third-person chase cam (mouse-look still
+    // free-rotates the camera around its anchor, same as on foot) — except
+    // mounts that can be seen out of (the dragon), which honor the F5 view
+    // toggle so the rider can look from its head instead.
+    const firstPersonRide = riding && mount.supportsFirstPerson === true && this.viewMode === "first";
+    const activeViewMode: ViewMode = driving || (riding && !firstPersonRide) ? "third" : this.viewMode;
+    if (riding) mount.setFirstPersonView?.(firstPersonRide);
     const eyeX = this.player.position.x;
     const eyeY = this.player.position.y + (mount ? mount.rideEyeHeight : driving ? DRIVING_EYE_HEIGHT : EYE_HEIGHT);
     const eyeZ = this.player.position.z;
-    if (activeViewMode === "first") {
+    if (firstPersonRide && mount.firstPersonEye) {
+      const eye = mount.firstPersonEye();
+      this.camera.position.set(eye.x, eye.y, eye.z);
+    } else if (activeViewMode === "first") {
       this.camera.position.set(eyeX, eyeY, eyeZ);
     } else {
       const forward = new THREE.Vector3();
       this.camera.getWorldDirection(forward);
-      const distance = mount ? mount.rideCameraDistance : THIRD_PERSON_DISTANCE;
+      const distance = mount ? mount.rideCameraDistance * this.rideCameraZoom : THIRD_PERSON_DISTANCE;
       this.camera.position
         .set(eyeX, eyeY, eyeZ)
         .addScaledVector(forward, -distance)
@@ -997,7 +1050,10 @@ export class GameLoop {
     // heading rather than the free-look camera's yaw (see the
     // third-person chase cam above — mouse-look can face anywhere
     // independent of travel).
-    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw : mount ? mount.rideYaw : bodyYaw;
+    // Vehicles/mounts keep their heading in the movement convention
+    // (forward = (sin, cos)), the opposite of the camera's (forward =
+    // (-sin, -cos)) that the minimap arrow expects — hence the half turn.
+    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw + Math.PI : mount ? mount.rideYaw + Math.PI : bodyYaw;
     this.lastMapYaw = miniMapYaw;
     this.miniMap.update(
       this.player.position.x,

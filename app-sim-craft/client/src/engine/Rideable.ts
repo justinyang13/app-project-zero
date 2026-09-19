@@ -33,6 +33,12 @@ export interface Rideable {
   readonly rideCameraDistance: number;
   /** Heading in this engine's yaw convention (forward = (sin, cos)) — drives the minimap arrow. */
   readonly rideYaw: number;
+  /** True if the rider can look out from the mount's own head (first person); the rest are chase-cam only. */
+  readonly supportsFirstPerson?: boolean;
+  /** World position of the rider's eyes when riding in first person. */
+  firstPersonEye?(): { x: number; y: number; z: number };
+  /** Told each frame whether the rider is in first person, so the mount can fade whatever would block the view (its head) — and keep it solid in third person. */
+  setFirstPersonView?(on: boolean): void;
   mount(): void;
   /** Ends the ride and says where the player should end up. */
   dismount(world: World): DismountSpot;

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GameLoop } from "./engine/GameLoop";
 import { setActiveGameLoop } from "./engine/activeGameLoop";
+import { preloadFullMap } from "./engine/fullMapCache";
 import { RENDER_DISTANCE_COLUMNS, MOBILE_RENDER_DISTANCE_COLUMNS } from "./engine/ChunkManager";
 import { DebugOverlay } from "./ui/DebugOverlay";
 import { Hotbar } from "./ui/Hotbar";
@@ -51,6 +52,7 @@ export function App() {
 
     let cancelled = false;
     let loop: GameLoop | null = null;
+    let cancelPreload: (() => void) | null = null;
     // Read once at creation time (not the live useIsTouchDevice() hook) —
     // this only needs to pick an initial render-distance budget, and
     // ChunkManager isn't built to have its radius change mid-session.
@@ -63,10 +65,12 @@ export function App() {
       loop = created;
       setActiveGameLoop(created);
       loop.start();
+      cancelPreload = preloadFullMap(created.getMapSnapshot().seed);
     });
 
     return () => {
       cancelled = true;
+      cancelPreload?.();
       setActiveGameLoop(null);
       loop?.dispose();
     };

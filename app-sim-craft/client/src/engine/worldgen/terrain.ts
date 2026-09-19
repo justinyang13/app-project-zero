@@ -11,7 +11,7 @@ import { pickBiome, type BiomeDef } from "./biomes";
 import { getBlockByKey } from "../../data/blocks";
 import { placeTrees } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
-import { isRoadColumn, FLAT_ROAD_Y } from "./roads";
+import { isRoadColumn, isBridgeDeckColumn, FLAT_ROAD_Y } from "./roads";
 import { mountainHeightBoost } from "./mountain";
 import { deepLakeHeight } from "./deepLake";
 
@@ -21,6 +21,9 @@ const SALT_HEIGHT = 0x5eed02;
 const STONE_ID = getBlockByKey("greystone").id;
 export const WATER_ID = getBlockByKey("water").id;
 const ROAD_ID = getBlockByKey("asphalt").id;
+const PLANK_ID = getBlockByKey("plank").id;
+const LOG_ID = getBlockByKey("log").id;
+const BRIDGE_PILLAR_SPACING = 10; // blocks between the support pillars under a bridge (leaves wide gaps for fish and whales to swim through)
 
 // Any column whose surface height falls below this gets flooded up to it
 // at generation time, forming lakes wherever the noise-based heightmap
@@ -95,12 +98,17 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
       // The loop road is flattened, not just surface-painted: every
       // column under it is cut/filled to a single constant elevation
       // (FLAT_ROAD_Y) regardless of the natural heightmap, cutting
-      // through hills and causewaying over lakes so the whole loop reads
+      // through hills and bridging over lakes so the whole loop reads
       // as genuinely flat (see worldgen/roads.ts).
       const worldX = cx * CHUNK_SIZE + lx;
       const worldZ = cz * CHUNK_SIZE + lz;
       const isRoad = isRoadColumn(worldX, worldZ);
-      const filledTop = isRoad ? FLAT_ROAD_Y : Math.max(height, SEA_LEVEL); // top of road/lake/bare ground
+      // Over water the road is a bridge rather than a causeway: just a
+      // deck (and a few pillars) at road height with open water and air
+      // beneath, so fish can swim under it and around the lake.
+      const isBridge = height < SEA_LEVEL && isBridgeDeckColumn(worldX, worldZ);
+      const isPillar = worldX % BRIDGE_PILLAR_SPACING === 0 && worldZ % BRIDGE_PILLAR_SPACING === 0;
+      const filledTop = isRoad || isBridge ? FLAT_ROAD_Y : Math.max(height, SEA_LEVEL); // top of road/lake/bare ground
 
       for (let cy = 0; cy <= maxCy; cy++) {
         const chunk = chunks[cy];
@@ -110,7 +118,16 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
           if (worldY > filledTop) break; // above the road/water/surface: leave as air (id 0)
           const idx = lx | (ly << 5) | (lz << 10);
           chunk.skyLight[idx] = 0;
-          if (isRoad) {
+          if (isBridge) {
+            if (worldY === FLAT_ROAD_Y) chunk.blocks[idx] = isRoad ? ROAD_ID : PLANK_ID;
+            else if (worldY === FLAT_ROAD_Y - 1) chunk.blocks[idx] = PLANK_ID; // deck underside
+            else if (worldY > height && isPillar) chunk.blocks[idx] = LOG_ID;
+            else if (worldY > SEA_LEVEL) chunk.skyLight[idx] = 15; // open air under the deck
+            else if (worldY > height) chunk.blocks[idx] = WATER_ID;
+            else if (worldY === height) chunk.blocks[idx] = biome.surfaceBlock;
+            else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
+            else chunk.blocks[idx] = STONE_ID;
+          } else if (isRoad) {
             if (worldY === FLAT_ROAD_Y) chunk.blocks[idx] = ROAD_ID;
             else if (worldY >= FLAT_ROAD_Y - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
             else chunk.blocks[idx] = STONE_ID;

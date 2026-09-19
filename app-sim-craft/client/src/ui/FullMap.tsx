@@ -1,28 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMinimapStore } from "../state/minimapStore";
 import { getActiveGameLoop } from "../engine/activeGameLoop";
-import { FULL_MAP_HALF_RANGE, startTerrainRender, type TerrainRender } from "../engine/FullMapRender";
-import { CASTLE_CENTER, HOUSE_LOTS } from "../engine/worldgen/structures";
-import { MOUNTAIN_CENTER } from "../engine/worldgen/mountain";
-import { DEEP_LAKE_CENTER } from "../engine/worldgen/deepLake";
+import { FULL_MAP_HALF_RANGE } from "../engine/FullMapRender";
+import { ensureFullMapRender } from "../engine/fullMapCache";
+import { LANDMARKS } from "../engine/landmarks";
 import type { MiniMapMarkerKind } from "../engine/MiniMap";
-
-// Terrain is a pure function of the seed, so once painted for a world it
-// stays valid — reopening the map is instant instead of re-sampling.
-let cachedRender: { seed: number; render: TerrainRender; progress: number } | null = null;
-
-const VILLAGE_CENTER = (() => {
-  const xs = HOUSE_LOTS.flatMap((l) => [l.x, l.x + l.width]);
-  const zs = HOUSE_LOTS.flatMap((l) => [l.z, l.z + l.depth]);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
-})();
-
-const LANDMARKS: { x: number; z: number; label: string; color: string }[] = [
-  { x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, label: "Castle", color: "#f2f2f2" },
-  { x: VILLAGE_CENTER.x, z: VILLAGE_CENTER.z, label: "Village", color: "#ffd27a" },
-  { x: MOUNTAIN_CENTER.x, z: MOUNTAIN_CENTER.z, label: "Dragon Mountain", color: "#ff7a5a" },
-  { x: DEEP_LAKE_CENTER.x, z: DEEP_LAKE_CENTER.z, label: "Deep Lake", color: "#bfe3ff" },
-];
 
 const MARKER_STYLE: Partial<Record<MiniMapMarkerKind, { color: string; radius: number; shape: "circle" | "diamond" }>> = {
   campfire: { color: "#ff8c2a", radius: 4, shape: "circle" },
@@ -62,11 +44,11 @@ export function FullMap() {
   const open = useMinimapStore((s) => s.fullMapOpen);
   const close = useMinimapStore((s) => s.closeFullMap);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [cursor, setCursor] = useState<{ x: number; z: number } | null>(null);
-  const [size, setSize] = useState(() => Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.9));
+  const [you, setYou] = useState<{ x: number; z: number } | null>(null);
+  const [size, setSize] = useState(() => Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.8));
 
   useEffect(() => {
-    const onResize = (): void => setSize(Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.9));
+    const onResize = (): void => setSize(Math.floor(Math.min(window.innerWidth, window.innerHeight) * 0.8));
     window.addEventListener("resize", onResize);
     return () => window.removeEventListener("resize", onResize);
   }, []);
@@ -82,21 +64,18 @@ export function FullMap() {
     const draw = (): void => {
       const snapshot = getActiveGameLoop()?.getMapSnapshot();
       if (snapshot) {
-        if (!cachedRender || cachedRender.seed !== snapshot.seed) {
-          cachedRender?.render.cancel();
-          const entry = { seed: snapshot.seed, render: null as unknown as TerrainRender, progress: 0 };
-          entry.render = startTerrainRender(snapshot.seed, (f) => {
-            entry.progress = f;
-          });
-          cachedRender = entry;
-        }
+        const render = ensureFullMapRender(snapshot.seed);
         const scale = size / (FULL_MAP_HALF_RANGE * 2);
         const toX = (wx: number): number => (wx + FULL_MAP_HALF_RANGE) * scale;
         const toY = (wz: number): number => (wz + FULL_MAP_HALF_RANGE) * scale;
 
         ctx.clearRect(0, 0, size, size);
         ctx.imageSmoothingEnabled = false;
-        ctx.drawImage(cachedRender.render.canvas, 0, 0, size, size);
+        // Terrain is drawn translucent so the live game stays visible
+        // underneath — the map is a HUD overlay you can keep moving under.
+        ctx.globalAlpha = 0.78;
+        ctx.drawImage(render.canvas, 0, 0, size, size);
+        ctx.globalAlpha = 1;
 
         // 100-block grid with coordinate labels along the top and left edges.
         ctx.strokeStyle = "rgba(255,255,255,0.14)";
@@ -104,7 +83,8 @@ export function FullMap() {
         ctx.font = "10px monospace";
         ctx.fillStyle = "rgba(255,255,255,0.7)";
         ctx.textAlign = "left";
-        for (let g = -400; g <= 400; g += 100) {
+        const gridEdge = Math.floor(FULL_MAP_HALF_RANGE / 100) * 100;
+        for (let g = -gridEdge; g <= gridEdge; g += 100) {
           ctx.beginPath();
           ctx.moveTo(toX(g), 0);
           ctx.lineTo(toX(g), size);
@@ -124,14 +104,24 @@ export function FullMap() {
           drawLabel(ctx, lm.label, toX(lm.x), toY(lm.z) - 10, lm.color);
         }
 
-        // Player: an arrow at their spot, or pinned to the edge (pointing
-        // toward them) when they've flown beyond the mapped region.
+        // Player: a pulsing halo + arrow at their spot, or pinned to the edge
+        // (pointing toward them) when they've flown beyond the mapped region.
         const half = FULL_MAP_HALF_RANGE;
         const clampedX = Math.max(-half, Math.min(half, snapshot.playerX));
         const clampedZ = Math.max(-half, Math.min(half, snapshot.playerZ));
         const inside = clampedX === snapshot.playerX && clampedZ === snapshot.playerZ;
         const px = toX(clampedX);
         const py = toY(clampedZ);
+        const pulse = (performance.now() % 1400) / 1400;
+        ctx.beginPath();
+        ctx.arc(px, py, 10 + pulse * 18, 0, Math.PI * 2);
+        ctx.strokeStyle = `rgba(55, 230, 255, ${1 - pulse})`;
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(px, py, 11, 0, Math.PI * 2);
+        ctx.fillStyle = "rgba(16, 16, 16, 0.55)";
+        ctx.fill();
         ctx.save();
         ctx.translate(px, py);
         // Arrow points up at rotation 0; on the map that's -z, matching the
@@ -139,21 +129,26 @@ export function FullMap() {
         // heading (same as the minimap). Off the map it points toward them.
         ctx.rotate(inside ? -snapshot.playerYaw : Math.atan2(snapshot.playerX - clampedX, -(snapshot.playerZ - clampedZ)));
         ctx.beginPath();
-        ctx.moveTo(0, -11);
-        ctx.lineTo(8, 9);
-        ctx.lineTo(0, 5);
-        ctx.lineTo(-8, 9);
+        ctx.moveTo(0, -14);
+        ctx.lineTo(10, 11);
+        ctx.lineTo(0, 6);
+        ctx.lineTo(-10, 11);
         ctx.closePath();
-        ctx.fillStyle = "#ffffff";
+        ctx.fillStyle = "#ffe14a";
         ctx.strokeStyle = "#101010";
         ctx.lineWidth = 2;
         ctx.fill();
         ctx.stroke();
         ctx.restore();
-        drawLabel(ctx, inside ? "You" : `You (${Math.round(snapshot.playerX)}, ${Math.round(snapshot.playerZ)})`, px, py + 24, "#ffffff");
+        drawLabel(ctx, `You (${Math.round(snapshot.playerX)}, ${Math.round(snapshot.playerZ)})`, px, py + 30, "#ffe14a");
+        setYou((prev) => {
+          const x = Math.round(snapshot.playerX);
+          const z = Math.round(snapshot.playerZ);
+          return prev && prev.x === x && prev.z === z ? prev : { x, z };
+        });
 
-        if (cachedRender.progress < 1) {
-          drawLabel(ctx, `Charting terrain… ${Math.round(cachedRender.progress * 100)}%`, size / 2, size / 2, "#ffffff");
+        if (render.progress < 1) {
+          drawLabel(ctx, `Charting terrain… ${Math.round(render.progress * 100)}%`, size / 2, size / 2, "#ffffff");
         }
       }
       raf = requestAnimationFrame(draw);
@@ -164,14 +159,15 @@ export function FullMap() {
 
   if (!open) return null;
 
+  // The overlay never intercepts input (pointer-events: none) — the game
+  // underneath keeps receiving movement keys, mouse-look and clicks. Only
+  // the close button is clickable.
   return (
     <div
-      onClick={close}
       style={{
         position: "fixed",
         inset: 0,
         zIndex: 900,
-        background: "rgba(6, 10, 16, 0.92)",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
@@ -180,23 +176,52 @@ export function FullMap() {
         fontFamily: "monospace",
         color: "#fff",
         userSelect: "none",
+        pointerEvents: "none",
       }}
     >
-      <div style={{ fontSize: 13, opacity: 0.85 }}>
-        World Map — M or Esc to close{cursor ? ` · x ${cursor.x}, z ${cursor.z}` : ""}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: 10,
+          padding: "3px 8px",
+          fontSize: 13,
+          background: "rgba(0, 0, 0, 0.55)",
+          borderRadius: 4,
+        }}
+      >
+        <span>World Map — M or Esc to close · keep moving{you ? ` · you: x ${you.x}, z ${you.z}` : ""}</span>
+        <button
+          onClick={close}
+          title="Close map (M)"
+          style={{
+            pointerEvents: "auto",
+            padding: "0 7px",
+            background: "rgba(0, 0, 0, 0.6)",
+            border: "1px solid rgba(255, 255, 255, 0.5)",
+            borderRadius: 3,
+            color: "#fff",
+            fontFamily: "monospace",
+            fontSize: 13,
+            cursor: "pointer",
+            touchAction: "manipulation",
+          }}
+        >
+          ×
+        </button>
       </div>
       <canvas
         ref={canvasRef}
         width={size}
         height={size}
-        onClick={(e) => e.stopPropagation()}
-        onMouseMove={(e) => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const f = (v: number): number => Math.round((v / size) * FULL_MAP_HALF_RANGE * 2 - FULL_MAP_HALF_RANGE);
-          setCursor({ x: f(e.clientX - rect.left), z: f(e.clientY - rect.top) });
+        style={{
+          width: size,
+          height: size,
+          background: "rgba(6, 10, 16, 0.35)",
+          border: "2px solid rgba(255,255,255,0.5)",
+          borderRadius: 4,
+          boxShadow: "0 4px 24px rgba(0,0,0,0.6)",
         }}
-        onMouseLeave={() => setCursor(null)}
-        style={{ width: size, height: size, border: "2px solid rgba(255,255,255,0.5)", borderRadius: 4, boxShadow: "0 4px 24px rgba(0,0,0,0.6)" }}
       />
     </div>
   );

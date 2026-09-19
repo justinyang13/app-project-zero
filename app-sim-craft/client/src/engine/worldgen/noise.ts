@@ -16,9 +16,21 @@ function mulberry32(seed: number): () => number {
   };
 }
 
+// Building a noise function shuffles a permutation table, and worldgen asks
+// for one per column sample — so build each (seed ^ salt) field once. The
+// result is a pure function of its coordinates, safe to share.
+const noiseCache = new Map<number, NoiseFunction2D>();
+const MAX_CACHED_NOISE_FIELDS = 64;
+
 export function seededNoise2D(seed: number, salt: number): NoiseFunction2D {
   const combined = (seed ^ salt) >>> 0;
-  return createNoise2D(mulberry32(combined));
+  let noise = noiseCache.get(combined);
+  if (!noise) {
+    if (noiseCache.size >= MAX_CACHED_NOISE_FIELDS) noiseCache.clear();
+    noise = createNoise2D(mulberry32(combined));
+    noiseCache.set(combined, noise);
+  }
+  return noise;
 }
 
 /** Fractal Brownian motion: layered octaves of a 2D noise field, in [-1, 1]. */

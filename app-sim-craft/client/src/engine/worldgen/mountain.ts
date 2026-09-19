@@ -93,6 +93,12 @@ export const DRAGON_PERCH = { x: CHAMBER_CENTER.x, z: CHAMBER_CENTER.z };
 export const DRAGON_FLIGHT_RADIUS = MOUNTAIN_RADIUS + 44;
 export const DRAGON_FLIGHT_ALTITUDE_ABOVE_PEAK = 30;
 
+// The green-winged dragon shares the cave: its own dais on the far side of
+// the chamber from the original dragon's.
+export const GREEN_DRAGON_PERCH = { x: CHAMBER_CENTER.x - 22, z: CHAMBER_CENTER.z - 2 };
+export const GREEN_DRAGON_FLIGHT_RADIUS = MOUNTAIN_RADIUS + 68;
+export const GREEN_DRAGON_ALTITUDE_ABOVE_PEAK = 45;
+
 // The crimson dragon roosts on a flattened platform at the very summit and
 // circles the mountain the other way, wider and higher than the cave
 // dragon (see engine/Dragon.ts's createDragons).
