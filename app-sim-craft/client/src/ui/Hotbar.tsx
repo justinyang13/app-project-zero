@@ -1,4 +1,4 @@
-import type { ReactElement } from "react";
+import { useState, type ReactElement } from "react";
 import type { BuildMode } from "../state/hotbarStore";
 import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
 import { ToolIcon } from "./ToolIcon";
@@ -12,10 +12,13 @@ const MODES: { mode: BuildMode; label: string; color: string; hotkey: string; ic
   { mode: "flag", label: "Flag", color: "#ff4fd8", hotkey: "V", icon: () => <FlagGlyph /> },
 ];
 
-function slotButtonStyle(selected: boolean, colorHex: string): React.CSSProperties {
+/** Space the touch hotbar's frame takes besides its slots: side padding + panel padding + gaps. */
+const TOUCH_HOTBAR_CHROME = 16 + 12 + (HOTBAR_SLOTS.length - 1) * 6;
+
+function slotButtonStyle(selected: boolean, colorHex: string, size: number | string = 48): React.CSSProperties {
   return {
-    width: 48,
-    height: 48,
+    width: size,
+    height: size,
     border: selected ? "2px solid #fff" : "2px solid rgba(255,255,255,0.3)",
     borderRadius: 4,
     background: colorHex,
@@ -33,8 +36,13 @@ export function Hotbar() {
   const select = useHotbarStore((s) => s.select);
   const mode = useHotbarStore((s) => s.mode);
   const setMode = useHotbarStore((s) => s.setMode);
+  // Touch only: the block row starts folded away to a single button so it does not cover the view.
+  const [expanded, setExpanded] = useState(false);
 
   if (isTouch) {
+    // Slots shrink (down from 48px) so the whole row fits the space beside the thumb controls — no scrolling to find a block.
+    const sideSpace = compact ? 152 + 220 : 0;
+    const slotSize = `min(48px, calc((100vw - ${sideSpace + TOUCH_HOTBAR_CHROME}px) / ${HOTBAR_SLOTS.length}))`;
     // Centered-and-wider-than-the-viewport (desktop's layout) doesn't
     // fit a narrow phone screen at all, let alone leave room for
     // TouchJoystick.tsx/TouchActionButtons.tsx in both bottom corners —
@@ -51,19 +59,41 @@ export function Hotbar() {
           right: compact ? 220 : 0,
           bottom: compact ? 8 : "max(240px, calc(env(safe-area-inset-bottom) + 240px))",
           display: "flex",
-          justifyContent: "center",
           overflowX: "auto",
           touchAction: "pan-x",
           padding: "0 8px",
           zIndex: 5, // above the touch look-drag overlay, so slots stay tappable
         }}
       >
-        <div style={{ display: "flex", gap: 6, background: "rgba(0, 0, 0, 0.4)", padding: 6, borderRadius: 6 }}>
+        {!expanded ? (
+          <button
+            onClick={() => setExpanded(true)}
+            title="Choose a block"
+            style={{
+              ...slotButtonStyle(true, `#${HOTBAR_SLOTS[selectedIndex].color.toString(16).padStart(6, "0")}`, 44),
+              margin: "0 auto",
+              boxShadow: "0 1px 6px rgba(0, 0, 0, 0.5)",
+            }}
+          >
+            <span style={{ position: "absolute", top: 1, left: 4, fontSize: 10, color: "#fff", textShadow: "0 0 2px #000", fontFamily: "monospace" }}>
+              {selectedIndex + 1}
+            </span>
+            <span style={{ position: "absolute", top: 1, right: 4, fontSize: 9, color: "#fff", textShadow: "0 0 2px #000" }}>▴</span>
+            <span style={{ position: "absolute", bottom: 1, right: 1 }}>
+              <ToolIcon tool={HOTBAR_SLOTS[selectedIndex].toolType} />
+            </span>
+          </button>
+        ) : (
+        /* margin: auto centers the row but, unlike justify-content: center, never clips its start when it overflows. */
+        <div style={{ display: "flex", gap: 6, background: "rgba(0, 0, 0, 0.4)", padding: 6, borderRadius: 6, margin: "0 auto" }}>
           {HOTBAR_SLOTS.map((block, i) => (
             <button
               key={block.key}
-              onClick={() => select(i)}
-              style={slotButtonStyle(i === selectedIndex, `#${block.color.toString(16).padStart(6, "0")}`)}
+              onClick={() => {
+                select(i);
+                setExpanded(false);
+              }}
+              style={slotButtonStyle(i === selectedIndex, `#${block.color.toString(16).padStart(6, "0")}`, slotSize)}
               title={`${block.name} (breaks with: ${block.toolType === "none" ? "any tool" : block.toolType})`}
             >
               <span style={{ position: "absolute", top: 2, left: 4, fontSize: 10, color: "#fff", textShadow: "0 0 2px #000", fontFamily: "monospace" }}>
@@ -75,6 +105,7 @@ export function Hotbar() {
             </button>
           ))}
         </div>
+        )}
       </div>
     );
   }

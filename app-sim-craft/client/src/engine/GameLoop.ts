@@ -147,6 +147,7 @@ export class GameLoop {
   // Dynamic resolution: if the frame rate sags, render at a lower pixel ratio (crisp UI is DOM, so only the 3D view softens) and creep back up when there's headroom.
   private adaptiveResolution = true;
   private unsubscribeGraphics: (() => void) | null = null;
+  private resizeObserver: ResizeObserver | null = null;
   private maxPixelRatio = 1;
   private pixelRatio = 1;
   private slowWindows = 0;
@@ -181,11 +182,12 @@ export class GameLoop {
     this.maxPixelRatio = Math.min(window.devicePixelRatio, initialGraphics.resolution);
     this.pixelRatio = this.maxPixelRatio;
     this.renderer.setPixelRatio(this.pixelRatio);
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    const { width: viewW, height: viewH } = this.viewportSize();
+    this.renderer.setSize(viewW, viewH, false);
 
     this.scene = new THREE.Scene();
 
-    this.camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(BASE_FOV, viewW / viewH, 0.1, 1000);
     // The camera itself needs to be part of the scene graph for its
     // children (the held-item viewmodel below) to render at all — a
     // camera doesn't have to be in the scene to be used for rendering,
@@ -254,6 +256,9 @@ export class GameLoop {
     });
 
     window.addEventListener("resize", this.handleResize);
+    // Orientation flips and the iOS toolbar collapsing don't always fire a window resize; the canvas's own box always changes.
+    this.resizeObserver = new ResizeObserver(this.handleResize);
+    this.resizeObserver.observe(canvas);
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
     window.addEventListener("beforeunload", this.handleBeforeUnload);
@@ -303,13 +308,27 @@ export class GameLoop {
   private setPixelRatio(ratio: number): void {
     this.pixelRatio = ratio;
     this.renderer.setPixelRatio(ratio);
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    const { width, height } = this.viewportSize();
+    this.renderer.setSize(width, height, false);
+  }
+
+  /**
+   * The canvas's layout size (CSS: fixed, inset 0). Not window.innerWidth —
+   * iOS Safari shrinks that while the page is pinch- or double-tap-zoomed,
+   * which left the canvas cut off at a fraction of the screen.
+   */
+  private viewportSize(): { width: number; height: number } {
+    return {
+      width: this.canvas.clientWidth || window.innerWidth,
+      height: this.canvas.clientHeight || window.innerHeight,
+    };
   }
 
   private handleResize = (): void => {
-    this.camera.aspect = window.innerWidth / window.innerHeight;
+    const { width, height } = this.viewportSize();
+    this.camera.aspect = width / height;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(window.innerWidth, window.innerHeight);
+    this.renderer.setSize(width, height, false);
   };
 
   private handleContextMenu = (e: Event): void => e.preventDefault();
@@ -1275,6 +1294,7 @@ export class GameLoop {
     this.disposed = true;
     cancelAnimationFrame(this.rafHandle);
     window.removeEventListener("resize", this.handleResize);
+    this.resizeObserver?.disconnect();
     window.removeEventListener("keydown", this.handleKeyDown);
     window.removeEventListener("keyup", this.handleKeyUp);
     window.removeEventListener("beforeunload", this.handleBeforeUnload);

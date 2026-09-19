@@ -28,7 +28,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
   // the screen; the ring's buttons grow to stay finger-sized.
   const isTouch = useIsTouchDevice();
   const size = isTouch ? TOUCH_SIZE : DESKTOP_SIZE;
-  const buttonSize = isTouch ? 30 : 22;
+  const buttonSize = isTouch ? 26 : 22;
 
   return (
     <div
@@ -61,7 +61,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
         <button
           onClick={() => getActiveGameLoop()?.teleportToCastle()}
           title="Back to the castle (H)"
-          style={{ ...zoomButtonStyle(false, isTouch ? 130 : HOME_ANGLE, size, buttonSize), fontSize: isTouch ? 15 : 12 }}
+          style={{ ...zoomButtonStyle(false, isTouch ? 132 : HOME_ANGLE, size, buttonSize), fontSize: isTouch ? 13 : 12 }}
         >
           🏰
         </button>
@@ -69,7 +69,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           onClick={zoomIn}
           disabled={zoomIndex === 0}
           title="Zoom in (=)"
-          style={zoomButtonStyle(zoomIndex === 0, isTouch ? 26 : ZOOM_IN_ANGLE, size, buttonSize)}
+          style={zoomButtonStyle(zoomIndex === 0, isTouch ? 22 : ZOOM_IN_ANGLE, size, buttonSize)}
         >
           +
         </button>
@@ -77,7 +77,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           onClick={zoomOut}
           disabled={zoomIndex === MINIMAP_ZOOM_LEVELS.length - 1}
           title="Zoom out (-)"
-          style={zoomButtonStyle(zoomIndex === MINIMAP_ZOOM_LEVELS.length - 1, isTouch ? 62 : ZOOM_OUT_ANGLE, size, buttonSize)}
+          style={zoomButtonStyle(zoomIndex === MINIMAP_ZOOM_LEVELS.length - 1, isTouch ? 66 : ZOOM_OUT_ANGLE, size, buttonSize)}
         >
           −
         </button>
@@ -125,14 +125,14 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
         title="Open the full-screen world map (M)"
         style={{
           pointerEvents: "auto",
-          marginTop: isTouch ? 8 : 0,
-          padding: isTouch ? "6px 12px" : "2px 8px",
+          marginTop: isTouch ? 6 : 0,
+          padding: isTouch ? "4px 10px" : "2px 8px",
           background: "rgba(0, 0, 0, 0.6)",
           border: "1px solid rgba(255, 255, 255, 0.5)",
           borderRadius: isTouch ? 6 : 3,
           color: "#fff",
           fontFamily: "monospace",
-          fontSize: isTouch ? 12 : 10,
+          fontSize: isTouch ? 11 : 10,
           cursor: "pointer",
           touchAction: "manipulation",
         }}
@@ -147,7 +147,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
 // clockwise from 3 o'clock): zoom in/out side by side along the lower right,
 // the castle button at the lower left.
 const DESKTOP_SIZE = 160;
-const TOUCH_SIZE = 112;
+const TOUCH_SIZE = 84;
 const ZOOM_IN_ANGLE = 40;
 const ZOOM_OUT_ANGLE = 66;
 const HOME_ANGLE = 122;

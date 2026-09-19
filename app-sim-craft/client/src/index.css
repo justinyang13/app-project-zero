@@ -1,13 +1,24 @@
-/* Resets the browser default body margin (8px) and disables page scroll
-   — without this, the canvas (sized to 100vw/100vh) overflows the
-   viewport by the margin, a scrollbar appears, and the default
-   space-bar-scrolls-the-page behavior can yank the canvas out of view. */
+/* Resets the browser default body margin (8px) and pins the page to the
+   viewport — the canvas and HUD are all fixed, so there is nothing to
+   scroll. On iOS Safari, overflow:hidden alone does not stop the page
+   from being panned or rubber-banded, so the body is fixed too. */
 html,
 body {
   margin: 0;
   padding: 0;
   overflow: hidden;
   height: 100%;
+  overscroll-behavior: none;
+  /* No double-tap-to-zoom (pinch is blocked separately, see lockPageZoom.ts). */
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  width: 100%;
 }
 
 #root {
