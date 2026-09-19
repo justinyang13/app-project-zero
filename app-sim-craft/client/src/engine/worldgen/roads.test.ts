@@ -12,7 +12,8 @@ import {
 } from "./roads";
 import { classifyRoadColumn, grandBridgeBlock } from "./bridge";
 import { generateColumn, sampleColumn } from "./terrain";
-import { CAMPFIRE_SITES, HOUSE_LOTS } from "./structures";
+import { CAMPFIRE_SITES } from "./structures";
+import { VILLAGE_CORE } from "./village/layout";
 import { CASTLE_CENTER, PLAN_MAX_X, PLAN_MAX_Z, PLAN_MIN_X, PLAN_MIN_Z } from "./castle/layout";
 import { MOUNTAIN_CENTER, MOUNTAIN_RADIUS } from "./mountain";
 import { getBlockByKey } from "../../data/blocks";
@@ -60,11 +61,9 @@ describe("loop road", () => {
     for (let s = 0; s < LOOP_PERIMETER; s += 3) {
       const { x, z } = pointAtProgress(s);
       expect(x > CASTLE_CENTER.x + PLAN_MIN_X - 20 && x < CASTLE_CENTER.x + PLAN_MAX_X + 20 && z > CASTLE_CENTER.z + PLAN_MIN_Z - 20 && z < CASTLE_CENTER.z + PLAN_MAX_Z + 20).toBe(false);
-      for (const lot of HOUSE_LOTS) {
-        const dx = Math.max(lot.x - x, 0, x - (lot.x + lot.width));
-        const dz = Math.max(lot.z - z, 0, z - (lot.z + lot.depth));
-        expect(Math.hypot(dx, dz)).toBeGreaterThan(14);
-      }
+      const vx = Math.max(VILLAGE_CORE.minX - x, 0, x - VILLAGE_CORE.maxX);
+      const vz = Math.max(VILLAGE_CORE.minZ - z, 0, z - VILLAGE_CORE.maxZ);
+      expect(Math.hypot(vx, vz)).toBeGreaterThan(5); // clear of the village's flattened ground
       for (const camp of CAMPFIRE_SITES) expect(Math.hypot(camp.x - x, camp.z - z)).toBeGreaterThan(20);
       expect(Math.hypot(x - MOUNTAIN_CENTER.x, z - MOUNTAIN_CENTER.z)).toBeGreaterThan(MOUNTAIN_RADIUS + 1);
     }

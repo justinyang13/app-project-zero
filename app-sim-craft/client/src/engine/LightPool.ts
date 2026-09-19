@@ -43,7 +43,13 @@ export class LightPool {
   private readonly candidates: Candidate[] = [];
 
   constructor(scene: THREE.Scene, size: number) {
-    for (let i = 0; i < size; i++) {
+    this.setSize(scene, size);
+  }
+
+  /** Changes how many real lights are in play. (Three recompiles the lit shaders when the count changes, so this is for settings changes, not per-frame use.) */
+  setSize(scene: THREE.Scene, size: number): void {
+    while (this.lights.length > size) scene.remove(this.lights.pop()!);
+    while (this.lights.length < size) {
       const light = new THREE.PointLight(0xffffff, 0, 1, 2);
       scene.add(light);
       this.lights.push(light);

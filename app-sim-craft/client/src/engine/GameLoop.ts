@@ -20,6 +20,7 @@ import {
 } from "./Fish";
 import { Dragon, createDragons } from "./Dragon";
 import { LightPool } from "./LightPool";
+import { useGraphicsStore, type GraphicsSettings } from "../state/graphicsStore";
 import type { Rideable, RideInput } from "./Rideable";
 import { DEEP_LAKE_CENTER, DEEP_LAKE_RADIUS } from "./worldgen/deepLake";
 import { Car, type CarInput } from "./Car";
@@ -57,8 +58,6 @@ const MAX_RIDE_ZOOM = 6;
 const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped position
 const ENTER_VEHICLE_RANGE = 3;
 // Real (shader-evaluated) dynamic lights at once — see LightPool.ts: every extra one costs every lit fragment on screen, so lamps, camps, torches and headlights share this handful, re-aimed at whichever are nearest the camera.
-const LIGHT_POOL_SIZE = 6;
-const MAX_PIXEL_RATIO = 2;
 const MIN_PIXEL_RATIO = 0.75;
 const ADAPT_LOW_FPS = 38; // below this for 1.5s, drop the render resolution a step
 const ADAPT_HIGH_FPS = 57; // at/above this for 15s, take a step back up
@@ -143,6 +142,8 @@ export class GameLoop {
   private fpsWindowStart = performance.now();
   private currentFps = 0;
   // Dynamic resolution: if the frame rate sags, render at a lower pixel ratio (crisp UI is DOM, so only the 3D view softens) and creep back up when there's headroom.
+  private adaptiveResolution = true;
+  private unsubscribeGraphics: (() => void) | null = null;
   private maxPixelRatio = 1;
   private pixelRatio = 1;
   private slowWindows = 0;
@@ -173,7 +174,8 @@ export class GameLoop {
     this.canvas = canvas;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.maxPixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+    const initialGraphics = useGraphicsStore.getState().settings;
+    this.maxPixelRatio = Math.min(window.devicePixelRatio, initialGraphics.resolution);
     this.pixelRatio = this.maxPixelRatio;
     this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
@@ -189,7 +191,7 @@ export class GameLoop {
     this.mouseLook = new MouseLook(this.camera, canvas);
 
     this.sky = new Sky(this.scene);
-    this.lightPool = new LightPool(this.scene, LIGHT_POOL_SIZE);
+    this.lightPool = new LightPool(this.scene, initialGraphics.lights);
 
     this.world = new World(seed);
     this.chunkManager = new ChunkManager(this.world, this.scene, saveManager, renderDistanceColumns);
@@ -243,6 +245,11 @@ export class GameLoop {
 
     this.miniMap = new MiniMap(minimapCanvas, seed);
 
+    this.applyGraphics(useGraphicsStore.getState().settings);
+    this.unsubscribeGraphics = useGraphicsStore.subscribe((state, previous) => {
+      if (state.settings !== previous.settings) this.applyGraphics(state.settings);
+    });
+
     window.addEventListener("resize", this.handleResize);
     window.addEventListener("keydown", this.handleKeyDown);
     window.addEventListener("keyup", this.handleKeyUp);
@@ -257,7 +264,21 @@ export class GameLoop {
     canvas.addEventListener("wheel", this.handleWheel);
   }
 
+  /** Applies the player's graphics settings (see state/graphicsStore.ts) to the running game — at startup and whenever they change. */
+  private applyGraphics(settings: GraphicsSettings): void {
+    this.chunkManager.setRenderDistance(settings.renderDistance, this.player.position.x, this.player.position.z);
+    this.sky.setViewDistance(settings.renderDistance * 32);
+    this.lightPool.setSize(this.scene, settings.lights);
+    this.clouds.setQuality(settings.clouds);
+    this.adaptiveResolution = settings.adaptive;
+    this.maxPixelRatio = Math.min(window.devicePixelRatio, settings.resolution);
+    this.slowWindows = 0;
+    this.fastWindows = 0;
+    this.setPixelRatio(this.maxPixelRatio);
+  }
+
   private adaptResolution(fps: number): void {
+    if (!this.adaptiveResolution) return;
     if (fps < ADAPT_LOW_FPS) {
       this.fastWindows = 0;
       if (++this.slowWindows >= 3 && this.pixelRatio > MIN_PIXEL_RATIO) {
@@ -1293,6 +1314,7 @@ export class GameLoop {
       this.scene.remove(torch.group);
       torch.dispose();
     }
+    this.unsubscribeGraphics?.();
     this.lightPool.dispose(this.scene);
     this.renderer.dispose();
 

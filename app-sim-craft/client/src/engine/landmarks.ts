@@ -1,6 +1,7 @@
 // The world's fixed points of interest, shared by the full-screen map
 // (ui/FullMap.tsx) and the minimap's edge arrows (engine/MiniMap.ts).
-import { CASTLE_CENTER, HOUSE_LOTS } from "./worldgen/structures";
+import { CASTLE_CENTER } from "./worldgen/structures";
+import { VILLAGE_CENTER } from "./worldgen/village/layout";
 import { MOUNTAIN_CENTER } from "./worldgen/mountain";
 import { DEEP_LAKE_CENTER } from "./worldgen/deepLake";
 
@@ -12,12 +13,6 @@ export interface Landmark {
   letter: string;
   color: string;
 }
-
-export const VILLAGE_CENTER = (() => {
-  const xs = HOUSE_LOTS.flatMap((l) => [l.x, l.x + l.width]);
-  const zs = HOUSE_LOTS.flatMap((l) => [l.z, l.z + l.depth]);
-  return { x: (Math.min(...xs) + Math.max(...xs)) / 2, z: (Math.min(...zs) + Math.max(...zs)) / 2 };
-})();
 
 export const LANDMARKS: Landmark[] = [
   { x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, label: "Castle", letter: "C", color: "#f2f2f2" },

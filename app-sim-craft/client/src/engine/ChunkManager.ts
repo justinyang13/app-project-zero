@@ -20,11 +20,6 @@ import { getTexturedMaterial } from "../rendering/texturedMaterial";
 // short of the budget — see spec/15-performance.md §3's "Medium" preset,
 // which uses the same 10-chunk radius as its default target.
 export const RENDER_DISTANCE_COLUMNS = 10; // chunk columns in each horizontal direction
-// Mobile GPUs choke on the desktop radius — same streaming/meshing cost
-// per column, but weaker fill-rate/bandwidth. A judgment-call starting
-// point (5-6 columns), easy to retune once real-device frame times are
-// measured; see engine/GameLoop.ts for where this is selected.
-export const MOBILE_RENDER_DISTANCE_COLUMNS = 6;
 const EVICT_MARGIN = 1;
 
 const material = new THREE.MeshLambertMaterial({ vertexColors: true });
@@ -86,7 +81,7 @@ export class ChunkManager {
   private readonly pendingColumns = new Set<string>();
   private readonly pendingMeshes = new Set<string>();
   private lastPlayerColumn: { cx: number; cz: number } | null = null;
-  private readonly renderDistanceColumns: number;
+  private renderDistanceColumns: number;
 
   constructor(world: World, scene: THREE.Scene, saveManager: SaveManager, renderDistanceColumns: number = RENDER_DISTANCE_COLUMNS) {
     this.world = world;
@@ -101,6 +96,14 @@ export class ChunkManager {
       () => new Worker(new URL("../workers/mesh.worker.ts", import.meta.url), { type: "module" }),
       defaultPoolSize(),
     );
+  }
+
+  /** Changes how many chunk columns are kept loaded around the player (takes effect on the next update, which this forces). */
+  setRenderDistance(columns: number, playerX: number, playerZ: number): void {
+    if (columns === this.renderDistanceColumns) return;
+    this.renderDistanceColumns = columns;
+    this.lastPlayerColumn = null;
+    this.update(playerX, playerZ);
   }
 
   get loadedChunkCount(): number {

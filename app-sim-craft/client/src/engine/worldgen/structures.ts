@@ -12,6 +12,7 @@ import { getBlockByKey } from "../../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
 import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER, ROAD_WIDTH } from "./roads";
 import { getCastlePlan } from "./castle/blueprint";
+import { chunkOverlapsVillage, stampVillage, VILLAGE_TOP_Y } from "./village/stamp";
 import { UNSET } from "./castle/plan";
 import {
   CASTLE_BASE_Y,
@@ -31,10 +32,8 @@ import { MOUNTAIN_CENTER } from "./mountain";
 export { CASTLE_CENTER, CASTLE_GATE_SPAWN };
 
 const WALL_ID = getBlockByKey("greystone").id;
-const ROOF_ID = getBlockByKey("roof_tile").id;
 const PLANK_ID = getBlockByKey("plank").id;
 const LOG_ID = getBlockByKey("log").id;
-const SANDSTONE_ID = getBlockByKey("sandstone").id;
 const AIR_ID = 0;
 
 export const BRIDGE_CENTER = { x: 14, z: 0 };
@@ -85,59 +84,6 @@ export const LAMP_SITES: { x: number; z: number }[] = Array.from(
   },
 );
 
-// A residential neighborhood: a fixed grid of lots south of the loop
-// road (clear of it — the loop bends around the lots' northwest corner,
-// see worldgen/roads.ts), each with a differently
-// shaped, sized, and walled house plus a fenced yard. Every lot's
-// dimensions are
-// derived from its index with moduli chosen (4, 5, 5, 3, 2 — pairwise
-// coprime enough that their combination doesn't repeat inside 30 lots)
-// so all 30 houses come out visually distinct without needing a random
-// number generator — this file's structures are meant to regenerate
-// identically every time a chunk reloads, so anything Math.random()-based
-// would make the neighborhood look different on every visit.
-const RESIDENTIAL_COLS = 6;
-const RESIDENTIAL_ROWS = 5;
-const LOT_SIZE = 14;
-const RESIDENTIAL_ORIGIN = { x: -(RESIDENTIAL_COLS * LOT_SIZE) / 2, z: 130 };
-const HOUSE_WALL_MATERIALS = [WALL_ID, PLANK_ID, LOG_ID, SANDSTONE_ID];
-const YARD_MARGIN = 2;
-const FENCE_ID = LOG_ID;
-const PATH_ID = PLANK_ID;
-
-interface HouseLot {
-  x: number; // footprint's min-X corner
-  z: number; // footprint's min-Z corner
-  width: number;
-  depth: number;
-  height: number;
-  wallBlock: number;
-  pitched: boolean;
-}
-
-export const HOUSE_LOTS: HouseLot[] = Array.from({ length: RESIDENTIAL_COLS * RESIDENTIAL_ROWS }, (_, i) => {
-  const col = i % RESIDENTIAL_COLS;
-  const row = Math.floor(i / RESIDENTIAL_COLS);
-  const centerX = RESIDENTIAL_ORIGIN.x + col * LOT_SIZE + LOT_SIZE / 2;
-  const centerZ = RESIDENTIAL_ORIGIN.z + row * LOT_SIZE + LOT_SIZE / 2;
-  const width = 5 + (i % 5); // 5..9
-  const depth = 5 + ((i * 2 + 3) % 5); // 5..9, different phase so it isn't just width again
-  return {
-    x: Math.round(centerX - width / 2),
-    z: Math.round(centerZ - depth / 2),
-    width,
-    depth,
-    height: 3 + (i % 3), // 3..5
-    wallBlock: HOUSE_WALL_MATERIALS[i % HOUSE_WALL_MATERIALS.length],
-    pitched: i % 2 === 0,
-  };
-});
-
-/** Extra vertical blocks a lot's roof needs above its wall top — gable roofs rise with the footprint's longer side, flat roofs just cap it. */
-function houseRoofRise(lot: HouseLot): number {
-  return lot.pitched ? Math.ceil((lot.depth + 2) / 2) + 1 : 1;
-}
-
 const SEAT_ID = getBlockByKey("plank").id;
 const SEAT_RADIUS = 2.2;
 const SEAT_COUNT = 6;
@@ -149,7 +95,6 @@ let cachedSeed: number | null = null;
 let cachedBridgeDeckY = 0;
 let cachedCampfireYs: number[] = [];
 let cachedLampYs: number[] = [];
-let cachedHouseYs: number[] = [];
 let cachedPeakY = 0;
 
 function ensureCache(seed: number): void {
@@ -168,9 +113,6 @@ function ensureCache(seed: number): void {
   // deck is well above any ground. This is what "sits at road-level"
   // actually means.
   cachedLampYs = LAMP_SITES.map((_, i) => roadDeckYAtProgress(i * LAMP_SPACING) + 1);
-  cachedHouseYs = HOUSE_LOTS.map(
-    (lot) => sampleColumn(seed, lot.x + Math.floor(lot.width / 2), lot.z + Math.floor(lot.depth / 2)).height + 1,
-  );
   cachedPeakY = sampleColumn(seed, MOUNTAIN_CENTER.x, MOUNTAIN_CENTER.z).height;
 }
 
@@ -182,7 +124,6 @@ export function getStructureAnchors(
   castleBaseY: number;
   campfireYs: number[];
   lampYs: number[];
-  houseYs: number[];
   peakY: number;
 } {
   ensureCache(seed);
@@ -191,7 +132,6 @@ export function getStructureAnchors(
     castleBaseY: CASTLE_BASE_Y,
     campfireYs: cachedCampfireYs,
     lampYs: cachedLampYs,
-    houseYs: cachedHouseYs,
     peakY: cachedPeakY,
   };
 }
@@ -243,23 +183,7 @@ export function structureMaxYFor(seed: number, cx: number, cz: number): number {
   ) {
     maxY = Math.max(maxY, CASTLE_FLOOR_Y + CASTLE_TOP_ABOVE_FLOOR);
   }
-  for (let i = 0; i < HOUSE_LOTS.length; i++) {
-    const lot = HOUSE_LOTS[i];
-    const margin = YARD_MARGIN + 1;
-    if (
-      !chunkOverlapsBox(
-        cx,
-        cz,
-        lot.x - margin,
-        lot.x + lot.width - 1 + margin,
-        lot.z - margin,
-        lot.z + lot.depth - 1 + margin,
-      )
-    ) {
-      continue;
-    }
-    maxY = Math.max(maxY, cachedHouseYs[i] + lot.height + houseRoofRise(lot) + 1);
-  }
+  if (chunkOverlapsVillage(cx, cz)) maxY = Math.max(maxY, VILLAGE_TOP_Y);
   return maxY;
 }
 
@@ -368,110 +292,6 @@ function stampCampfires(seed: number, cx: number, cz: number, chunks: Chunk[]): 
   }
 }
 
-function stampFlatRoof(cx: number, cz: number, chunks: Chunk[], minX: number, maxX: number, minZ: number, maxZ: number, wy: number): void {
-  for (let wx = minX - 1; wx <= maxX + 1; wx++) {
-    for (let wz = minZ - 1; wz <= maxZ + 1; wz++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, ROOF_ID);
-  }
-}
-
-/** A gable roof: two tiers stepping in from the north/south edges each level up until they meet at a ridge running along X. */
-function stampGableRoof(cx: number, cz: number, chunks: Chunk[], minX: number, maxX: number, minZ: number, maxZ: number, wy: number): void {
-  let curMinZ = minZ - 1;
-  let curMaxZ = maxZ + 1;
-  let y = wy;
-  while (curMinZ < curMaxZ) {
-    for (let wx = minX - 1; wx <= maxX + 1; wx++) {
-      setWorldVoxel(chunks, cx, cz, wx, y, curMinZ, ROOF_ID);
-      setWorldVoxel(chunks, cx, cz, wx, y, curMaxZ, ROOF_ID);
-    }
-    curMinZ++;
-    curMaxZ--;
-    y++;
-  }
-  if (curMinZ === curMaxZ) {
-    for (let wx = minX - 1; wx <= maxX + 1; wx++) setWorldVoxel(chunks, cx, cz, wx, y, curMinZ, ROOF_ID);
-  }
-}
-
-/** One house: a hollow box with a front door, three windows, a plank floor, and a flat or gable roof depending on the lot. */
-function stampHouse(cx: number, cz: number, chunks: Chunk[], lot: HouseLot, baseY: number): void {
-  const minX = lot.x;
-  const maxX = lot.x + lot.width - 1;
-  const minZ = lot.z;
-  const maxZ = lot.z + lot.depth - 1;
-  const topWallY = baseY + lot.height - 1;
-  const midX = lot.x + Math.floor(lot.width / 2);
-  const midZ = lot.z + Math.floor(lot.depth / 2);
-  const windowY = baseY + 1;
-
-  for (let wx = minX; wx <= maxX; wx++) {
-    for (let wz = minZ; wz <= maxZ; wz++) {
-      setWorldVoxel(chunks, cx, cz, wx, baseY - 1, wz, PLANK_ID);
-      const onWall = wx === minX || wx === maxX || wz === minZ || wz === maxZ;
-      if (!onWall) {
-        for (let wy = baseY; wy <= topWallY; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-        continue;
-      }
-      const isDoor = wz === minZ && wx === midX;
-      const isWindow =
-        !isDoor &&
-        windowY <= topWallY &&
-        ((wz === maxZ && wx === midX) || (wx === minX && wz === midZ) || (wx === maxX && wz === midZ));
-      for (let wy = baseY; wy <= topWallY; wy++) {
-        if (isDoor && wy <= baseY + 1) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-        else if (isWindow && wy === windowY) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-        else setWorldVoxel(chunks, cx, cz, wx, wy, wz, lot.wallBlock);
-      }
-    }
-  }
-
-  if (lot.pitched) stampGableRoof(cx, cz, chunks, minX, maxX, minZ, maxZ, topWallY + 1);
-  else stampFlatRoof(cx, cz, chunks, minX, maxX, minZ, maxZ, topWallY + 1);
-}
-
-/** A picket-style fence (posts every other block) around the yard, with a gate gap facing the house's front door, plus a short path from the gate to the door. */
-function stampYard(cx: number, cz: number, chunks: Chunk[], lot: HouseLot, baseY: number): void {
-  const minX = lot.x - YARD_MARGIN;
-  const maxX = lot.x + lot.width - 1 + YARD_MARGIN;
-  const minZ = lot.z - YARD_MARGIN;
-  const maxZ = lot.z + lot.depth - 1 + YARD_MARGIN;
-  const gateX = lot.x + Math.floor(lot.width / 2);
-
-  for (let wx = minX; wx <= maxX; wx++) {
-    if ((wx - minX) % 2 !== 0) continue;
-    if (Math.abs(wx - gateX) > 1) setWorldVoxel(chunks, cx, cz, wx, baseY, minZ, FENCE_ID);
-    setWorldVoxel(chunks, cx, cz, wx, baseY, maxZ, FENCE_ID);
-  }
-  for (let wz = minZ; wz <= maxZ; wz++) {
-    if ((wz - minZ) % 2 !== 0) continue;
-    setWorldVoxel(chunks, cx, cz, minX, baseY, wz, FENCE_ID);
-    setWorldVoxel(chunks, cx, cz, maxX, baseY, wz, FENCE_ID);
-  }
-  for (let wz = minZ; wz < lot.z; wz++) setWorldVoxel(chunks, cx, cz, gateX, baseY - 1, wz, PATH_ID);
-}
-
-function stampResidentialArea(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
-  const { houseYs } = getStructureAnchors(seed);
-  const margin = YARD_MARGIN + 1;
-  for (let i = 0; i < HOUSE_LOTS.length; i++) {
-    const lot = HOUSE_LOTS[i];
-    if (
-      !chunkOverlapsBox(
-        cx,
-        cz,
-        lot.x - margin,
-        lot.x + lot.width - 1 + margin,
-        lot.z - margin,
-        lot.z + lot.depth - 1 + margin,
-      )
-    ) {
-      continue;
-    }
-    stampYard(cx, cz, chunks, lot, houseYs[i]);
-    stampHouse(cx, cz, chunks, lot, houseYs[i]);
-  }
-}
-
 function stampStreetLamps(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   const { lampYs } = getStructureAnchors(seed);
   for (let i = 0; i < LAMP_SITES.length; i++) {
@@ -489,5 +309,5 @@ export function stampStructures(seed: number, cx: number, cz: number, chunks: Ch
   stampCastle(cx, cz, chunks);
   stampCampfires(seed, cx, cz, chunks);
   stampStreetLamps(seed, cx, cz, chunks);
-  stampResidentialArea(seed, cx, cz, chunks);
+  stampVillage(cx, cz, chunks);
 }

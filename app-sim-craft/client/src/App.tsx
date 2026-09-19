@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { GameLoop } from "./engine/GameLoop";
 import { setActiveGameLoop } from "./engine/activeGameLoop";
 import { preloadFullMap } from "./engine/fullMapCache";
-import { RENDER_DISTANCE_COLUMNS, MOBILE_RENDER_DISTANCE_COLUMNS } from "./engine/ChunkManager";
+import { useGraphicsStore } from "./state/graphicsStore";
 import { DebugOverlay } from "./ui/DebugOverlay";
 import { Hotbar } from "./ui/Hotbar";
 import { Crosshair } from "./ui/Crosshair";
@@ -15,9 +15,9 @@ import { FullMap } from "./ui/FullMap";
 import { WorldNameModal } from "./ui/WorldNameModal";
 import { TouchControls } from "./ui/TouchControls";
 import { TouchOverrideToggle } from "./ui/TouchOverrideToggle";
+import { GraphicsPanel } from "./ui/GraphicsPanel";
 import { finalizeWorldChoice, resolveActiveWorldId, validateWorldName, type WorldResolution } from "./persistence/migration";
 import { useWorldStore } from "./state/worldStore";
-import { isTouchDeviceNow } from "./hooks/useIsTouchDevice";
 
 export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -53,10 +53,8 @@ export function App() {
     let cancelled = false;
     let loop: GameLoop | null = null;
     let cancelPreload: (() => void) | null = null;
-    // Read once at creation time (not the live useIsTouchDevice() hook) —
-    // this only needs to pick an initial render-distance budget, and
-    // ChunkManager isn't built to have its radius change mid-session.
-    const renderDistanceColumns = isTouchDeviceNow() ? MOBILE_RENDER_DISTANCE_COLUMNS : RENDER_DISTANCE_COLUMNS;
+    // The render distance the player last chose (see ui/GraphicsPanel.tsx); the game loop keeps following changes after this.
+    const renderDistanceColumns = useGraphicsStore.getState().settings.renderDistance;
     void GameLoop.create(canvas, minimapCanvas, readyWorldId, renderDistanceColumns).then((created) => {
       if (cancelled) {
         created.dispose();
@@ -116,6 +114,7 @@ export function App() {
       <FullMap />
       <TouchControls />
       <TouchOverrideToggle />
+      <GraphicsPanel />
     </>
   );
 }

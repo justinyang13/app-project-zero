@@ -331,6 +331,23 @@ export const BLOCKS: BlockDef[] = [
   // The lake bridge (worldgen/bridge.ts): a steel-blue box girder on pale concrete piers.
   flatStone(45, "bridge_steel", "Bridge Steel", 0x6a9fcc),
   flatStone(46, "bridge_concrete", "Bridge Concrete", 0xcac7be),
+  // The village (worldgen/village/): plaster walls, wood/slate roofs, gravel
+  // paths, crops and a few furnishings — all plain flat-colored blocks.
+  flatBlock(47, "whitewash", "Whitewashed Plaster", 0xece6d4, "pickaxe", 1.0),
+  flatBlock(48, "shingle_brown", "Wood Shingle", 0x7d4c2e, "axe", 1.0),
+  flatBlock(49, "shingle_slate", "Slate Shingle", 0x5c6675, "pickaxe", 1.5),
+  flatBlock(50, "path_gravel", "Gravel Path", 0xb3a98f, "shovel", 0.6),
+  flatBlock(51, "farmland", "Tilled Soil", 0x5b3a23, "shovel", 0.6),
+  flatBlock(52, "crop_wheat", "Wheat", 0xdcb640, "shovel", 0.2),
+  flatBlock(53, "crop_carrot", "Carrots", 0xeb8a2e, "shovel", 0.2),
+  flatBlock(54, "crop_cabbage", "Cabbage", 0x78bb4c, "shovel", 0.2),
+  flatBlock(55, "crop_pumpkin", "Pumpkins", 0xd9701a, "shovel", 0.2),
+  flatBlock(56, "hay", "Hay Bale", 0xd8bb52, "axe", 0.5),
+  flatBlock(57, "bed_red", "Bed", 0xb2363e, "axe", 0.4),
+  flatBlock(58, "bookshelf", "Bookshelf", 0x6e4b2d, "axe", 0.8),
+  flatBlock(59, "awning_red", "Red Awning", 0xc7402f, "axe", 0.4),
+  flatBlock(60, "awning_white", "White Awning", 0xf1ede2, "axe", 0.4),
+  flatBlock(61, "barn_red", "Barn Planks", 0x8f3128, "axe", 1.0),
 ];
 
 /** A textured (pixel-art) block. `overrides` tweak the defaults — see the notes on BlockDef for what each does. */
@@ -381,6 +398,11 @@ function flatTurf(id: number, key: string, name: string, color: number): BlockDe
     dropTable: [{ itemKey: "loam", minCount: 1, maxCount: 1, chance: 1 }],
     color,
   };
+}
+
+/** A plain flat-colored block with the given tool and hardness — drops itself. */
+function flatBlock(id: number, key: string, name: string, color: number, toolType: ToolType, hardness: number): BlockDef {
+  return { ...flatStone(id, key, name, color), toolType, hardness };
 }
 
 /** A plain flat-colored pickaxe block. */

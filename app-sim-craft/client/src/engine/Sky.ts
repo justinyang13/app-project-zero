@@ -7,20 +7,14 @@
 // meshes, the single directional "sky light" (whichever body is up),
 // ambient light, and the sky/fog color.
 import * as THREE from "three";
+import { SkyDome } from "./SkyDome";
 
 const SUNRISE = 6 / 24;
-const SUNSET = 19 / 24;
+// The sun crosses the horizon at 06:00 and 18:00 (see the orbit in update() below), so the lighting transition is centred on those.
+const SUNSET = 18 / 24;
 const TRANSITION = 0.75 / 24; // ~45 real minutes of dawn/dusk blend
 
-const DAY_SKY = new THREE.Color(0x8fd0f0);
-const NIGHT_SKY = new THREE.Color(0x0b1230);
-// Sunrise/sunset used to blend the sky straight from NIGHT_SKY to
-// DAY_SKY, which — since both are blue — just faded from dark blue to
-// light blue with no color shift at all through the transition. This
-// third stop sits at the transition's midpoint (see skyColorAt below)
-// so dawn/dusk actually pass through a warm, soft purple-pink glow
-// before settling into day or night, instead of a flat two-color fade.
-const TWILIGHT_SKY = new THREE.Color(0xcf7f9e);
+const DAY_SKY = new THREE.Color(0xbfe3f7); // fog/background before the first frame paints the real sky
 const DAY_AMBIENT = 0.95;
 // Low enough that an unlit face reads as genuinely dark at midnight
 // (previously 0.22 — a wash that barely dimmed anything since it stacks
@@ -34,6 +28,9 @@ const DAY_SUN_INTENSITY = 2.6;
 // moonlit (brighter than the ambient floor), just not near-daylight.
 const NIGHT_MOON_INTENSITY = 0.18;
 const SUN_COLOR = new THREE.Color(0xfff3d0);
+const SUNSET_SUN_COLOR = new THREE.Color(0xff9a52); // the low sun's light, warm through dawn and dusk
+const SUN_DISC_DAY = new THREE.Color(0xfff6d8);
+const SUN_DISC_LOW = new THREE.Color(0xfff4cc);
 const MOON_COLOR = new THREE.Color(0xaebfe0);
 
 const ORBIT_RADIUS = 300;
@@ -112,31 +109,21 @@ export function isNight(timeOfDay: number): boolean {
   return dayFactorAt(timeOfDay) < 0.5;
 }
 
-/**
- * Sky/fog color for a given day factor — a 3-stop gradient (night →
- * twilight → day) instead of a straight night-to-day fade, so both
- * sunrise and sunset (day factor rising through or falling through 0.5,
- * which — see dayFactorAt — lands exactly at each transition's midpoint)
- * pass through TWILIGHT_SKY's warm glow rather than just a dimmer blue.
- */
-function skyColorAt(day: number): THREE.Color {
-  return day <= 0.5
-    ? NIGHT_SKY.clone().lerp(TWILIGHT_SKY, day * 2)
-    : TWILIGHT_SKY.clone().lerp(DAY_SKY, (day - 0.5) * 2);
-}
-
 export class Sky {
   readonly skyLight: THREE.DirectionalLight;
   readonly ambientLight: THREE.AmbientLight;
   private readonly sunMesh: THREE.Mesh;
   private readonly moonMesh: THREE.Mesh;
   private readonly scene: THREE.Scene;
+  private readonly dome: SkyDome;
   private readonly stars: THREE.Group;
   private readonly dimStars: THREE.Points;
   private readonly brightStars: THREE.Points;
 
   constructor(scene: THREE.Scene) {
     this.scene = scene;
+    this.dome = new SkyDome();
+    scene.add(this.dome.mesh);
 
     // Many dim pinpricks plus a scattering of larger bright ones; the
     // whole dome follows the player and turns slowly with the time of day.
@@ -159,7 +146,7 @@ export class Sky {
     // the fog color and read as invisible instead of a crisp sun/moon.
     this.sunMesh = new THREE.Mesh(
       new THREE.SphereGeometry(9, 12, 12),
-      new THREE.MeshBasicMaterial({ color: 0xfff6d8, fog: false }),
+      new THREE.MeshBasicMaterial({ color: SUN_DISC_DAY.clone(), fog: false }),
     );
     this.moonMesh = new THREE.Mesh(
       new THREE.SphereGeometry(7, 12, 12),
@@ -173,6 +160,14 @@ export class Sky {
     // boundary, instead of ending in a visible hard edge.
     scene.background = DAY_SKY.clone();
     scene.fog = new THREE.Fog(DAY_SKY.getHex(), 120, 300);
+  }
+
+  /** Fades the world into the sky just inside the edge of what's loaded (`blocks` = the render distance in blocks), so there's never a visible hard edge. */
+  setViewDistance(blocks: number): void {
+    if (!(this.scene.fog instanceof THREE.Fog)) return;
+    const far = Math.max(70, blocks - 20);
+    this.scene.fog.far = far;
+    this.scene.fog.near = far * 0.4;
   }
 
   update(playerPosition: { x: number; y: number; z: number }, timeOfDay: number): void {
@@ -223,13 +218,21 @@ export class Sky {
       (this.brightStars.material as THREE.PointsMaterial).color.setScalar(starLevel * (1.05 - 0.15 * twinkle));
     }
 
-    const skyColor = skyColorAt(day);
+    // Paint the sky for where the sun and moon actually are, and fade distant terrain into its horizon color.
+    const sunDir = sunOffset.clone().normalize();
+    const skyColor = this.dome.update(playerPosition, sunDir, moonOffset.clone().normalize());
     if (this.scene.background instanceof THREE.Color) this.scene.background.copy(skyColor);
     if (this.scene.fog instanceof THREE.Fog) this.scene.fog.color.copy(skyColor);
+
+    // The low sun is warmer: its disc and its light shift from white-gold overhead to orange at the horizon.
+    const warmth = 1 - THREE.MathUtils.smoothstep(sunDir.y, 0.05, 0.5);
+    (this.sunMesh.material as THREE.MeshBasicMaterial).color.copy(SUN_DISC_DAY).lerp(SUN_DISC_LOW, warmth);
+    if (usingSun) this.skyLight.color.copy(SUN_COLOR).lerp(SUNSET_SUN_COLOR, warmth * 0.85);
   }
 
   dispose(): void {
-    this.scene.remove(this.skyLight, this.skyLight.target, this.ambientLight, this.sunMesh, this.moonMesh, this.stars);
+    this.scene.remove(this.skyLight, this.skyLight.target, this.ambientLight, this.sunMesh, this.moonMesh, this.stars, this.dome.mesh);
+    this.dome.dispose();
     for (const field of [this.dimStars, this.brightStars]) {
       field.geometry.dispose();
       (field.material as THREE.Material).dispose();

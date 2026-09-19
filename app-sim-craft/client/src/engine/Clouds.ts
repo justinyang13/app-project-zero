@@ -35,6 +35,7 @@ const RECENTER_MARGIN = SCATTER_RADIUS * 0.6;
 // regardless of time of day.
 const NIGHT_TINT = new THREE.Color(0x4d5568);
 const DAY_TINT = new THREE.Color(0xffffff);
+const TWILIGHT_TINT = new THREE.Color(0xffa98a);
 const MIN_OPACITY = 0.35;
 const MAX_OPACITY = 0.9;
 // Fraction of a cloud's own size its "breathing" scale oscillates by —
@@ -101,6 +102,14 @@ export class Clouds {
     }
   }
 
+  /** Off hides the sky's clouds entirely; Low draws every third one. */
+  setQuality(quality: "off" | "low" | "high"): void {
+    this.group.visible = quality !== "off";
+    this.clouds.forEach((cloud, i) => {
+      cloud.group.visible = quality === "high" || i % 3 === 0;
+    });
+  }
+
   update(dt: number, playerX: number, playerZ: number, timeOfDay: number): void {
     this.elapsed += dt;
     this.windOffset = (this.windOffset + WIND_SPEED * dt) % (SCATTER_RADIUS * 2);
@@ -108,7 +117,10 @@ export class Clouds {
     if (Math.abs(playerX - this.fieldOriginX) > RECENTER_MARGIN) this.fieldOriginX = playerX;
     if (Math.abs(playerZ - this.fieldOriginZ) > RECENTER_MARGIN) this.fieldOriginZ = playerZ;
 
-    const tint = NIGHT_TINT.clone().lerp(DAY_TINT, dayFactorAt(timeOfDay));
+    const day = dayFactorAt(timeOfDay);
+    // Catch the low sun: clouds blush pink-orange through dawn and dusk (strongest at the midpoint, when day is 0.5).
+    const twilight = 1 - Math.abs(day * 2 - 1);
+    const tint = NIGHT_TINT.clone().lerp(DAY_TINT, day).lerp(TWILIGHT_TINT, twilight * 0.75);
 
     for (const cloud of this.clouds) {
       cloud.group.position.x = this.fieldOriginX + wrapCoord(cloud.baseX + this.windOffset, SCATTER_RADIUS);

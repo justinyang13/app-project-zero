@@ -4,9 +4,9 @@ import { useHudStore } from "../state/hudStore";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const PRESETS: { label: string; t: number }[] = [
-  { label: "Dawn", t: 6 / 24 },
+  { label: "Dawn", t: 6.2 / 24 },
   { label: "Noon", t: 12 / 24 },
-  { label: "Dusk", t: 19 / 24 },
+  { label: "Dusk", t: 17.8 / 24 },
   { label: "Midnight", t: 0 },
 ];
 

@@ -109,8 +109,9 @@ function placeCherry(seed: number, chunks: Chunk[], lx: number, lz: number, heig
 export function placeTrees(seed: number, cx: number, cz: number, columns: ColumnSample[], chunks: Chunk[]): void {
   for (let lx = SMALL_MARGIN; lx < CHUNK_SIZE - SMALL_MARGIN; lx++) {
     for (let lz = SMALL_MARGIN; lz < CHUNK_SIZE - SMALL_MARGIN; lz++) {
-      const { height, biome, blight } = columns[lx * CHUNK_SIZE + lz];
+      const { height, biome, blight, village } = columns[lx * CHUNK_SIZE + lz];
       if (height < SEA_LEVEL) continue; // underwater/beach column, no trees
+      if (village > 0.02) continue; // the village plants its own oaks (worldgen/village/build.ts)
       if (blight > 0.6) continue; // nothing green grows in the castle's shadow
       const density = (TREE_DENSITY[biome.key] ?? 0) * (1 - blight / 0.6); // thinning out as the ground darkens
       if (density <= 0) continue;
