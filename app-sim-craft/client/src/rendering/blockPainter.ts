@@ -494,6 +494,107 @@ function paintRustRock(t: Tile): void {
   });
 }
 
+// --- trees and snow ----------------------------------------------------
+
+/** Vertical bark: dark furrows between raised, mottled ridges, with the odd knot. */
+function paintBark(t: Tile, base: RGB, furrow: RGB, light: RGB, seed: number, mossy = false): void {
+  t.fill((x, y) => {
+    const ridge = tileNoise(x, y * 0.35, 3, seed); // stretched vertically so the grain runs up the trunk
+    const groove = (x + Math.floor(hash(y >> 2, 0, seed + 1) * 2)) % 4 === 0;
+    let c = mix(base, light, ridge * 0.7);
+    if (groove) c = mix(c, furrow, 0.75);
+    c = scale(c, grain(x, y, seed + 2, 0.08));
+    if (hash(x >> 1, y >> 1, seed + 3) > 0.965) c = mix(c, furrow, 0.85); // knot
+    if (mossy && tileNoise(x, y, 5, seed + 4) > 0.66) c = mix(c, [74, 108, 54], 0.75);
+    return c;
+  });
+}
+
+/** A log's cut end: pale heartwood rings inside a bark border. */
+function paintLogTop(t: Tile, bark: RGB, wood: RGB, ring: RGB, seed: number): void {
+  t.fill((x, y) => {
+    const d = Math.max(Math.abs(x - 7.5), Math.abs(y - 7.5));
+    if (d > 6.5) return scale(bark, grain(x, y, seed, 0.1));
+    const rings = Math.floor(d) % 2 === 0 ? wood : ring;
+    return scale(rings, grain(x, y, seed + 1, 0.05));
+  });
+}
+
+/** Paper-white birch bark with the characteristic dark horizontal dashes. */
+function paintBirchBark(t: Tile): void {
+  t.fill((x, y) => {
+    let c: RGB = mix([236, 234, 226], [212, 210, 204], tileNoise(x, y, 4, 501) * 0.6);
+    c = scale(c, grain(x, y, 502, 0.04));
+    // Dashes: short horizontal marks at pseudo-random spots, clustered in rows.
+    const row = hash(0, y, 503);
+    const start = Math.floor(hash(y, 1, 504) * S);
+    const len = 2 + Math.floor(hash(y, 2, 505) * 4);
+    const inDash = row > 0.55 && ((x - start + S) % S) < len;
+    if (inDash) c = scale([32, 30, 34], 0.8 + hash(x, y, 506) * 0.5);
+    else if (row > 0.55 && ((x - start + S) % S) === len) c = mix(c, [110, 108, 110], 0.5);
+    return c;
+  });
+}
+
+function paintSnowTop(t: Tile): void {
+  t.fill((x, y) => {
+    const drift = tileNoise(x, y, 4, 511);
+    let c = mix([242, 247, 251], [212, 226, 242], drift * 0.65);
+    const n = hash(x, y, 512);
+    if (n > 0.94) c = [255, 255, 255];
+    else if (n < 0.07) c = mix(c, [190, 208, 232], 0.6);
+    return c;
+  });
+}
+
+function paintLoamDirt(t: Tile): void {
+  t.fill((x, y) => {
+    let c = mix([104, 70, 44], [132, 92, 58], tileNoise(x, y, 3, 521));
+    c = scale(c, grain(x, y, 522, 0.1));
+    if (hash(x, y, 523) > 0.95) c = mix(c, [150, 148, 140], 0.5); // pebble
+    return c;
+  });
+}
+
+/** Dirt with a ragged snow cap: the layer you see stepping down a snowy slope. */
+function paintSnowSide(t: Tile): void {
+  paintLoamDirt(t);
+  const depth = Array.from({ length: S }, (_, x) => 4 + hash(x, 0, 531) * 3);
+  for (let x = 0; x < S; x++) {
+    const d = (depth[x] * 2 + depth[(x + S - 1) % S] + depth[(x + 1) % S]) / 4; // smooth the fringe a little
+    const rows = Math.round(d);
+    for (let y = 0; y < rows; y++) {
+      const shade = y === rows - 1 ? 0.88 : 1; // the lower lip of the snow sits in shadow
+      const n = hash(x, y, 532);
+      let c: RGB = mix([244, 248, 252], [214, 228, 244], y / Math.max(1, rows));
+      c = scale(c, shade * (0.97 + n * 0.05));
+      t.set(x, y, c);
+    }
+    if (hash(x, 1, 533) > 0.8) t.set(x, rows, [226, 236, 246]); // a drip of melt
+  }
+}
+
+/** A hanging vine (drawn on crossed planes): a thin dark strand, small leaves, and glowing berries. */
+function paintGlowVine(t: Tile): void {
+  for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) t.set(x, y, [0, 0, 0], 0);
+  for (let y = 0; y < S; y++) {
+    const sway = Math.round(Math.sin(y * 0.55) * 1.2);
+    const sx = 7 + sway;
+    t.set(sx, y, scale([48, 96, 48], 0.85 + hash(sx, y, 541) * 0.3));
+    t.set(sx + 1, y, scale([38, 80, 44], 0.85 + hash(sx, y, 542) * 0.3));
+    if (y % 3 === 1) {
+      const side = hash(y, 0, 543) < 0.5 ? -1 : 1;
+      t.set(sx + (side < 0 ? -1 : 2), y, [104, 188, 78]);
+      t.set(sx + (side < 0 ? -2 : 3), y, [128, 210, 92]);
+    }
+    if (y % 5 === 3) {
+      const bx = sx + (hash(y, 1, 544) < 0.5 ? -2 : 3);
+      t.set(bx, y + 1, [255, 232, 130]);
+      t.glow(bx, y + 1, [255, 226, 120]);
+    }
+  }
+}
+
 const PAINTERS: Record<string, (t: Tile, frame: number, frames: number) => void> = {
   gloomstone: (t) => paintGloomstone(t),
   gloom_brick: (t) => paintBrick(t, 5, BRICK),
@@ -522,6 +623,18 @@ const PAINTERS: Record<string, (t: Tile, frame: number, frames: number) => void>
   crimson_runner: (t) => paintCrimsonRunner(t),
   gilded_trim: (t) => paintGildedTrim(t),
   rust_rock: (t) => paintRustRock(t),
+  oak_bark: (t) => paintBark(t, [92, 64, 40], [44, 30, 20], [122, 88, 56], 551),
+  oak_log_top: (t) => paintLogTop(t, [84, 58, 36], [176, 140, 88], [150, 114, 68], 553),
+  birch_bark: (t) => paintBirchBark(t),
+  birch_log_top: (t) => paintLogTop(t, [226, 224, 216], [214, 198, 156], [190, 172, 128], 557),
+  cherry_bark: (t) => paintBark(t, [86, 42, 50], [42, 18, 24], [128, 66, 74], 561),
+  cherry_log_top: (t) => paintLogTop(t, [76, 36, 44], [188, 120, 128], [156, 92, 102], 563),
+  willow_bark: (t) => paintBark(t, [108, 96, 74], [58, 50, 38], [138, 124, 96], 571, true),
+  willow_log_top: (t) => paintLogTop(t, [96, 84, 62], [178, 156, 108], [146, 126, 84], 573),
+  snow_top: (t) => paintSnowTop(t),
+  snow_side: (t) => paintSnowSide(t),
+  loam_dirt: (t) => paintLoamDirt(t),
+  glow_vine: (t) => paintGlowVine(t),
 };
 
 /** Paints every texture layer, in registry order (an animated texture yields one tile per frame). */

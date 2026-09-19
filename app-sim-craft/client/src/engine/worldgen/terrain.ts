@@ -9,7 +9,7 @@ import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { fbm2D, seededNoise2D } from "./noise";
 import { pickBiome, CRAG_BIOME, type BiomeDef } from "./biomes";
 import { getBlockByKey } from "../../data/blocks";
-import { placeTrees } from "./trees";
+import { placeTrees, planTrees, treesMaxY } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
 import { FLAT_ROAD_Y } from "./roads";
 import { classifyRoadColumn, grandBridgeBlock, roadColumnTop, type RoadColumn } from "./bridge";
@@ -23,6 +23,9 @@ const SALT_HEIGHT = 0x5eed02;
 
 const STONE_ID = getBlockByKey("greystone").id;
 const TURF_ID = getBlockByKey("turf").id;
+const SNOW_TURF_ID = getBlockByKey("snow_turf").id;
+// Ground this high (or higher) is under snow whatever the biome — the summit of the dragon hill.
+const SNOW_LINE_Y = 104;
 export const WATER_ID = getBlockByKey("water").id;
 const ROAD_ID = getBlockByKey("asphalt").id;
 const PLANK_ID = getBlockByKey("plank").id;
@@ -36,9 +39,6 @@ const BRIDGE_PILLAR_SPACING = 10; // blocks between the support pillars under a 
 // flow simulation yet, see the water BlockDef's own note).
 export const SEA_LEVEL = 64;
 
-// Vertical room above the tallest column reserved for trees — the tallest
-// pine (worldgen/trees.ts) tops out 16 blocks above its ground.
-const TREE_HEADROOM = 18;
 // Room above a bridge deck for the street lamps standing on it.
 const ROAD_TOP_CLEARANCE = 6;
 
@@ -47,6 +47,8 @@ export interface ColumnSample {
   biome: BiomeDef;
   /** Nonzero where the castle's crag or approach ramp shapes this column (see worldgen/castle/crag.ts); it picks the column's blocks. */
   crag: number;
+  /** True where the ground is snow-covered: the cold biome, and the high slopes of the hill. */
+  snowy: boolean;
   /** 0-1: how much the village levels and claims this column (see worldgen/village/ground.ts). */
   village: number;
   /** 0-1: how blighted the natural ground here is by the castle's shadow (see castleBlight); 0 on crag columns and far from the castle. */
@@ -69,7 +71,10 @@ export function sampleColumn(seed: number, worldX: number, worldZ: number): Colu
 
   const blight = kind === CRAG_NONE && height >= SEA_LEVEL ? castleBlight(worldX, worldZ) : 0;
   const village = kind === CRAG_NONE ? villageWeight(worldX, worldZ) : 0;
-  return { height, biome: kind === CRAG_NONE ? biome : CRAG_BIOME, crag: kind, blight, village };
+  // Snow: all of the tundra, and any high ground above a ragged snow line.
+  const snowLine = SNOW_LINE_Y + fbm2D(heightNoise, worldX, worldZ, 2, 1 / 22) * 7;
+  const snowy = kind === CRAG_NONE && village === 0 && (biome.key === "tundra" || height >= snowLine);
+  return { height, biome: kind === CRAG_NONE ? biome : CRAG_BIOME, crag: kind, blight, village, snowy };
 }
 
 /** Highest chunk-Y layer (inclusive) that can contain solid terrain for a max column height. */
@@ -103,20 +108,20 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
     }
   }
 
-  // Headroom above the tallest column (TREE_HEADROOM — enough for a tall
-  // pine) so a tree's trunk+canopy never
-  // needs a vertical chunk that wasn't allocated (see worldgen/trees.ts),
-  // plus whatever a fixed structure overlapping this chunk needs (a
-  // castle tower reaches well above typical terrain — see
-  // worldgen/structures.ts).
-  const maxCy = maxChunkYFor(Math.max(maxHeight + TREE_HEADROOM, SEA_LEVEL, FLAT_ROAD_Y, structureMaxYFor(seed, cx, cz)));
+  // Every tree reaching into this column (see worldgen/trees.ts) — the
+  // vertical extent has to be tall enough for the tallest of them, and for
+  // whatever a fixed structure overlapping this chunk needs (a castle tower
+  // reaches well above typical terrain — see worldgen/structures.ts).
+  const trees = planTrees(seed, cx, cz);
+  const maxCy = maxChunkYFor(Math.max(maxHeight + 2, treesMaxY(trees) + 2, SEA_LEVEL, FLAT_ROAD_Y, structureMaxYFor(seed, cx, cz)));
   const chunks: Chunk[] = [];
   for (let cy = 0; cy <= maxCy; cy++) chunks.push(new Chunk({ cx, cy, cz }));
 
   for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
-      const { height, biome, crag, blight, village } = columns[lx * CHUNK_SIZE + lz];
-      const surfaceBlock = village > 0.5 ? TURF_ID : biome.surfaceBlock; // the village is always on green meadow
+      const { height, biome, crag, blight, village, snowy } = columns[lx * CHUNK_SIZE + lz];
+      // The village is always on green meadow; snowy ground is snow-capped turf.
+      const surfaceBlock = village > 0.5 ? TURF_ID : snowy ? SNOW_TURF_ID : biome.surfaceBlock;
 
       // The loop road is flattened, not just surface-painted: every
       // column under it is cut/filled to the road's own elevation
@@ -182,7 +187,7 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
     }
   }
 
-  placeTrees(seed, cx, cz, columns, chunks);
+  placeTrees(seed, trees, cx, cz, chunks);
   stampStructures(seed, cx, cz, chunks);
 
   for (const chunk of chunks) chunk.dirty = true;

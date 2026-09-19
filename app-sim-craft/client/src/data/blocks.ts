@@ -348,6 +348,31 @@ export const BLOCKS: BlockDef[] = [
   flatBlock(59, "awning_red", "Red Awning", 0xc7402f, "axe", 0.4),
   flatBlock(60, "awning_white", "White Awning", 0xf1ede2, "axe", 0.4),
   flatBlock(61, "barn_red", "Barn Planks", 0x8f3128, "axe", 1.0),
+  // Trees and snow (worldgen/trees.ts, worldgen/treeShapes.ts): barked logs
+  // with their own end-grain rings, snow-capped ground, glowing vines and
+  // a wider range of leaf colors.
+  textured(62, "oak_log", "Oak Log", 1.0, { top: "oak_log_top", bottom: "oak_log_top", side: "oak_bark" }, 0x5a4029, { toolType: "axe" }),
+  textured(63, "birch_log", "Birch Log", 1.0, { top: "birch_log_top", bottom: "birch_log_top", side: "birch_bark" }, 0xe6e3da, { toolType: "axe" }),
+  textured(64, "cherry_log", "Cherry Log", 1.0, { top: "cherry_log_top", bottom: "cherry_log_top", side: "cherry_bark" }, 0x4e2630, { toolType: "axe" }),
+  textured(65, "willow_log", "Willow Log", 1.0, { top: "willow_log_top", bottom: "willow_log_top", side: "willow_bark" }, 0x665a46, { toolType: "axe" }),
+  textured(66, "snow_turf", "Snowy Turf", 0.6, { top: "snow_top", bottom: "loam_dirt", side: "snow_side" }, 0xeef4f8, { toolType: "shovel" }),
+  textured(67, "snow_block", "Snow Block", 0.4, { all: "snow_top" }, 0xeef4f8, { toolType: "shovel" }),
+  textured(68, "glow_vine", "Glow Vine", 0.1, { all: "glow_vine" }, 0xc4e878, {
+    solid: false,
+    shape: "cross",
+    transparentToRender: true,
+    lightOpacity: 0,
+    toolType: "none",
+    glow: { level: 6, stride: 2 },
+  }),
+  flatBlock(69, "blossom", "Blossom", 0xf39bc4, "axe", 0.2),
+  leafVariant(70, "leaves_maple", "Crimson Maple Leaves", 0xe32b1f),
+  leafVariant(71, "leaves_maple_light", "Scarlet Maple Leaves", 0xff5f3d),
+  leafVariant(72, "leaves_willow", "Willow Leaves", 0x8bdd52),
+  leafVariant(73, "leaves_willow_dark", "Deep Willow Leaves", 0x37ab6c),
+  leafVariant(74, "leaves_lime", "Lime Leaves", 0xa0e24f),
+  leafVariant(75, "leaves_cherry_dark", "Dusk Blossom Leaves", 0xb84c7c),
+  leafVariant(76, "leaves_snowy", "Snow-laden Leaves", 0xf2f8fc),
 ];
 
 /** A textured (pixel-art) block. `overrides` tweak the defaults — see the notes on BlockDef for what each does. */

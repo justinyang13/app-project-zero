@@ -1,36 +1,29 @@
-// Deterministic tree placement — a small slice of
-// spec/02-world-generation.md §2 step 9 (vegetation pass). Scoped down:
-// only two biomes grow trees (no desert cacti yet), and a tree is never
-// allowed to spill past its own chunk column's edge — a canopy never needs
-// to write into a neighboring (possibly not-yet-generated) chunk column, a
-// deliberate simplification rather than building cross-chunk vegetation
-// stitching for this pass. Three kinds: the original small round tree,
-// a tall dark-green pine (a stack of shrinking needle skirts), and a
-// pink cherry tree with a wide, low blossom crown. The wider ones need a
-// bigger margin from the chunk edge; a column too close to one falls back
-// to the small tree so density stays the same.
+// Deterministic tree placement: forests and groves scattered over the
+// meadows and snowfields. Candidate trees live on a jittered grid in world
+// space (one slot per CELL x CELL cell), each with a hash-decided
+// probability, species and size — so any chunk can work out exactly which
+// trees reach into it, *including ones rooted in the neighboring column*,
+// and draws just its own share (see treeShapes.ts for the trees). That is
+// what lets crowns 20 blocks wide and trunks 20 blocks tall cross chunk
+// edges seamlessly.
+//
+// The land is a patchwork: a slow "forest" noise decides open meadow vs.
+// woodland, and a second slow noise picks each grove's signature species
+// (cherry blossom, birch, oak, maple, willow), so you walk from a pink
+// grove into an orange birch wood into a red maple stand, with a scatter
+// of other species mixed through each. Cold ground grows snow-laden
+// conifers instead.
 import { CHUNK_SIZE, Chunk } from "../Chunk";
-import { getBlockByKey } from "../../data/blocks";
-import { SEA_LEVEL, type ColumnSample } from "./terrain";
+import { fbm2D, seededNoise2D } from "./noise";
+import { SEA_LEVEL, sampleColumn } from "./terrain";
 import { isRoadCorridorColumn } from "./roads";
+import { drawTree, THICK_TRUNK, TREE_HEIGHT, TREE_REACH, type Palette, type TreeKind, type TreeSpec } from "./treeShapes";
 
-const LOG_ID = getBlockByKey("log").id;
-const PINE_LEAF_ID = getBlockByKey("leaves_pine").id;
-const CHERRY_LEAF_ID = getBlockByKey("leaves_cherry").id;
-const LEAF_IDS = [
-  getBlockByKey("leaves_green").id,
-  getBlockByKey("leaves_autumn").id,
-  getBlockByKey("leaves_gold").id,
-  getBlockByKey("leaves_frost").id,
-];
+const CELL = 6;
+const MAX_REACH = Math.max(...Object.values(TREE_REACH));
+const SALT_FOREST = 0x7ee501;
+const SALT_SPECIES = 0x7ee502;
 
-const TREE_DENSITY: Record<string, number> = {
-  meadow: 0.025,
-  tundra: 0.012,
-  desert: 0,
-};
-
-/** Deterministic pseudo-random float in [0, 1) from (seed, world x, z, salt) — not a noise field, just a placement coin-flip. */
 function hash01(seed: number, x: number, z: number, salt: number): number {
   let h = (seed ^ Math.imul(x, 374761393) ^ Math.imul(z, 668265263) ^ Math.imul(salt, 2246822519)) >>> 0;
   h = Math.imul(h ^ (h >>> 13), 1274126177);
@@ -38,127 +31,114 @@ function hash01(seed: number, x: number, z: number, salt: number): number {
   return (h >>> 0) / 4294967296;
 }
 
-function setTreeVoxel(chunks: Chunk[], lx: number, lz: number, worldY: number, blockId: number, onlyIfAir: boolean): void {
-  const cy = Math.floor(worldY / CHUNK_SIZE);
-  const chunk = chunks[cy];
-  if (!chunk) return; // out of the generated vertical range — shouldn't happen given the +8 headroom in generateColumn
-  const ly = worldY - cy * CHUNK_SIZE;
-  const idx = lx | (ly << 5) | (lz << 10);
-  if (onlyIfAir && chunk.blocks[idx] !== 0) return;
-  chunk.blocks[idx] = blockId;
-  chunk.skyLight[idx] = 0;
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  const t = Math.min(1, Math.max(0, (x - edge0) / (edge1 - edge0)));
+  return t * t * (3 - 2 * t);
 }
 
-const SMALL_MARGIN = 1;
-const PINE_RADIUS = 3;
-const CHERRY_RADIUS = 3;
+/** Picks a warm-country species from the local grove noise and a roll. */
+function meadowSpecies(grove: number, roll: number, lowGround: boolean): { kind: TreeKind; palette: Palette } {
+  let dominant: TreeKind;
+  let palette: Palette = "green";
+  if (grove > 0.4) dominant = "cherry";
+  else if (grove > 0.14) {
+    dominant = "birch";
+    palette = "autumn";
+  } else if (grove > -0.14) dominant = roll < 0.35 ? "grandOak" : "oak";
+  else if (grove > -0.4) dominant = "maple";
+  else dominant = lowGround ? "willow" : "grandOak";
+  if (dominant === "willow" && !lowGround) dominant = "grandOak";
 
-type TreeKind = "small" | "pine" | "cherry";
-
-function inChunkInterior(l: number, margin: number): boolean {
-  return l >= margin && l < CHUNK_SIZE - margin;
+  // Most of a grove is its signature tree; the rest is a mix so it never reads as a monoculture.
+  const mix = (roll * 7.31) % 1;
+  if (roll < 0.66) return { kind: dominant, palette };
+  if (mix < 0.22) return { kind: "oak", palette: "green" };
+  if (mix < 0.4) return { kind: "birch", palette: mix < 0.3 ? "autumn" : "gold" };
+  if (mix < 0.52) return { kind: "grandOak", palette: "green" };
+  if (mix < 0.66) return { kind: "shrub", palette: "green" };
+  if (mix < 0.76) return { kind: "cherry", palette: "green" };
+  if (mix < 0.88) return { kind: "maple", palette: "green" };
+  return { kind: "pine", palette: "green" };
 }
 
-/** A round-cornered square of leaves of the given radius at one height. */
-function leafDisc(chunks: Chunk[], lx: number, lz: number, y: number, radius: number, leafId: number, onlyIfAir = true): void {
-  for (let dx = -radius; dx <= radius; dx++) {
-    for (let dz = -radius; dz <= radius; dz++) {
-      if (Math.abs(dx) + Math.abs(dz) > radius + 1) continue; // clip the corners
-      setTreeVoxel(chunks, lx + dx, lz + dz, y, leafId, onlyIfAir);
+function snowSpecies(roll: number): TreeKind {
+  if (roll < 0.58) return "pine";
+  if (roll < 0.78) return "spruce";
+  if (roll < 0.9) return "frostBirch";
+  return "snowShrub";
+}
+
+/** Every tree that reaches into chunk column (cx, cz), in a stable order. */
+export function planTrees(seed: number, cx: number, cz: number): TreeSpec[] {
+  const forestNoise = seededNoise2D(seed, SALT_FOREST);
+  const speciesNoise = seededNoise2D(seed, SALT_SPECIES);
+  const x0 = cx * CHUNK_SIZE - MAX_REACH;
+  const x1 = cx * CHUNK_SIZE + CHUNK_SIZE - 1 + MAX_REACH;
+  const z0 = cz * CHUNK_SIZE - MAX_REACH;
+  const z1 = cz * CHUNK_SIZE + CHUNK_SIZE - 1 + MAX_REACH;
+  const trees: TreeSpec[] = [];
+
+  for (let gx = Math.floor(x0 / CELL); gx <= Math.floor(x1 / CELL); gx++) {
+    for (let gz = Math.floor(z0 / CELL); gz <= Math.floor(z1 / CELL); gz++) {
+      const x = gx * CELL + Math.floor(hash01(seed, gx, gz, 1) * CELL);
+      const z = gz * CELL + Math.floor(hash01(seed, gx, gz, 2) * CELL);
+
+      // Woodland vs. open meadow, from slow noise.
+      const forest = fbm2D(forestNoise, x, z, 2, 1 / 80);
+      const density = 0.08 + 0.58 * smoothstep(-0.05, 0.4, forest);
+      if (hash01(seed, gx, gz, 3) > density) continue;
+
+      const sample = sampleColumn(seed, x, z);
+      if (sample.height < SEA_LEVEL || sample.village > 0.02 || sample.crag !== 0) continue;
+      if (sample.biome.key === "desert") continue;
+      if (sample.blight > 0.6 || hash01(seed, gx, gz, 4) < sample.blight * 0.9) continue;
+      if (isRoadCorridorColumn(x, z)) continue;
+
+      const grove = fbm2D(speciesNoise, x, z, 2, 1 / 120);
+      const roll = hash01(seed, gx, gz, 5);
+      let kind: TreeKind;
+      let palette: Palette = "green";
+      if (sample.snowy) kind = snowSpecies(roll);
+      else ({ kind, palette } = meadowSpecies(grove, roll, sample.height <= SEA_LEVEL + 4));
+      // A birch that landed in an oak grove keeps a natural palette mix.
+      if (kind === "birch" && palette === "green" && hash01(seed, gx, gz, 6) < 0.5) palette = "autumn";
+
+      const tree: TreeSpec = { kind, x, z, y: sample.height, seed: Math.floor(hash01(seed, gx, gz, 7) * 0xffffffff), palette, snowy: sample.snowy };
+      if (THICK_TRUNK.has(kind)) {
+        // The trunk takes four columns; none of them may stand in water.
+        let low = false;
+        for (const [dx, dz] of [[1, 0], [0, 1], [1, 1]] as const) if (sampleColumn(seed, x + dx, z + dz).height < SEA_LEVEL) low = true;
+        if (low) continue;
+      }
+      trees.push(tree);
     }
   }
+  return trees;
 }
 
-/** A tall trunk with tiered, shrinking needle skirts up to a single tip. Reaches 16 blocks above the ground at most (see terrain.ts's TREE_HEADROOM). */
-function placePine(chunks: Chunk[], lx: number, lz: number, height: number, roll: number): void {
-  const trunk = 9 + Math.floor(roll * 6); // 9-14
-  for (let dy = 1; dy <= trunk; dy++) setTreeVoxel(chunks, lx, lz, height + dy, LOG_ID, false);
-  const skirtBase = height + 3;
-  const layers = trunk - 1;
-  for (let i = 0; i < layers; i++) {
-    const t = layers > 1 ? i / (layers - 1) : 1;
-    let radius = PINE_RADIUS - Math.floor(t * 3.999); // 3 at the bottom tapering to 0 at the top
-    if (i % 3 === 2) radius = Math.max(0, radius - 1); // every third layer tucks in, giving the tiered look
-    leafDisc(chunks, lx, lz, skirtBase + i, radius, PINE_LEAF_ID);
-  }
-  setTreeVoxel(chunks, lx, lz, height + trunk + 1, PINE_LEAF_ID, true);
-  setTreeVoxel(chunks, lx, lz, height + trunk + 2, PINE_LEAF_ID, true);
+/** The highest world Y any of these trees can reach — used to size the chunk column's vertical extent. */
+export function treesMaxY(trees: TreeSpec[]): number {
+  let top = 0;
+  for (const t of trees) top = Math.max(top, t.y + TREE_HEIGHT[t.kind]);
+  return top;
 }
 
-/** A short, slightly crooked-looking trunk under a wide blossom crown with a few gaps so it reads as flowers, not a solid ball. */
-function placeCherry(seed: number, chunks: Chunk[], lx: number, lz: number, height: number, worldX: number, worldZ: number, roll: number): void {
-  const trunk = 4 + Math.floor(roll * 3); // 4-6
-  for (let dy = 1; dy <= trunk; dy++) setTreeVoxel(chunks, lx, lz, height + dy, LOG_ID, false);
-  const crownBase = height + trunk - 1;
-  const radii = [2, 3, 3, 2, 1];
-  for (let i = 0; i < radii.length; i++) {
-    const y = crownBase + i;
-    const r = radii[i];
-    for (let dx = -r; dx <= r; dx++) {
-      for (let dz = -r; dz <= r; dz++) {
-        if (Math.abs(dx) + Math.abs(dz) > r + 1) continue;
-        const rim = Math.max(Math.abs(dx), Math.abs(dz)) === r && r > 1;
-        if (rim && hash01(seed, worldX + dx * 31, worldZ + dz * 17, 20 + i) < 0.18) continue; // ragged edge
-        setTreeVoxel(chunks, lx + dx, lz + dz, y, CHERRY_LEAF_ID, true);
-      }
-    }
-  }
-}
-
-/** Scatters trees across one already-terrain-filled chunk column. Mutates `chunks` in place. */
-export function placeTrees(seed: number, cx: number, cz: number, columns: ColumnSample[], chunks: Chunk[]): void {
-  for (let lx = SMALL_MARGIN; lx < CHUNK_SIZE - SMALL_MARGIN; lx++) {
-    for (let lz = SMALL_MARGIN; lz < CHUNK_SIZE - SMALL_MARGIN; lz++) {
-      const { height, biome, blight, village } = columns[lx * CHUNK_SIZE + lz];
-      if (height < SEA_LEVEL) continue; // underwater/beach column, no trees
-      if (village > 0.02) continue; // the village plants its own oaks (worldgen/village/build.ts)
-      if (blight > 0.6) continue; // nothing green grows in the castle's shadow
-      const density = (TREE_DENSITY[biome.key] ?? 0) * (1 - blight / 0.6); // thinning out as the ground darkens
-      if (density <= 0) continue;
-
-      const worldX = cx * CHUNK_SIZE + lx;
-      const worldZ = cz * CHUNK_SIZE + lz;
-      if (isRoadCorridorColumn(worldX, worldZ)) continue; // keep roads (and the bridge girder over their shoulders) clear of trees
-      if (hash01(seed, worldX, worldZ, 1) >= density) continue;
-
-      const kindRoll = hash01(seed, worldX, worldZ, 4);
-      let kind: TreeKind =
-        biome.key === "tundra"
-          ? kindRoll < 0.6 ? "pine" : "small"
-          : kindRoll < 0.28 ? "pine" : kindRoll < 0.4 ? "cherry" : "small";
-      if (kind === "pine" && !(inChunkInterior(lx, PINE_RADIUS) && inChunkInterior(lz, PINE_RADIUS))) kind = "small";
-      if (kind === "cherry" && !(inChunkInterior(lx, CHERRY_RADIUS) && inChunkInterior(lz, CHERRY_RADIUS))) kind = "small";
-
-      if (kind === "pine") {
-        placePine(chunks, lx, lz, height, hash01(seed, worldX, worldZ, 5));
-        continue;
-      }
-      if (kind === "cherry") {
-        placeCherry(seed, chunks, lx, lz, height, worldX, worldZ, hash01(seed, worldX, worldZ, 6));
-        continue;
-      }
-
-      const trunkHeight = 3 + Math.floor(hash01(seed, worldX, worldZ, 2) * 3); // 3-5
-      const leafRoll = hash01(seed, worldX, worldZ, 3);
-      const leafId =
-        biome.key === "tundra"
-          ? leafRoll < 0.7 ? LEAF_IDS[3] : LEAF_IDS[0]
-          : LEAF_IDS[Math.floor(leafRoll * 3)]; // green/autumn/gold
-
-      for (let dy = 1; dy <= trunkHeight; dy++) {
-        setTreeVoxel(chunks, lx, lz, height + dy, LOG_ID, false);
-      }
-
-      const canopyBase = height + trunkHeight - 1;
-      for (let dx = -1; dx <= 1; dx++) {
-        for (let dz = -1; dz <= 1; dz++) {
-          setTreeVoxel(chunks, lx + dx, lz + dz, canopyBase, leafId, true);
-        }
-      }
-      for (const [dx, dz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as const) {
-        setTreeVoxel(chunks, lx + dx, lz + dz, canopyBase + 1, leafId, true);
-      }
-      setTreeVoxel(chunks, lx, lz, canopyBase + 2, leafId, true);
-    }
-  }
+/** Draws the part of each tree that falls inside chunk column (cx, cz). Mutates `chunks` in place. */
+export function placeTrees(seed: number, trees: TreeSpec[], cx: number, cz: number, chunks: Chunk[]): void {
+  const minX = cx * CHUNK_SIZE;
+  const minZ = cz * CHUNK_SIZE;
+  const put = (x: number, y: number, z: number, block: number, onlyIfAir: boolean): void => {
+    const lx = x - minX;
+    const lz = z - minZ;
+    if (lx < 0 || lx >= CHUNK_SIZE || lz < 0 || lz >= CHUNK_SIZE || y < 0) return;
+    const cy = Math.floor(y / CHUNK_SIZE);
+    const chunk = chunks[cy];
+    if (!chunk) return;
+    const idx = lx | ((y - cy * CHUNK_SIZE) << 5) | (lz << 10);
+    if (onlyIfAir && chunk.blocks[idx] !== 0) return;
+    chunk.blocks[idx] = block;
+    chunk.skyLight[idx] = 0;
+  };
+  const ground = (x: number, z: number): number => sampleColumn(seed, x, z).height;
+  for (const tree of trees) drawTree(tree, put, ground);
 }

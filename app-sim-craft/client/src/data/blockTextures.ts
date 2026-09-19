@@ -39,6 +39,18 @@ export const TEXTURE_DEFS: TextureDef[] = [
   { key: "ashslate_ridge", frames: 1 },
   { key: "gilded_trim", frames: 1 },
   { key: "rust_rock", frames: 1 },
+  { key: "oak_bark", frames: 1 },
+  { key: "oak_log_top", frames: 1 },
+  { key: "birch_bark", frames: 1 },
+  { key: "birch_log_top", frames: 1 },
+  { key: "cherry_bark", frames: 1 },
+  { key: "cherry_log_top", frames: 1 },
+  { key: "willow_bark", frames: 1 },
+  { key: "willow_log_top", frames: 1 },
+  { key: "snow_top", frames: 1 },
+  { key: "snow_side", frames: 1 },
+  { key: "loam_dirt", frames: 1 },
+  { key: "glow_vine", frames: 1 },
 ];
 
 const layerByKey = new Map<string, number>();

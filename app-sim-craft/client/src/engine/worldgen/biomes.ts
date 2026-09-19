@@ -35,7 +35,7 @@ export const BIOMES: Record<"meadow" | "desert" | "tundra", BiomeDef> = {
   tundra: {
     key: "tundra",
     name: "Frostreach Tundra",
-    surfaceBlock: getBlockByKey("frost_turf").id,
+    surfaceBlock: getBlockByKey("snow_turf").id,
     subsurfaceBlock: getBlockByKey("loam").id,
     heightBase: 70,
     heightAmplitude: 10,

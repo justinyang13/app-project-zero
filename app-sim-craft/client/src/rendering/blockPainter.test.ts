@@ -29,15 +29,20 @@ describe("block texture painters", () => {
       expect(a.some((v) => v === 0)).toBe(true);
       expect(a.some((v) => v === 255)).toBe(true);
     }
-    for (const key of ["gloom_brick", "magma", "gloomstone"]) expect(alphaOf(key).every((v) => v === 255)).toBe(true);
+    for (const key of ["gloom_brick", "magma", "gloomstone", "oak_bark", "birch_bark", "cherry_bark", "willow_bark", "snow_top", "snow_side", "oak_log_top", "birch_log_top"]) {
+      expect(alphaOf(key).every((v) => v === 255)).toBe(true);
+    }
+    const vine = alphaOf("glow_vine");
+    expect(vine.filter((v) => v === 0).length).toBeGreaterThan(100); // mostly air around a thin strand
+    expect(vine.some((v) => v === 255)).toBe(true);
   });
 
   it("gives emissive textures some glowing pixels", () => {
-    for (const key of ["magma", "ember_lattice", "brazier_flame", "ember_lamp"]) {
+    for (const key of ["magma", "ember_lattice", "brazier_flame", "ember_lamp", "glow_vine"]) {
       const layer = textureLayer(key);
       let lit = 0;
       for (let i = 0; i < TEXTURE_SIZE * TEXTURE_SIZE; i++) lit += tiles[layer].emissive[i * 4 + 3] > 0 ? 1 : 0;
-      expect(lit).toBeGreaterThan(8);
+      expect(lit).toBeGreaterThan(key === "glow_vine" ? 2 : 8);
     }
   });
 
