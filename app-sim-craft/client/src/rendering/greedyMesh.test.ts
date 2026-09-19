@@ -116,4 +116,51 @@ describe("meshChunkGreedy", () => {
     // Only 5 faces exposed now (the +X face is culled by the neighbor).
     expect(result.indices.length).toBe(5 * 6);
   });
+
+  it("routes a textured block's faces into the textured buffers with UVs, tile layers and glow", () => {
+    const { blocks, skyLight } = emptyChunk();
+    const brick = getBlockByKey("gloom_brick").id;
+    blocks[5 | (5 << 5) | (5 << 10)] = brick;
+
+    const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES, () => 9);
+    expect(result.indices.length).toBe(0);
+    expect(result.texIndices.length).toBe(36);
+    expect(result.texPositions.length / 3).toBe(24);
+    expect(result.texUvs.length / 2).toBe(24);
+    expect(result.texTiles.length / 2).toBe(24);
+    expect(result.texGlow.length / 3).toBe(24);
+    expect(Array.from(result.texGlow).some((v) => v > 0)).toBe(true); // baked block light reached the face
+  });
+
+  it("only merges textured faces that share the same baked glow", () => {
+    const { blocks, skyLight } = emptyChunk();
+    const brick = getBlockByKey("gloom_brick").id;
+    for (let x = 0; x < 4; x++) blocks[x | (0 << 5) | (0 << 10)] = brick;
+    const uniform = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES, () => 5);
+    const varied = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES, (lx) => lx);
+    expect(varied.texIndices.length).toBeGreaterThan(uniform.texIndices.length);
+  });
+
+  it("draws a flame block as crossed quads (no cube), and never culls its neighbours' faces", () => {
+    const { blocks, skyLight } = emptyChunk();
+    const flame = getBlockByKey("brazier_flame").id;
+    const brick = getBlockByKey("gloom_brick").id;
+    blocks[5 | (5 << 5) | (5 << 10)] = flame;
+    blocks[6 | (5 << 5) | (5 << 10)] = brick;
+    const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES);
+    // The brick keeps all six faces (a flame doesn't hide the one it touches) = 24 verts; the flame adds 2 quads x 2 windings.
+    expect(result.texPositions.length / 3).toBe(24 + 8);
+    expect(result.texIndices.length).toBe(36 + 24);
+  });
+
+  it("shows a face behind a see-through lattice instead of culling it", () => {
+    const { blocks, skyLight } = emptyChunk();
+    const lattice = getBlockByKey("ember_lattice").id;
+    const brick = getBlockByKey("gloom_brick").id;
+    blocks[5 | (5 << 5) | (5 << 10)] = lattice;
+    blocks[6 | (5 << 5) | (5 << 10)] = brick;
+    const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES);
+    // The brick keeps all 6 faces (it sees through the lattice); the lattice loses only the one pressed against opaque brick.
+    expect(result.texPositions.length / 3).toBe(44);
+  });
 });

@@ -7,13 +7,14 @@
 // and mine into.
 import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { fbm2D, seededNoise2D } from "./noise";
-import { pickBiome, type BiomeDef } from "./biomes";
+import { pickBiome, CRAG_BIOME, type BiomeDef } from "./biomes";
 import { getBlockByKey } from "../../data/blocks";
 import { placeTrees } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
 import { isRoadColumn, isBridgeDeckColumn, FLAT_ROAD_Y } from "./roads";
 import { mountainHeightBoost } from "./mountain";
 import { deepLakeHeight } from "./deepLake";
+import { applyCrag, cragBodyBlock, cragSurfaceBlock, CRAG_NONE } from "./castle/crag";
 
 const SALT_TEMPERATURE = 0x5eed01;
 const SALT_HEIGHT = 0x5eed02;
@@ -39,6 +40,8 @@ const TREE_HEADROOM = 18;
 export interface ColumnSample {
   height: number;
   biome: BiomeDef;
+  /** Nonzero where the castle's crag or approach ramp shapes this column (see worldgen/castle/crag.ts); it picks the column's blocks. */
+  crag: number;
 }
 
 /** Pure function of (seed, world x/z) — see spec/01-tech-stack-architecture.md §9. */
@@ -52,9 +55,10 @@ export function sampleColumn(seed: number, worldX: number, worldZ: number): Colu
   const detail = fbm2D(heightNoise, worldX, worldZ, 4, 1 / 96, 0.5);
   const naturalHeight =
     Math.round(biome.heightBase + detail * biome.heightAmplitude) + mountainHeightBoost(seed, worldX, worldZ);
-  const height = deepLakeHeight(naturalHeight, worldX, worldZ, SEA_LEVEL);
+  const lakeHeight = deepLakeHeight(naturalHeight, worldX, worldZ, SEA_LEVEL);
+  const { height, kind } = applyCrag(lakeHeight, worldX, worldZ);
 
-  return { height, biome };
+  return { height, biome: kind === CRAG_NONE ? biome : CRAG_BIOME, crag: kind };
 }
 
 /** Highest chunk-Y layer (inclusive) that can contain solid terrain for a max column height. */
@@ -93,7 +97,7 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
 
   for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
-      const { height, biome } = columns[lx * CHUNK_SIZE + lz];
+      const { height, biome, crag } = columns[lx * CHUNK_SIZE + lz];
 
       // The loop road is flattened, not just surface-painted: every
       // column under it is cut/filled to a single constant elevation
@@ -127,6 +131,11 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
             else if (worldY === height) chunk.blocks[idx] = biome.surfaceBlock;
             else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
             else chunk.blocks[idx] = STONE_ID;
+          } else if (crag !== CRAG_NONE && !isRoad) {
+            // The castle's crag / approach ramp: dark rock all the way down, since its cliffs expose every layer.
+            if (worldY > height) chunk.blocks[idx] = WATER_ID;
+            else if (worldY === height) chunk.blocks[idx] = cragSurfaceBlock(worldX, worldZ, crag);
+            else chunk.blocks[idx] = cragBodyBlock(worldX, worldY, worldZ, height, crag);
           } else if (isRoad) {
             if (worldY === FLAT_ROAD_Y) chunk.blocks[idx] = ROAD_ID;
             else if (worldY >= FLAT_ROAD_Y - 3) chunk.blocks[idx] = biome.subsurfaceBlock;

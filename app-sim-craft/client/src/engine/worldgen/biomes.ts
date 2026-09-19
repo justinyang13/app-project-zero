@@ -48,3 +48,13 @@ export function pickBiome(temperature: number): BiomeDef {
   if (temperature > 0.35) return BIOMES.desert;
   return BIOMES.meadow;
 }
+
+/** Not a real biome: what columns shaped by the castle's crag report (see worldgen/castle/crag.ts), so the minimaps can draw them as bare dark rock and trees skip them. */
+export const CRAG_BIOME: BiomeDef = {
+  key: "crag",
+  name: "Gloom Crag",
+  surfaceBlock: getBlockByKey("gloomstone").id,
+  subsurfaceBlock: getBlockByKey("umbral_slate").id,
+  heightBase: 68,
+  heightAmplitude: 0,
+};

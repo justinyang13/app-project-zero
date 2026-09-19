@@ -5,7 +5,8 @@
 // flat-colored per block, shaded by the merged cell's sky-light level.
 // Foliage (leaves) is the one exception: it carries UVs so
 // ChunkManager.ts can texture it with an alpha-cutout pattern instead.
-import { AIR_ID, WATER_ID, getBlockById } from "../data/blocks";
+import { AIR_ID, BLOCKS, WATER_ID, getBlockById, type BlockDef } from "../data/blocks";
+import { textureFrames, textureLayer } from "../data/blockTextures";
 import { CHUNK_SIZE } from "../engine/Chunk";
 
 type Axis = 0 | 1 | 2; // 0 = X, 1 = Y, 2 = Z
@@ -49,6 +50,47 @@ export interface MeshedChunk {
   foliageColors: Float32Array;
   foliageUvs: Float32Array;
   foliageIndices: Uint32Array;
+  // Textured blocks (the castle's palette — pixel-art textures, cut-outs,
+  // emissive pixels, animation): UVs in block units like foliage, plus per
+  // vertex the texture-array layer + frame count (`texTiles`, 2 floats)
+  // and the baked block-light glow color (`texGlow`, 3 floats). See
+  // rendering/texturedMaterial.ts for how they're consumed.
+  texPositions: Float32Array;
+  texNormals: Float32Array;
+  texColors: Float32Array;
+  texUvs: Float32Array;
+  texTiles: Float32Array;
+  texGlow: Float32Array;
+  texIndices: Uint32Array;
+}
+
+/** Block-light level (0-15) at a chunk-local coordinate — may lie outside 0..31 (a neighboring chunk). Supplied by the caller (workers/mesh.worker.ts) so this module stays free of castle-specific knowledge. */
+export type BlockLightSampler = (lx: number, ly: number, lz: number) => number;
+
+// Per-block, per-face texture layer tables (face order: +x -x +y -y +z -z),
+// built once so the hot meshing loop is a pair of array lookups.
+const FACE_TILE = new Int16Array(BLOCKS.length * 6).fill(-1);
+const BLOCK_FRAMES = new Uint8Array(BLOCKS.length);
+for (const def of BLOCKS) {
+  if (!def.tex) continue;
+  const pick = (face: number): string | undefined => (face === 2 ? def.tex!.top : face === 3 ? def.tex!.bottom : def.tex!.side) ?? def.tex!.all;
+  for (let face = 0; face < 6; face++) {
+    const key = pick(face);
+    if (key) FACE_TILE[def.id * 6 + face] = textureLayer(key);
+  }
+  const frameKey = def.tex.all ?? def.tex.side ?? def.tex.top;
+  BLOCK_FRAMES[def.id] = frameKey ? textureFrames(frameKey) : 1;
+}
+
+function faceIndex(axis: Axis, dir: number): number {
+  return axis * 2 + (dir > 0 ? 0 : 1);
+}
+
+/** Baked block light -> the warm glow color added to a face (firelight: dim reads deep red-orange, bright reads gold). */
+function glowColor(level: number): [number, number, number] {
+  if (level <= 0) return [0, 0, 0];
+  const t = Math.pow(level / 15, 1.7); // a steeper curve keeps distant walls dark and pools the light around the flames
+  return [Math.min(1, t * 1.15), 0.6 * Math.pow(t, 1.2), 0.16 * Math.pow(t, 2)];
 }
 
 function sampleBlock(x: number, y: number, z: number, blocks: Uint16Array, b: BoundaryLayers): number {
@@ -75,7 +117,12 @@ function lightToBrightness(level: number): number {
   return AMBIENT_FLOOR + (1 - AMBIENT_FLOOR) * (level / (LIGHT_LEVELS - 1));
 }
 
-export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, boundaries: BoundaryLayers): MeshedChunk {
+export function meshChunkGreedy(
+  blocks: Uint16Array,
+  skyLight: Uint8Array,
+  boundaries: BoundaryLayers,
+  blockLightAt?: BlockLightSampler,
+): MeshedChunk {
   const positions: number[] = [];
   const normals: number[] = [];
   const colors: number[] = [];
@@ -89,11 +136,21 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
   const foliageColors: number[] = [];
   const foliageUvs: number[] = [];
   const foliageIndices: number[] = [];
+  const tex = {
+    positions: [] as number[],
+    normals: [] as number[],
+    colors: [] as number[],
+    uvs: [] as number[],
+    tiles: [] as number[],
+    glow: [] as number[],
+    indices: [] as number[],
+  };
 
   const voxel: [number, number, number] = [0, 0, 0];
   const neighborVoxel: [number, number, number] = [0, 0, 0];
   const mask = new Int32Array(CHUNK_SIZE * CHUNK_SIZE); // packed key, 0 = no face
   const lightMask = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
+  const glowMask = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
   const visited = new Uint8Array(CHUNK_SIZE * CHUNK_SIZE);
 
   for (const axis of [0, 1, 2] as const) {
@@ -101,6 +158,7 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
       for (let slice = 0; slice < CHUNK_SIZE; slice++) {
         mask.fill(0);
         lightMask.fill(0);
+        glowMask.fill(0);
         visited.fill(0);
 
         for (let u = 0; u < CHUNK_SIZE; u++) {
@@ -147,6 +205,9 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
             const idx = u * CHUNK_SIZE + v;
             mask[idx] = blockId;
             lightMask[idx] = light;
+            if (def.tex && blockLightAt) {
+              glowMask[idx] = blockLightAt(neighborVoxel[0], neighborVoxel[1], neighborVoxel[2]);
+            }
           }
         }
 
@@ -158,13 +219,15 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
             if (visited[idx] || mask[idx] === 0) continue;
             const blockId = mask[idx];
             const light = lightMask[idx];
+            const glow = glowMask[idx];
 
             let width = 1;
             while (
               v + width < CHUNK_SIZE &&
               !visited[u * CHUNK_SIZE + (v + width)] &&
               mask[u * CHUNK_SIZE + (v + width)] === blockId &&
-              lightMask[u * CHUNK_SIZE + (v + width)] === light
+              lightMask[u * CHUNK_SIZE + (v + width)] === light &&
+              glowMask[u * CHUNK_SIZE + (v + width)] === glow
             ) {
               width++;
             }
@@ -173,7 +236,7 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
             heightLoop: while (u + height < CHUNK_SIZE) {
               for (let k = 0; k < width; k++) {
                 const rowIdx = (u + height) * CHUNK_SIZE + (v + k);
-                if (visited[rowIdx] || mask[rowIdx] !== blockId || lightMask[rowIdx] !== light) break heightLoop;
+                if (visited[rowIdx] || mask[rowIdx] !== blockId || lightMask[rowIdx] !== light || glowMask[rowIdx] !== glow) break heightLoop;
               }
               height++;
             }
@@ -184,8 +247,13 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
               }
             }
 
+            const quadDef = getBlockById(blockId);
+            if (quadDef.tex) {
+              emitTexturedQuad(tex, quadDef, axis, slice, dir, u, u + height, v, v + width, light, glow);
+              continue;
+            }
             const isWater = blockId === WATER_ID;
-            const isFoliage = getBlockById(blockId).foliage ?? false;
+            const isFoliage = quadDef.foliage ?? false;
             emitQuad(
               isWater ? waterPositions : isFoliage ? foliagePositions : positions,
               isWater ? waterNormals : isFoliage ? foliageNormals : normals,
@@ -199,7 +267,7 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
               u + height,
               v,
               v + width,
-              getBlockById(blockId).color,
+              quadDef.color,
               light,
             );
           }
@@ -207,6 +275,9 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
       }
     }
   }
+
+  emitCrossShapes(tex, blocks, skyLight);
+
   return {
     positions: new Float32Array(positions),
     normals: new Float32Array(normals),
@@ -221,7 +292,105 @@ export function meshChunkGreedy(blocks: Uint16Array, skyLight: Uint8Array, bound
     foliageColors: new Float32Array(foliageColors),
     foliageUvs: new Float32Array(foliageUvs),
     foliageIndices: new Uint32Array(foliageIndices),
+    texPositions: new Float32Array(tex.positions),
+    texNormals: new Float32Array(tex.normals),
+    texColors: new Float32Array(tex.colors),
+    texUvs: new Float32Array(tex.uvs),
+    texTiles: new Float32Array(tex.tiles),
+    texGlow: new Float32Array(tex.glow),
+    texIndices: new Uint32Array(tex.indices),
   };
+}
+
+interface TexBuffers {
+  positions: number[];
+  normals: number[];
+  colors: number[];
+  uvs: number[];
+  tiles: number[];
+  glow: number[];
+  indices: number[];
+}
+
+/** One merged rectangle of a textured block face. Same corner/winding convention as emitQuad, plus the per-vertex texture layer, frame count and baked glow. */
+function emitTexturedQuad(
+  out: TexBuffers,
+  def: BlockDef,
+  axis: Axis,
+  slice: number,
+  dir: number,
+  u0: number,
+  u1: number,
+  v0: number,
+  v1: number,
+  light: number,
+  glowLevel: number,
+): void {
+  const faceVal = dir > 0 ? slice + 1 : slice;
+  const corners: [number, number][] = dir > 0 ? [[u0, v0], [u1, v0], [u1, v1], [u0, v1]] : [[u0, v0], [u0, v1], [u1, v1], [u1, v0]];
+  const layer = FACE_TILE[def.id * 6 + faceIndex(axis, dir)];
+  const frames = BLOCK_FRAMES[def.id];
+  const brightness = lightToBrightness(light);
+  const [gr, gg, gb] = glowColor(glowLevel);
+
+  const baseIndex = out.positions.length / 3;
+  const p: [number, number, number] = [0, 0, 0];
+  for (const [u, v] of corners) {
+    setVoxel(p, axis, faceVal, u, v);
+    out.positions.push(p[0], p[1], p[2]);
+    const normal: [number, number, number] = [0, 0, 0];
+    normal[axis] = dir;
+    out.normals.push(normal[0], normal[1], normal[2]);
+    out.colors.push(brightness, brightness, brightness);
+    // Texture coordinates follow the world, not the greedy-mesh axes: on
+    // side faces "up" is always the texture's vertical (so brick courses
+    // stay level on every wall), and a merged quad tiles once per block.
+    if (axis === 0) out.uvs.push(p[2], p[1]);
+    else if (axis === 1) out.uvs.push(p[0], p[2]);
+    else out.uvs.push(p[0], p[1]);
+    out.tiles.push(layer, frames);
+    out.glow.push(gr, gg, gb);
+  }
+  out.indices.push(baseIndex, baseIndex + 1, baseIndex + 2, baseIndex, baseIndex + 2, baseIndex + 3);
+}
+
+/** Non-cube "cross" blocks (a flame): two diagonal quads through the voxel, each emitted with both windings so the layer can stay single-sided. Self-lit, so no baked glow. */
+function emitCrossShapes(out: TexBuffers, blocks: Uint16Array, skyLight: Uint8Array): void {
+  for (let i = 0; i < blocks.length; i++) {
+    const id = blocks[i];
+    if (id === AIR_ID) continue;
+    const def = getBlockById(id);
+    if (def.shape !== "cross" || !def.tex) continue;
+    const x = i & 31;
+    const y = (i >> 5) & 31;
+    const z = (i >> 10) & 31;
+    const layer = FACE_TILE[id * 6];
+    const frames = BLOCK_FRAMES[id];
+    const brightness = lightToBrightness(skyLight[i]);
+    const diagonals: [number, number, number, number][] = [
+      [x, z, x + 1, z + 1],
+      [x + 1, z, x, z + 1],
+    ];
+    for (const [ax, az, bx, bz] of diagonals) {
+      const base = out.positions.length / 3;
+      const verts: [number, number, number, number, number][] = [
+        [ax, y, az, 0, 0],
+        [bx, y, bz, 1, 0],
+        [bx, y + 1, bz, 1, 1],
+        [ax, y + 1, az, 0, 1],
+      ];
+      for (const [vx, vy, vz, uu, vv] of verts) {
+        out.positions.push(vx, vy, vz);
+        out.normals.push(0, 1, 0);
+        out.colors.push(brightness, brightness, brightness);
+        out.uvs.push(uu, vv);
+        out.tiles.push(layer, frames);
+        out.glow.push(0, 0, 0);
+      }
+      out.indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
+      out.indices.push(base, base + 2, base + 1, base, base + 3, base + 2);
+    }
+  }
 }
 
 function emitQuad(

@@ -7,6 +7,20 @@ _(empty — add new ideas above this line)_
 
 ## Shipped
 
+- The dark castle (replaces the grey box castle): a fixed, seed-independent
+  fortress on a terraced crag at (-100, -30) — banner-hung curtain wall
+  with glowing pagoda pavilions, a three-tier keep with a crowned spire,
+  a lava-river courtyard with brazier pillars and a bridge, an outer wall
+  and gatehouse, a great hall, interior stairs, and lava cascading down
+  the cliffs. Built on a new "textured" render layer: pixel-art block
+  textures, see-through lattice windows and iron grates, self-lit
+  (emissive) lava/windows/flames with animated frames, and baked,
+  occlusion-aware block light from every glowing block (see
+  src/engine/worldgen/castle/ and src/rendering/texturedMaterial.ts).
+  Banners are thin swaying cloth planes (src/engine/CastleBanners.ts).
+  The H key / minimap button now teleports to the castle's outer gate.
+  Three campfire camps that stood where the crag now is were moved.
+
 - Hotkeys for tool selection (Z/X/C/V for Break/Build/Torch/Flag,
   alongside B's existing cycle)
 - Minimap zoom in/out feature (+/- buttons on the minimap, or the

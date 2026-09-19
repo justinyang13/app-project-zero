@@ -26,6 +26,7 @@ const BIOME_LAND: Record<string, [number, number, number]> = {
   meadow: [92, 148, 70],
   desert: [226, 200, 130],
   tundra: [214, 232, 232],
+  crag: [58, 54, 66],
 };
 
 /** One map pixel's color for a world column. */

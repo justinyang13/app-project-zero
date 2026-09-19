@@ -26,10 +26,12 @@ import { pointAtProgress, LOOP_PERIMETER, FLAT_ROAD_Y } from "./worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
 import { HeldItem } from "./HeldItem";
 import { Clouds } from "./Clouds";
-import { Sky, getSystemTimeOfDay, isNight } from "./Sky";
+import { Sky, dayFactorAt, getSystemTimeOfDay, isNight } from "./Sky";
+import { updateTexturedMaterial } from "../rendering/texturedMaterial";
 import { useTimeStore } from "../state/timeStore";
 import { CampfireVisual } from "./CampfireVisual";
 import { StreetLamp } from "./StreetLamp";
+import { CastleBanners } from "./CastleBanners";
 import { Torch } from "./Torch";
 import { Flag } from "./Flag";
 import { CAMPFIRE_SITES, CASTLE_CENTER, CASTLE_GATE_SPAWN, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "./worldgen/structures";
@@ -99,6 +101,7 @@ export class GameLoop {
   private readonly sky: Sky;
   private readonly campfires: CampfireVisual[];
   private readonly streetLamps: StreetLamp[];
+  private readonly castleBanners: CastleBanners;
   private readonly miniMap: MiniMap;
   private customMarkers: MapMarkerRecord[] = [];
   private flagVisuals: Flag[] = [];
@@ -213,6 +216,9 @@ export class GameLoop {
 
     this.streetLamps = LAMP_SITES.map((site, i) => new StreetLamp(site.x, lampYs[i], site.z, LAMP_POST_HEIGHT));
     for (const lamp of this.streetLamps) this.scene.add(lamp.group);
+
+    this.castleBanners = new CastleBanners();
+    this.scene.add(this.castleBanners.group);
 
     this.dragons = createDragons(caveFloorY, peakY);
     for (const dragon of this.dragons) this.scene.add(dragon.mesh);
@@ -1038,6 +1044,8 @@ export class GameLoop {
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
     this.clouds.update(dt, this.player.position.x, this.player.position.z, timeOfDay);
     this.sky.update(this.player.position, timeOfDay);
+    updateTexturedMaterial(performance.now() / 1000, 1 - dayFactorAt(timeOfDay));
+    this.castleBanners.update(performance.now() / 1000);
     for (const campfire of this.campfires) campfire.update(dt);
     for (const torch of this.torchVisuals) torch.update(dt);
     for (const torch of this.caveTorches) torch.update(dt);
@@ -1223,6 +1231,8 @@ export class GameLoop {
       this.scene.remove(lamp.group);
       lamp.dispose();
     }
+    this.scene.remove(this.castleBanners.group);
+    this.castleBanners.dispose();
     for (const dragon of this.dragons) {
       this.scene.remove(dragon.mesh);
       dragon.dispose();

@@ -1,8 +1,8 @@
 // Fixed, deterministic landmark structures near spawn — a small,
 // hard-coded slice of spec/02-world-generation.md §6 (the real spec
 // wants chunk-hash-based probabilistic placement across the whole world;
-// this is one bridge, one castle, and a handful of campfire camps at
-// fixed world coordinates near origin, stamped the same way trees are:
+// this is one bridge, one castle (see worldgen/castle/), and a handful of
+// campfire camps at fixed world coordinates, stamped the same way trees are:
 // by checking, for each generated chunk, whether it overlaps the
 // structure's world-space bounding box, so it stays correct across chunk
 // load/unload and never needs to be treated as a "player edit" for
@@ -11,6 +11,21 @@ import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { getBlockByKey } from "../../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
 import { pointAtProgress, LOOP_PERIMETER, ROAD_WIDTH, FLAT_ROAD_Y } from "./roads";
+import { getCastlePlan } from "./castle/blueprint";
+import { UNSET } from "./castle/plan";
+import {
+  CASTLE_BASE_Y,
+  CASTLE_CENTER,
+  CASTLE_FLOOR_Y,
+  CASTLE_GATE_SPAWN,
+  PLAN_MAX_X,
+  PLAN_MAX_Z,
+  PLAN_MIN_X,
+  PLAN_MIN_Y,
+  PLAN_MAX_Y,
+  PLAN_MIN_Z,
+} from "./castle/layout";
+import { getBlockById } from "../../data/blocks";
 import {
   CAVE_BOUNDS,
   CAVE_FLOOR_DIG,
@@ -23,6 +38,8 @@ import {
   isCaveVoxel,
 } from "./mountain";
 
+export { CASTLE_CENTER, CASTLE_GATE_SPAWN };
+
 const WALL_ID = getBlockByKey("greystone").id;
 const ROOF_ID = getBlockByKey("roof_tile").id;
 const PLANK_ID = getBlockByKey("plank").id;
@@ -34,29 +51,13 @@ export const BRIDGE_CENTER = { x: 14, z: 0 };
 const BRIDGE_HALF_LENGTH = 8;
 const BRIDGE_HALF_WIDTH = 1;
 
-export const CASTLE_CENTER = { x: -34, z: -20 };
-const CASTLE_HALF_SIZE = 8;
-/** Just outside the castle's gate (the gap in its +z wall), where the minimap's "back to castle" button drops the player. */
-export const CASTLE_GATE_SPAWN = { x: CASTLE_CENTER.x + 0.5, z: CASTLE_CENTER.z + CASTLE_HALF_SIZE + 4 };
-const CASTLE_WALL_HEIGHT = 7;
-const CASTLE_TOWER_EXTRA = 6;
-const TOWER_HALF = 1;
-const CASTLE_CORNERS: [number, number][] = [
-  [CASTLE_CENTER.x - CASTLE_HALF_SIZE, CASTLE_CENTER.z - CASTLE_HALF_SIZE],
-  [CASTLE_CENTER.x - CASTLE_HALF_SIZE, CASTLE_CENTER.z + CASTLE_HALF_SIZE],
-  [CASTLE_CENTER.x + CASTLE_HALF_SIZE, CASTLE_CENTER.z - CASTLE_HALF_SIZE],
-  [CASTLE_CENTER.x + CASTLE_HALF_SIZE, CASTLE_CENTER.z + CASTLE_HALF_SIZE],
-];
-
-// A central keep in the courtyard — taller than the curtain wall and its
-// corner towers, so it reads as the castle's dominant structure instead
-// of an empty walled yard.
-const KEEP_HALF_SIZE = 3; // 7x7 footprint
-const KEEP_HEIGHT = 14;
-const CASTLE_MAX_EXTRA_ABOVE_BASE = Math.max(
-  CASTLE_WALL_HEIGHT + CASTLE_TOWER_EXTRA + 4, // corner tower + its roof cap
-  KEEP_HEIGHT + 6, // keep + its taller stepped roof and spire
-);
+// The castle is a big plan-based build (worldgen/castle/): the highest
+// thing it reaches above the courtyard floor, for sizing chunk columns.
+const CASTLE_TOP_ABOVE_FLOOR = 74;
+// A chunk column this close to the castle (blocks) might hold some of it or
+// of the lava cascading down its crag; anything farther skips the castle
+// entirely (and never builds its plan).
+const CASTLE_NEAR_RADIUS = 150;
 
 // Several small camps scattered near spawn, each a fire pit ringed by
 // seating (see stampCampfireSite) — deliberately kept off the road grid
@@ -66,9 +67,9 @@ const CASTLE_MAX_EXTRA_ABOVE_BASE = Math.max(
 export const CAMPFIRE_SITES: { x: number; z: number }[] = [
   { x: 4, z: 6 }, // original camp, right by spawn
   { x: 16, z: -48 },
-  { x: -48, z: 16 },
+  { x: -16, z: 48 },
   { x: 48, z: 48 },
-  { x: -80, z: -16 },
+  { x: -16, z: -48 },
 ];
 export const CAMPFIRE_CENTER = CAMPFIRE_SITES[0];
 
@@ -157,7 +158,6 @@ const SEAT_COUNT = 6;
 // (which only ever changes once per session) rather than resampling.
 let cachedSeed: number | null = null;
 let cachedBridgeDeckY = 0;
-let cachedCastleBaseY = 0;
 let cachedCampfireYs: number[] = [];
 let cachedLampYs: number[] = [];
 let cachedHouseYs: number[] = [];
@@ -170,7 +170,6 @@ function ensureCache(seed: number): void {
   const bridgeStart = sampleColumn(seed, BRIDGE_CENTER.x - BRIDGE_HALF_LENGTH, BRIDGE_CENTER.z).height;
   const bridgeEnd = sampleColumn(seed, BRIDGE_CENTER.x + BRIDGE_HALF_LENGTH, BRIDGE_CENTER.z).height;
   cachedBridgeDeckY = Math.max(bridgeStart, bridgeEnd, SEA_LEVEL) + 1;
-  cachedCastleBaseY = sampleColumn(seed, CASTLE_CENTER.x, CASTLE_CENTER.z).height + 1;
   cachedCampfireYs = CAMPFIRE_SITES.map((site) => sampleColumn(seed, site.x, site.z).height + 1);
   // Anchored to the loop road's own constant elevation, not the natural
   // terrain height at the post's shoulder offset — the road itself is
@@ -201,7 +200,7 @@ export function getStructureAnchors(
   ensureCache(seed);
   return {
     bridgeDeckY: cachedBridgeDeckY,
-    castleBaseY: cachedCastleBaseY,
+    castleBaseY: CASTLE_BASE_Y,
     campfireYs: cachedCampfireYs,
     lampYs: cachedLampYs,
     houseYs: cachedHouseYs,
@@ -249,13 +248,13 @@ export function structureMaxYFor(seed: number, cx: number, cz: number): number {
     chunkOverlapsBox(
       cx,
       cz,
-      CASTLE_CENTER.x - CASTLE_HALF_SIZE - TOWER_HALF,
-      CASTLE_CENTER.x + CASTLE_HALF_SIZE + TOWER_HALF,
-      CASTLE_CENTER.z - CASTLE_HALF_SIZE - TOWER_HALF,
-      CASTLE_CENTER.z + CASTLE_HALF_SIZE + TOWER_HALF,
+      CASTLE_CENTER.x + PLAN_MIN_X,
+      CASTLE_CENTER.x + PLAN_MAX_X,
+      CASTLE_CENTER.z + PLAN_MIN_Z,
+      CASTLE_CENTER.z + PLAN_MAX_Z,
     )
   ) {
-    maxY = Math.max(maxY, cachedCastleBaseY + CASTLE_MAX_EXTRA_ABOVE_BASE);
+    maxY = Math.max(maxY, CASTLE_FLOOR_Y + CASTLE_TOP_ABOVE_FLOOR);
   }
   for (let i = 0; i < HOUSE_LOTS.length; i++) {
     const lot = HOUSE_LOTS[i];
@@ -296,139 +295,54 @@ function stampBridge(seed: number, cx: number, cz: number, chunks: Chunk[]): voi
   }
 }
 
-function stampCastle(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
-  const minX = CASTLE_CENTER.x - CASTLE_HALF_SIZE;
-  const maxX = CASTLE_CENTER.x + CASTLE_HALF_SIZE;
-  const minZ = CASTLE_CENTER.z - CASTLE_HALF_SIZE;
-  const maxZ = CASTLE_CENTER.z + CASTLE_HALF_SIZE;
-  if (!chunkOverlapsBox(cx, cz, minX - TOWER_HALF, maxX + TOWER_HALF, minZ - TOWER_HALF, maxZ + TOWER_HALF)) return;
-  const { castleBaseY } = getStructureAnchors(seed);
+/** Copies the castle plan (worldgen/castle/blueprint.ts) over this chunk column, then re-derives the sky light of every column it touched: open air above the roofs stays lit, rooms under them go dark. */
+function stampCastle(cx: number, cz: number, chunks: Chunk[]): void {
+  if (!chunkOverlapsBox(cx, cz, CASTLE_CENTER.x - CASTLE_NEAR_RADIUS, CASTLE_CENTER.x + CASTLE_NEAR_RADIUS, CASTLE_CENTER.z - CASTLE_NEAR_RADIUS, CASTLE_CENTER.z + CASTLE_NEAR_RADIUS)) return;
+  const plan = getCastlePlan();
 
-  const gateMinX = CASTLE_CENTER.x - 1;
-  const gateMaxX = CASTLE_CENTER.x + 1;
-  const towerTop = castleBaseY + CASTLE_WALL_HEIGHT + CASTLE_TOWER_EXTRA;
+  const chunkMinX = cx * CHUNK_SIZE;
+  const chunkMinZ = cz * CHUNK_SIZE;
+  const minX = Math.max(chunkMinX, CASTLE_CENTER.x + PLAN_MIN_X);
+  const maxX = Math.min(chunkMinX + CHUNK_SIZE - 1, CASTLE_CENTER.x + PLAN_MAX_X);
+  const minZ = Math.max(chunkMinZ, CASTLE_CENTER.z + PLAN_MIN_Z);
+  const maxZ = Math.min(chunkMinZ + CHUNK_SIZE - 1, CASTLE_CENTER.z + PLAN_MAX_Z);
 
-  for (let wx = minX - TOWER_HALF; wx <= maxX + TOWER_HALF; wx++) {
-    for (let wz = minZ - TOWER_HALF; wz <= maxZ + TOWER_HALF; wz++) {
-      const inTower = CASTLE_CORNERS.some(([tx, tz]) => Math.abs(wx - tx) <= TOWER_HALF && Math.abs(wz - tz) <= TOWER_HALF);
-      const insideFootprint = wx >= minX && wx <= maxX && wz >= minZ && wz <= maxZ;
-      const onWallLine = insideFootprint && (wx === minX || wx === maxX || wz === minZ || wz === maxZ);
-      const isGate = wz === maxZ && wx >= gateMinX && wx <= gateMaxX;
-
-      if (inTower) {
-        for (let wy = castleBaseY - 3; wy <= towerTop; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, WALL_ID);
-      } else if (onWallLine && !isGate) {
-        for (let wy = castleBaseY - 3; wy <= castleBaseY + CASTLE_WALL_HEIGHT; wy++) {
-          setWorldVoxel(chunks, cx, cz, wx, wy, wz, WALL_ID);
+  const touched: [number, number][] = [];
+  if (minX <= maxX && minZ <= maxZ) {
+    for (let wx = minX; wx <= maxX; wx++) {
+      for (let wz = minZ; wz <= maxZ; wz++) {
+        let any = false;
+        for (let ly = PLAN_MIN_Y; ly <= PLAN_MAX_Y; ly++) {
+          const block = plan.get(wx - CASTLE_CENTER.x, ly, wz - CASTLE_CENTER.z);
+          if (block === UNSET) continue;
+          setWorldVoxel(chunks, cx, cz, wx, CASTLE_FLOOR_Y + ly, wz, block);
+          any = true;
         }
-        // Crenellations: alternating merlons one block above the wall
-        // top, so the curtain wall reads as a proper parapet instead of
-        // a flat-topped box.
-        if ((wx + wz) % 2 === 0) {
-          setWorldVoxel(chunks, cx, cz, wx, castleBaseY + CASTLE_WALL_HEIGHT + 1, wz, WALL_ID);
-        }
-      } else if (onWallLine && isGate) {
-        for (let wy = castleBaseY; wy <= castleBaseY + CASTLE_WALL_HEIGHT; wy++) {
-          setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-        }
+        if (any) touched.push([wx, wz]);
       }
     }
   }
-
-  for (const [tx, tz] of CASTLE_CORNERS) {
-    for (let dx = -1; dx <= 1; dx++) {
-      for (let dz = -1; dz <= 1; dz++) setWorldVoxel(chunks, cx, cz, tx + dx, towerTop + 1, tz + dz, ROOF_ID);
-    }
-    setWorldVoxel(chunks, cx, cz, tx, towerTop + 2, tz, ROOF_ID);
-    setWorldVoxel(chunks, cx, cz, tx, towerTop + 3, tz, LOG_ID);
+  // Blocks that follow the terrain rather than the plan box (lava down the crag).
+  for (const extra of plan.extras) {
+    if (extra.x < chunkMinX || extra.x >= chunkMinX + CHUNK_SIZE || extra.z < chunkMinZ || extra.z >= chunkMinZ + CHUNK_SIZE) continue;
+    setWorldVoxel(chunks, cx, cz, extra.x, extra.y, extra.z, extra.id);
+    touched.push([extra.x, extra.z]);
   }
-}
 
-function stampSquareRoofTier(
-  chunks: Chunk[],
-  cx: number,
-  cz: number,
-  centerX: number,
-  centerZ: number,
-  wy: number,
-  half: number,
-): void {
-  for (let dx = -half; dx <= half; dx++) {
-    for (let dz = -half; dz <= half; dz++) {
-      setWorldVoxel(chunks, cx, cz, centerX + dx, wy, centerZ + dz, ROOF_ID);
-    }
-  }
-}
-
-/** A central keep in the courtyard: a hollow tower with a door, four windows, and a tall stepped-pyramid roof with a spire. */
-function stampKeep(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
-  const { x: kx, z: kz } = CASTLE_CENTER;
-  const minX = kx - KEEP_HALF_SIZE;
-  const maxX = kx + KEEP_HALF_SIZE;
-  const minZ = kz - KEEP_HALF_SIZE;
-  const maxZ = kz + KEEP_HALF_SIZE;
-  if (!chunkOverlapsBox(cx, cz, minX, maxX, minZ, maxZ)) return;
-  const { castleBaseY } = getStructureAnchors(seed);
-  const keepTop = castleBaseY + KEEP_HEIGHT;
-
-  const doorMinX = kx - 1;
-  const doorMaxX = kx + 1;
-
-  for (let wx = minX; wx <= maxX; wx++) {
-    for (let wz = minZ; wz <= maxZ; wz++) {
-      const onWallLine = wx === minX || wx === maxX || wz === minZ || wz === maxZ;
-      if (!onWallLine) {
-        // Interior floor, with the space above it cleared to air —
-        // without this, whatever the natural terrain under the keep
-        // happens to be (this seed's spot dips just below sea level, per
-        // SEA_LEVEL in terrain.ts) would still fill the interior right
-        // up to sea level, showing as a pool of water inside a
-        // supposedly-finished building.
-        setWorldVoxel(chunks, cx, cz, wx, castleBaseY - 1, wz, PLANK_ID);
-        for (let wy = castleBaseY; wy < keepTop; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-        continue;
+  // A plan cell is only ever opaque or air, so a straight top-down scan is exact (same rule as terrain.ts's initial lighting).
+  for (const [wx, wz] of touched) {
+    let sky = 15;
+    for (let cy = chunks.length - 1; cy >= 0; cy--) {
+      const chunk = chunks[cy];
+      const lx = wx - chunkMinX;
+      const lz = wz - chunkMinZ;
+      for (let ly = CHUNK_SIZE - 1; ly >= 0; ly--) {
+        const idx = lx | (ly << 5) | (lz << 10);
+        if (chunk.blocks[idx] !== AIR_ID) {
+          sky = getBlockById(chunk.blocks[idx]).lightOpacity >= 15 ? 0 : sky;
+          chunk.skyLight[idx] = 0;
+        } else chunk.skyLight[idx] = sky;
       }
-      const isDoor = wz === maxZ && wx >= doorMinX && wx <= doorMaxX;
-      const isWindow =
-        !isDoor && ((wx === kx && (wz === minZ || wz === maxZ)) || (wz === kz && (wx === minX || wx === maxX)));
-
-      for (let wy = castleBaseY - 3; wy <= keepTop; wy++) {
-        if (isDoor && wy <= castleBaseY + 2) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-        else if (isWindow && wy === castleBaseY + 4) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-        else setWorldVoxel(chunks, cx, cz, wx, wy, wz, WALL_ID);
-      }
-    }
-  }
-
-  // Stepped pyramid roof + spire — taller and more tiered than the
-  // corner towers' cap, so the keep reads as the tallest, most important
-  // part of the castle.
-  stampSquareRoofTier(chunks, cx, cz, kx, kz, keepTop + 1, 2);
-  stampSquareRoofTier(chunks, cx, cz, kx, kz, keepTop + 2, 1);
-  setWorldVoxel(chunks, cx, cz, kx, keepTop + 3, kz, ROOF_ID);
-  setWorldVoxel(chunks, cx, cz, kx, keepTop + 4, kz, LOG_ID);
-  setWorldVoxel(chunks, cx, cz, kx, keepTop + 5, kz, LOG_ID);
-}
-
-/** Paves the courtyard between the curtain wall and the keep, instead of leaving bare terrain inside the walls. */
-function stampCourtyardFloor(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
-  const minX = CASTLE_CENTER.x - CASTLE_HALF_SIZE + 1;
-  const maxX = CASTLE_CENTER.x + CASTLE_HALF_SIZE - 1;
-  const minZ = CASTLE_CENTER.z - CASTLE_HALF_SIZE + 1;
-  const maxZ = CASTLE_CENTER.z + CASTLE_HALF_SIZE - 1;
-  if (!chunkOverlapsBox(cx, cz, minX, maxX, minZ, maxZ)) return;
-  const { castleBaseY } = getStructureAnchors(seed);
-  const floorY = castleBaseY - 1;
-
-  const keepMinX = CASTLE_CENTER.x - KEEP_HALF_SIZE;
-  const keepMaxX = CASTLE_CENTER.x + KEEP_HALF_SIZE;
-  const keepMinZ = CASTLE_CENTER.z - KEEP_HALF_SIZE;
-  const keepMaxZ = CASTLE_CENTER.z + KEEP_HALF_SIZE;
-
-  for (let wx = minX; wx <= maxX; wx++) {
-    for (let wz = minZ; wz <= maxZ; wz++) {
-      if (wx >= keepMinX && wx <= keepMaxX && wz >= keepMinZ && wz <= keepMaxZ) continue;
-      setWorldVoxel(chunks, cx, cz, wx, floorY, wz, PLANK_ID);
     }
   }
 }
@@ -666,9 +580,7 @@ function stampSummitRoost(seed: number, cx: number, cz: number, chunks: Chunk[])
 /** Stamps every fixed structure that overlaps this chunk column. Mutates `chunks` in place. */
 export function stampStructures(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   stampBridge(seed, cx, cz, chunks);
-  stampCastle(seed, cx, cz, chunks);
-  stampKeep(seed, cx, cz, chunks);
-  stampCourtyardFloor(seed, cx, cz, chunks);
+  stampCastle(cx, cz, chunks);
   stampCampfires(seed, cx, cz, chunks);
   stampStreetLamps(seed, cx, cz, chunks);
   stampResidentialArea(seed, cx, cz, chunks);

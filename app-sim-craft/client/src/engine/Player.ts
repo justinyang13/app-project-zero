@@ -9,7 +9,7 @@
 // 17-game-modes-progression.md for the systems this will plug into once
 // gathered items, food, and Survival/Creative mode selection exist.
 import type { World } from "./World";
-import { isLiquid } from "../data/blocks";
+import { isLiquid, isSolidBlock } from "../data/blocks";
 
 export const PLAYER_WIDTH = 0.6;
 export const PLAYER_HEIGHT = 1.8;
@@ -61,8 +61,9 @@ export class Player {
         for (let bz = minZ; bz <= maxZ; bz++) {
           const id = world.getBlock(bx, by, bz);
           // Liquids are swum through, not walked into like a wall — see
-          // isInLiquid below for the swim-state check itself.
-          if (id !== 0 && !isLiquid(id)) return true;
+          // isInLiquid below for the swim-state check itself. A flame is
+          // decoration, not a block: walk straight through it.
+          if (id !== 0 && !isLiquid(id) && isSolidBlock(id)) return true;
         }
       }
     }

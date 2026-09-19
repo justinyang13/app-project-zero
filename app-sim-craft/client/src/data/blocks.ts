@@ -33,8 +33,29 @@ export interface BlockDef {
   // engine/ChunkManager.ts) instead of a flat-colored solid cube. Only
   // the leaf variants today; unset/false for everything else.
   foliage?: boolean;
+  // Painted with a pixel-art texture (data/blockTextures.ts) instead of a
+  // flat color, in the "textured" mesh layer (see rendering/greedyMesh.ts
+  // and rendering/texturedMaterial.ts) — the layer that also carries
+  // see-through cut-outs, emissive (self-lit) pixels, and animation.
+  tex?: BlockTexture;
+  // "cross" draws two intersecting diagonal quads (like a flame or a
+  // flower) instead of a cube; such a block is never solid.
+  shape?: "cube" | "cross";
+  // Light this block gives off into the surrounding air, baked into the
+  // castle's block-light map (worldgen/castle/lightMap.ts) — level 0-15,
+  // falling off one step per block. `stride` thins out big emitter fields
+  // (a lava river) so every Nth cell is a source instead of all of them.
+  glow?: { level: number; stride?: number };
   dropTable: DropEntry[];
   color: number; // placeholder flat color until textures land (18-visual-art-direction.md §3)
+}
+
+/** Texture keys (data/blockTextures.ts) per face. `all` covers any face not otherwise named. */
+export interface BlockTexture {
+  all?: string;
+  top?: string;
+  bottom?: string;
+  side?: string;
 }
 
 export const AIR_ID = 0;
@@ -255,7 +276,83 @@ export const BLOCKS: BlockDef[] = [
   },
   leafVariant(16, "leaves_pine", "Pine Needles", 0x143f28),
   leafVariant(17, "leaves_cherry", "Cherry Blossom", 0xf4a3c6),
+  // --- the dark castle's palette (ids 18+) -------------------------------
+  // Everything below renders in the textured layer. Gloomstone is the
+  // castle's own dark volcanic rock; the crag it stands on is made of the
+  // same stuff plus Umbral slate/cobble (see worldgen/castle/crag.ts).
+  textured(18, "gloomstone", "Gloomstone", 1.8, { all: "gloomstone" }, 0x2e2a32),
+  textured(19, "gloom_brick", "Gloom Brick", 2.0, { all: "gloom_brick" }, 0x3e3944),
+  textured(20, "gloom_brick_cracked", "Cracked Gloom Brick", 1.6, { all: "gloom_brick_cracked" }, 0x3a3540),
+  textured(21, "gloom_brick_mossy", "Mossy Gloom Brick", 2.0, { all: "gloom_brick_mossy" }, 0x3a4438),
+  textured(22, "gloom_polished", "Polished Gloomstone", 2.0, { all: "gloom_polished" }, 0x36323c),
+  textured(23, "gloom_runed", "Runed Gloomstone", 2.0, { all: "gloom_runed" }, 0x36323c, { glow: { level: 5, stride: 2 } }),
+  textured(24, "gloom_column", "Gloom Column", 2.0, { side: "gloom_column_side", top: "gloom_polished", bottom: "gloom_polished" }, 0x36323c),
+  textured(25, "umbral_slate", "Umbral Slate", 2.0, { all: "umbral_slate" }, 0x1e1e26),
+  textured(26, "umbral_cobble", "Umbral Cobble", 1.8, { all: "umbral_cobble" }, 0x242430),
+  textured(27, "gloom_moss", "Gloom Moss", 0.8, { top: "gloom_moss_top", side: "gloom_moss_side", bottom: "umbral_cobble" }, 0x2c4a26, { toolType: "shovel" }),
+  textured(28, "magma", "Magma", 0, { all: "magma" }, 0xf0781a, {
+    liquid: true,
+    toolType: "none",
+    glow: { level: 12, stride: 3 },
+  }),
+  textured(29, "ember_brick", "Emberveined Brick", 2.0, { all: "ember_brick" }, 0x4a2a24, { glow: { level: 7, stride: 2 } }),
+  // Partial see-through: the pane corners are cut out and the amber glass
+  // is emissive, so the window glows and you can still peer through it.
+  textured(30, "ember_lattice", "Ember Lattice Window", 0.6, { all: "ember_lattice" }, 0xff9a30, {
+    transparentToRender: true,
+    glow: { level: 11, stride: 1 },
+  }),
+  textured(31, "dark_lattice", "Dark Lattice Window", 0.6, { all: "dark_lattice" }, 0x1c2438, { transparentToRender: true }),
+  textured(32, "iron_grate", "Iron Grate", 1.5, { all: "iron_grate" }, 0x3a3640, { transparentToRender: true }),
+  textured(33, "brazier_flame", "Brazier Flame", 0, { all: "brazier_flame" }, 0xff9a30, {
+    solid: false,
+    shape: "cross",
+    transparentToRender: true,
+    lightOpacity: 0,
+    glow: { level: 14, stride: 1 },
+  }),
+  textured(34, "ashslate_roof", "Ashslate Roof Tile", 1.5, { all: "ashslate" }, 0x262a36),
+  textured(35, "crimson_brick", "Crimson Brick", 2.0, { all: "crimson_brick" }, 0x602824),
+  textured(36, "nightglass", "Nightglass", 4.0, { all: "nightglass" }, 0x120e1c),
+  textured(37, "brazier", "Brazier", 2.0, { top: "brazier_top", side: "brazier_side", bottom: "brazier_side" }, 0x40252a, {
+    glow: { level: 9, stride: 1 },
+  }),
+  textured(38, "ember_lamp", "Ember Lamp", 0.5, { all: "ember_lamp" }, 0xffc060, { glow: { level: 15, stride: 1 } }),
+  textured(39, "crimson_runner", "Crimson Runner", 0.4, { all: "crimson_runner" }, 0x701820),
+  textured(40, "ashslate_ridge", "Ashslate Ridge Tile", 1.5, { all: "ashslate_ridge" }, 0x3a3e4e),
+  textured(41, "gilded_trim", "Gilded Trim", 2.0, { all: "gilded_trim" }, 0x845c2a),
+  textured(42, "rust_rock", "Rustrock", 1.8, { all: "rust_rock" }, 0x5a3a2c),
 ];
+
+/** A textured (pixel-art) block. `overrides` tweak the defaults — see the notes on BlockDef for what each does. */
+function textured(
+  id: number,
+  key: string,
+  name: string,
+  hardness: number,
+  tex: BlockTexture,
+  color: number,
+  overrides: Partial<BlockDef> = {},
+): BlockDef {
+  return {
+    id,
+    key,
+    name,
+    hardness,
+    toolType: "pickaxe",
+    toolTier: 0,
+    lightEmission: 0,
+    lightOpacity: 15,
+    flammable: false,
+    solid: true,
+    transparentToRender: false,
+    gravityAffected: false,
+    tex,
+    dropTable: [{ itemKey: key, minCount: 1, maxCount: 1, chance: 1 }],
+    color,
+    ...overrides,
+  };
+}
 
 function leafVariant(id: number, key: string, name: string, color: number): BlockDef {
   return {
@@ -296,4 +393,9 @@ export const WATER_ID = getBlockByKey("water").id;
 
 export function isLiquid(id: number): boolean {
   return id !== AIR_ID && (byId.get(id)?.liquid ?? false);
+}
+
+/** False for air and for non-solid decorations (a flame): things the player walks straight through. */
+export function isSolidBlock(id: number): boolean {
+  return id !== AIR_ID && (byId.get(id)?.solid ?? false);
 }

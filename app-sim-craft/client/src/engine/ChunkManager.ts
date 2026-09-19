@@ -12,6 +12,7 @@ import type { MeshApi } from "../workers/mesh.worker";
 import type { BoundaryLayers } from "../rendering/greedyMesh";
 import type { SaveManager } from "../persistence/SaveManager";
 import { getLeafTexture } from "../rendering/leafTexture";
+import { getTexturedMaterial } from "../rendering/texturedMaterial";
 
 // Measured against spec/15-performance.md §1's budget (~10ms of the 16.6ms
 // frame for render+sim) with the debug overlay's frame-time readout: at this
@@ -80,6 +81,7 @@ export class ChunkManager {
   private readonly meshes = new Map<string, THREE.Mesh>();
   private readonly waterMeshes = new Map<string, THREE.Mesh>();
   private readonly foliageMeshes = new Map<string, THREE.Mesh>();
+  private readonly texturedMeshes = new Map<string, THREE.Mesh>();
   private readonly loadedColumns = new Set<string>();
   private readonly pendingColumns = new Set<string>();
   private readonly pendingMeshes = new Set<string>();
@@ -208,6 +210,12 @@ export class ChunkManager {
         foliageMesh.geometry.dispose();
         this.foliageMeshes.delete(chunkKeyStr);
       }
+      const texturedMesh = this.texturedMeshes.get(chunkKeyStr);
+      if (texturedMesh) {
+        this.scene.remove(texturedMesh);
+        texturedMesh.geometry.dispose();
+        this.texturedMeshes.delete(chunkKeyStr);
+      }
       if (chunk.modifiedFromGenerated) void this.saveManager.saveChunkNow(chunk);
       this.world.chunks.delete(chunkKeyStr);
     }
@@ -274,7 +282,7 @@ export class ChunkManager {
       nz: nz ? extractLayer(nz, "z", CHUNK_SIZE - 1) : null,
     };
 
-    const result = await this.meshPool.run((api) => api.meshChunk(chunk.blocks, chunk.skyLight, boundaries));
+    const result = await this.meshPool.run((api) => api.meshChunk(chunk.blocks, chunk.skyLight, boundaries, cx, cy, cz));
     this.pendingMeshes.delete(key);
     chunk.dirty = false;
 
@@ -295,6 +303,12 @@ export class ChunkManager {
       this.scene.remove(existingFoliage);
       existingFoliage.geometry.dispose();
       this.foliageMeshes.delete(key);
+    }
+    const existingTextured = this.texturedMeshes.get(key);
+    if (existingTextured) {
+      this.scene.remove(existingTextured);
+      existingTextured.geometry.dispose();
+      this.texturedMeshes.delete(key);
     }
 
     if (result.indices.length > 0) {
@@ -336,6 +350,22 @@ export class ChunkManager {
       this.scene.add(foliageMesh);
       this.foliageMeshes.set(key, foliageMesh);
     }
+
+    if (result.texIndices.length > 0) {
+      const texGeometry = new THREE.BufferGeometry();
+      texGeometry.setAttribute("position", new THREE.BufferAttribute(result.texPositions, 3));
+      texGeometry.setAttribute("normal", new THREE.BufferAttribute(result.texNormals, 3));
+      texGeometry.setAttribute("color", new THREE.BufferAttribute(result.texColors, 3));
+      texGeometry.setAttribute("tuv", new THREE.BufferAttribute(result.texUvs, 2));
+      texGeometry.setAttribute("tile", new THREE.BufferAttribute(result.texTiles, 2));
+      texGeometry.setAttribute("glow", new THREE.BufferAttribute(result.texGlow, 3));
+      texGeometry.setIndex(new THREE.BufferAttribute(result.texIndices, 1));
+
+      const texMesh = new THREE.Mesh(texGeometry, getTexturedMaterial());
+      texMesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
+      this.scene.add(texMesh);
+      this.texturedMeshes.set(key, texMesh);
+    }
   }
 
   dispose(): void {
@@ -350,6 +380,10 @@ export class ChunkManager {
       mesh.geometry.dispose();
     }
     for (const mesh of this.foliageMeshes.values()) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+    }
+    for (const mesh of this.texturedMeshes.values()) {
       this.scene.remove(mesh);
       mesh.geometry.dispose();
     }
