@@ -11,10 +11,11 @@ import { pickBiome, CRAG_BIOME, type BiomeDef } from "./biomes";
 import { getBlockByKey } from "../../data/blocks";
 import { placeTrees } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
-import { isRoadColumn, isBridgeDeckColumn, FLAT_ROAD_Y } from "./roads";
+import { FLAT_ROAD_Y } from "./roads";
+import { classifyRoadColumn, grandBridgeBlock, roadColumnTop, type RoadColumn } from "./bridge";
 import { mountainHeightBoost } from "./mountain";
 import { deepLakeHeight } from "./deepLake";
-import { applyCrag, cragBodyBlock, cragSurfaceBlock, CRAG_NONE } from "./castle/crag";
+import { applyCrag, blightSurfaceBlock, castleBlight, cragBodyBlock, cragSurfaceBlock, raiseCastleGround, CRAG_NONE } from "./castle/crag";
 
 const SALT_TEMPERATURE = 0x5eed01;
 const SALT_HEIGHT = 0x5eed02;
@@ -36,12 +37,16 @@ export const SEA_LEVEL = 64;
 // Vertical room above the tallest column reserved for trees — the tallest
 // pine (worldgen/trees.ts) tops out 16 blocks above its ground.
 const TREE_HEADROOM = 18;
+// Room above a bridge deck for the street lamps standing on it.
+const ROAD_TOP_CLEARANCE = 6;
 
 export interface ColumnSample {
   height: number;
   biome: BiomeDef;
   /** Nonzero where the castle's crag or approach ramp shapes this column (see worldgen/castle/crag.ts); it picks the column's blocks. */
   crag: number;
+  /** 0-1: how blighted the natural ground here is by the castle's shadow (see castleBlight); 0 on crag columns and far from the castle. */
+  blight: number;
 }
 
 /** Pure function of (seed, world x/z) — see spec/01-tech-stack-architecture.md §9. */
@@ -56,9 +61,10 @@ export function sampleColumn(seed: number, worldX: number, worldZ: number): Colu
   const naturalHeight =
     Math.round(biome.heightBase + detail * biome.heightAmplitude) + mountainHeightBoost(seed, worldX, worldZ);
   const lakeHeight = deepLakeHeight(naturalHeight, worldX, worldZ, SEA_LEVEL);
-  const { height, kind } = applyCrag(lakeHeight, worldX, worldZ);
+  const { height, kind } = applyCrag(raiseCastleGround(lakeHeight, worldX, worldZ), worldX, worldZ);
 
-  return { height, biome: kind === CRAG_NONE ? biome : CRAG_BIOME, crag: kind };
+  const blight = kind === CRAG_NONE && height >= SEA_LEVEL ? castleBlight(worldX, worldZ) : 0;
+  return { height, biome: kind === CRAG_NONE ? biome : CRAG_BIOME, crag: kind, blight };
 }
 
 /** Highest chunk-Y layer (inclusive) that can contain solid terrain for a max column height. */
@@ -75,13 +81,20 @@ export function maxChunkYFor(height: number): number {
  */
 export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
   const columns: ColumnSample[] = Array.from({ length: CHUNK_SIZE * CHUNK_SIZE });
+  const roads: (RoadColumn | null)[] = Array.from({ length: CHUNK_SIZE * CHUNK_SIZE });
   let maxHeight = 0;
 
   for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
-      const sample = sampleColumn(seed, cx * CHUNK_SIZE + lx, cz * CHUNK_SIZE + lz);
+      const worldX = cx * CHUNK_SIZE + lx;
+      const worldZ = cz * CHUNK_SIZE + lz;
+      const sample = sampleColumn(seed, worldX, worldZ);
       columns[lx * CHUNK_SIZE + lz] = sample;
       if (sample.height > maxHeight) maxHeight = sample.height;
+      // The road's own top (the lake bridge arches well above the terrain, lamp posts and all).
+      const road = classifyRoadColumn(worldX, worldZ, sample.height);
+      roads[lx * CHUNK_SIZE + lz] = road;
+      if (road && road.kind === "grand") maxHeight = Math.max(maxHeight, roadColumnTop(road) + ROAD_TOP_CLEARANCE);
     }
   }
 
@@ -97,22 +110,27 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
 
   for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
-      const { height, biome, crag } = columns[lx * CHUNK_SIZE + lz];
+      const { height, biome, crag, blight } = columns[lx * CHUNK_SIZE + lz];
 
       // The loop road is flattened, not just surface-painted: every
-      // column under it is cut/filled to a single constant elevation
-      // (FLAT_ROAD_Y) regardless of the natural heightmap, cutting
-      // through hills and bridging over lakes so the whole loop reads
-      // as genuinely flat (see worldgen/roads.ts).
+      // column under it is cut/filled to the road's own elevation
+      // (constant, except across the lake bridge) regardless of the
+      // natural heightmap, cutting through hills and bridging over
+      // lakes so the whole loop reads as genuinely flat (see
+      // worldgen/roads.ts and worldgen/bridge.ts).
       const worldX = cx * CHUNK_SIZE + lx;
       const worldZ = cz * CHUNK_SIZE + lz;
-      const isRoad = isRoadColumn(worldX, worldZ);
-      // Over water the road is a bridge rather than a causeway: just a
+      const road = roads[lx * CHUNK_SIZE + lz];
+      const deckY = road ? road.deckY : FLAT_ROAD_Y;
+      const isGrand = road?.kind === "grand";
+      const isRoad = road?.kind === "causeway";
+      // Over water a low road is a bridge rather than a causeway: just a
       // deck (and a few pillars) at road height with open water and air
       // beneath, so fish can swim under it and around the lake.
-      const isBridge = height < SEA_LEVEL && isBridgeDeckColumn(worldX, worldZ);
+      const isBridge = road?.kind === "plank";
       const isPillar = worldX % BRIDGE_PILLAR_SPACING === 0 && worldZ % BRIDGE_PILLAR_SPACING === 0;
-      const filledTop = isRoad || isBridge ? FLAT_ROAD_Y : Math.max(height, SEA_LEVEL); // top of road/lake/bare ground
+      const groundTop = Math.max(height, SEA_LEVEL); // top of lake/bare ground
+      const filledTop = isGrand && road ? roadColumnTop(road) : isRoad || isBridge ? deckY : groundTop;
 
       for (let cy = 0; cy <= maxCy; cy++) {
         const chunk = chunks[cy];
@@ -122,9 +140,18 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
           if (worldY > filledTop) break; // above the road/water/surface: leave as air (id 0)
           const idx = lx | (ly << 5) | (lz << 10);
           chunk.skyLight[idx] = 0;
-          if (isBridge) {
-            if (worldY === FLAT_ROAD_Y) chunk.blocks[idx] = isRoad ? ROAD_ID : PLANK_ID;
-            else if (worldY === FLAT_ROAD_Y - 1) chunk.blocks[idx] = PLANK_ID; // deck underside
+          if (isGrand && road) {
+            // The lake bridge's viaduct: girder, piers and parapet from the road's spec, otherwise whatever lies beneath (terrain, water, or lit air under the deck).
+            const bridgeBlock = worldY > height ? grandBridgeBlock(road, worldY) : 0;
+            if (bridgeBlock !== 0) chunk.blocks[idx] = bridgeBlock;
+            else if (worldY > groundTop) chunk.skyLight[idx] = 15;
+            else if (worldY > height) chunk.blocks[idx] = WATER_ID;
+            else if (worldY === height) chunk.blocks[idx] = blightSurfaceBlock(worldX, worldZ, blight, biome.surfaceBlock);
+            else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
+            else chunk.blocks[idx] = STONE_ID;
+          } else if (isBridge) {
+            if (worldY === deckY) chunk.blocks[idx] = road?.onRoad ? ROAD_ID : PLANK_ID;
+            else if (worldY === deckY - 1) chunk.blocks[idx] = PLANK_ID; // deck underside
             else if (worldY > height && isPillar) chunk.blocks[idx] = LOG_ID;
             else if (worldY > SEA_LEVEL) chunk.skyLight[idx] = 15; // open air under the deck
             else if (worldY > height) chunk.blocks[idx] = WATER_ID;
@@ -137,11 +164,11 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
             else if (worldY === height) chunk.blocks[idx] = cragSurfaceBlock(worldX, worldZ, crag);
             else chunk.blocks[idx] = cragBodyBlock(worldX, worldY, worldZ, height, crag);
           } else if (isRoad) {
-            if (worldY === FLAT_ROAD_Y) chunk.blocks[idx] = ROAD_ID;
-            else if (worldY >= FLAT_ROAD_Y - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
+            if (worldY === deckY) chunk.blocks[idx] = ROAD_ID;
+            else if (worldY >= deckY - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
             else chunk.blocks[idx] = STONE_ID;
           } else if (worldY > height) chunk.blocks[idx] = WATER_ID;
-          else if (worldY === height) chunk.blocks[idx] = biome.surfaceBlock;
+          else if (worldY === height) chunk.blocks[idx] = blightSurfaceBlock(worldX, worldZ, blight, biome.surfaceBlock);
           else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
           else chunk.blocks[idx] = STONE_ID;
         }

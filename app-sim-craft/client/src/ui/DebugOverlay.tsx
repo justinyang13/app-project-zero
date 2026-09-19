@@ -45,6 +45,7 @@ export function DebugOverlay() {
           position: "fixed",
           top: 8,
           left: 8,
+          zIndex: 5,
           fontFamily: "monospace",
           fontSize: 12,
           color: "#fff",

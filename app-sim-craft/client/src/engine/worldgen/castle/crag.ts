@@ -14,6 +14,7 @@ import { CASTLE_CENTER, CASTLE_FLOOR_Y, RAMP_DROP_PER_BLOCK, RAMP_HALF_WIDTH, RA
 const CRAG_SEED = 0x7a11c0de;
 const SALT_SHAPE = 0x11;
 const SALT_DETAIL = 0x12;
+const SALT_BLIGHT = 0x13;
 
 // The plateau (rounded rectangle) that the castle's walls sit on, in
 // castle-local coordinates, centered slightly north of the origin since
@@ -27,6 +28,17 @@ const TERRACE = 3; // ledge height
 const MAX_RUN = 48; // beyond this the crag is always below any natural terrain
 const NOISE_SCALE_SHAPE = 0.07;
 const NOISE_SCALE_DETAIL = 0.19;
+
+// The blighted ground: natural terrain beyond the crag keeps its meadow
+// biome, but its surface darkens the closer it gets to the castle — solid
+// dark within BLIGHT_SOLID blocks of the plateau, fading to plain turf at
+// BLIGHT_REACH — so the crag's dark rock blends into the meadow rather
+// than butting against it.
+const BLIGHT_SOLID = 14;
+const BLIGHT_REACH = 84;
+const BLIGHT_BOUND_X = HULL_HALF_X + BLIGHT_REACH + 14;
+const BLIGHT_BOUND_Z = HULL_HALF_Z + BLIGHT_REACH + 14;
+const BLIGHT_STAGES = 4; // 0 = natural surface, 4 = bare dark rock
 
 // Tall rock spires around the rim, as (local dx, local dz, radius, height above the plateau).
 const SPIRES: { dx: number; dz: number; r: number; h: number }[] = [
@@ -53,6 +65,8 @@ const gloomPolished = getBlockByKey("gloom_polished").id;
 const gloomBrick = getBlockByKey("gloom_brick").id;
 const magma = getBlockByKey("magma").id;
 const rustRock = getBlockByKey("rust_rock").id;
+const duskTurf = getBlockByKey("dusk_turf").id;
+const witheredTurf = getBlockByKey("withered_turf").id;
 
 /** What kind of castle terrain a column is (0 = none). Stored on ColumnSample so terrain.ts can pick materials. */
 export const CRAG_NONE = 0;
@@ -66,6 +80,13 @@ function hash3(x: number, y: number, z: number, salt: number): number {
   return (h >>> 0) / 4294967296;
 }
 
+/** Signed distance (blocks) from the castle plateau's rounded-rectangle edge: <= 0 on the plateau, growing outward. */
+function hullDistance(dx: number, dz: number): number {
+  const qx = Math.abs(dx) - (HULL_HALF_X - HULL_CORNER_RADIUS);
+  const qz = Math.abs(dz - HULL_CENTER_LZ) - (HULL_HALF_Z - HULL_CORNER_RADIUS);
+  return Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - HULL_CORNER_RADIUS;
+}
+
 /** Height (world Y of the surface block) of the crag at (x, z), or -Infinity well outside its footprint. */
 export function cragHeight(x: number, z: number): number {
   const dx = x - CASTLE_CENTER.x;
@@ -75,9 +96,7 @@ export function cragHeight(x: number, z: number): number {
   const shape = seededNoise2D(CRAG_SEED, SALT_SHAPE);
   const detail = seededNoise2D(CRAG_SEED, SALT_DETAIL);
 
-  const qx = Math.abs(dx) - (HULL_HALF_X - HULL_CORNER_RADIUS);
-  const qz = Math.abs(dz - HULL_CENTER_LZ) - (HULL_HALF_Z - HULL_CORNER_RADIUS);
-  const outside = Math.hypot(Math.max(qx, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qz), 0) - HULL_CORNER_RADIUS;
+  const outside = hullDistance(dx, dz);
 
   let h = -Infinity;
   if (outside <= 0) {
@@ -105,6 +124,26 @@ export function rampHeight(x: number, z: number): number | null {
   const dz = z - (CASTLE_CENTER.z + RAMP_START_Z);
   if (dz < 0 || Math.abs(dx) > RAMP_HALF_WIDTH) return null;
   return CASTLE_FLOOR_Y - 1 - Math.round(dz * RAMP_DROP_PER_BLOCK);
+}
+
+// Low ground around the castle is filled in to a dry meadow: depending on
+// the world seed the natural heightmap can dip under sea level right at the
+// foot of the approach ramp, which would drown the stairs in a pond. Within
+// LAND_FULL blocks of the plateau the ground is never lower than
+// LAND_FLOOR_Y, easing back to the natural terrain by LAND_FADE.
+const LAND_FLOOR_Y = 67;
+const LAND_FULL = 60;
+const LAND_FADE = 100;
+
+/** Natural terrain height with any low ground near the castle raised to dry land. */
+export function raiseCastleGround(naturalHeight: number, x: number, z: number): number {
+  if (naturalHeight >= LAND_FLOOR_Y) return naturalHeight;
+  const dx = x - CASTLE_CENTER.x;
+  const dz = z - CASTLE_CENTER.z;
+  if (Math.abs(dx) > HULL_HALF_X + LAND_FADE || Math.abs(dz) > HULL_HALF_Z + LAND_FADE + 6) return naturalHeight;
+  const t = Math.min(1, Math.max(0, (hullDistance(dx, dz) - LAND_FULL) / (LAND_FADE - LAND_FULL)));
+  const w = 1 - t * t * (3 - 2 * t);
+  return Math.round(naturalHeight + (LAND_FLOOR_Y - naturalHeight) * w);
 }
 
 /** Combines the natural terrain height with the crag and ramp: rock rises out of the ground wherever it's higher, and the ramp is cut (or built up) to its own gentle slope until it meets the natural ground. */
@@ -149,4 +188,27 @@ export function cragBodyBlock(x: number, y: number, z: number, surfaceY: number,
   if (hash3(x >> 2, y >> 2, z >> 2, 14) > 0.9) return rustRock;
   if (depth <= 3) return r < 0.5 ? umbralCobble : r < 0.85 ? gloomstone : umbralSlate;
   return r < 0.5 ? umbralSlate : r < 0.82 ? gloomstone : umbralCobble;
+}
+
+/** How blighted the natural ground at (x, z) is: 1 hugging the castle's crag, easing to 0 (plain meadow) BLIGHT_REACH blocks out. Ragged with slow noise so the fade is blotchy rather than a ring. */
+export function castleBlight(x: number, z: number): number {
+  const dx = x - CASTLE_CENTER.x;
+  const dz = z - CASTLE_CENTER.z;
+  if (Math.abs(dx) > BLIGHT_BOUND_X || Math.abs(dz) > BLIGHT_BOUND_Z) return 0;
+  const blotch = seededNoise2D(CRAG_SEED, SALT_BLIGHT);
+  const distance = hullDistance(dx, dz) + blotch(x * 0.045, z * 0.045) * 11 + blotch(x * 0.16 + 90, z * 0.16) * 3;
+  const t = Math.min(1, Math.max(0, (distance - BLIGHT_SOLID) / (BLIGHT_REACH - BLIGHT_SOLID)));
+  return 1 - t * t * (3 - 2 * t);
+}
+
+/** The surface block for a natural (non-crag) column with the given blight: the natural block when there's none, otherwise a dithered blend that darkens turf -> dusk -> withered -> gloom moss -> bare rock as blight grows. */
+export function blightSurfaceBlock(x: number, z: number, blight: number, natural: number): number {
+  if (blight <= 0.02) return natural;
+  const jitter = (hash3(x >> 1, 21, z >> 1, 22) * 0.6 + hash3(x, 21, z, 23) * 0.4 - 0.5) * 1.3;
+  const stage = Math.round(blight * BLIGHT_STAGES + jitter);
+  if (stage <= 0) return natural;
+  if (stage === 1) return duskTurf;
+  if (stage === 2) return witheredTurf;
+  if (stage === 3) return gloomMoss;
+  return hash3(x >> 1, 24, z >> 1, 25) < 0.55 ? umbralCobble : gloomstone;
 }

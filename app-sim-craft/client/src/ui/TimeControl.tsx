@@ -42,7 +42,8 @@ export function TimeControl() {
           position: "fixed",
           top: 84,
           left: 8,
-          width: 190,
+          zIndex: 5, // above the touch look-drag overlay
+          width: expanded ? 190 : 150,
           background: "rgba(0, 0, 0, 0.55)",
           borderRadius: 6,
           color: "#fff",

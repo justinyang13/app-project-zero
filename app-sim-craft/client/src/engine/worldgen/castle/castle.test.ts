@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { getCastlePlan } from "./blueprint";
 import { UNSET } from "./plan";
-import { applyCrag, cragHeight, rampHeight, CRAG_RAMP } from "./crag";
+import { sampleColumn, SEA_LEVEL } from "../terrain";
+import { applyCrag, blightSurfaceBlock, castleBlight, cragHeight, rampHeight, CRAG_RAMP } from "./crag";
 import { castleBlockLightAt } from "./lightMap";
 import { CASTLE_CENTER, CASTLE_FLOOR_Y, RAMP_START_Z } from "./layout";
 import { getBlockById, getBlockByKey } from "../../../data/blocks";
@@ -76,5 +77,48 @@ describe("castle crag", () => {
     const { height, kind } = applyCrag(60, CASTLE_CENTER.x, CASTLE_CENTER.z + RAMP_START_Z + 4);
     expect(kind).toBe(CRAG_RAMP);
     expect(height).toBeGreaterThan(60);
+  });
+});
+
+describe("castle blight (the ground darkening toward the crag)", () => {
+  const turf = getBlockByKey("turf").id;
+
+  it("is strong beside the crag, fades with distance, and is gone far away", () => {
+    const average = (dist: number): number => {
+      let sum = 0;
+      for (let i = 0; i < 40; i++) sum += castleBlight(CASTLE_CENTER.x + 41 + dist, CASTLE_CENTER.z - 20 + i * 2);
+      return sum / 40;
+    };
+    expect(average(16)).toBeGreaterThan(0.85);
+    expect(average(16)).toBeGreaterThan(average(45));
+    expect(average(45)).toBeGreaterThan(average(70));
+    expect(average(70)).toBeGreaterThan(average(100));
+    expect(castleBlight(CASTLE_CENTER.x + 400, CASTLE_CENTER.z)).toBe(0);
+  });
+
+  it("keeps the natural surface where there is no blight, and never turns it green when blighted", () => {
+    expect(blightSurfaceBlock(5, 5, 0, turf)).toBe(turf);
+    const dark = new Set<number>();
+    for (let x = 0; x < 30; x++) for (let z = 0; z < 30; z++) dark.add(blightSurfaceBlock(x, z, 1, turf));
+    expect(dark.has(turf)).toBe(false);
+  });
+
+  it("blends through intermediate shades at mid blight", () => {
+    const seen = new Set<number>();
+    for (let x = 0; x < 30; x++) for (let z = 0; z < 30; z++) seen.add(blightSurfaceBlock(x, z, 0.5, turf));
+    expect(seen.size).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("castle approach", () => {
+  it("is dry land in every world — the ramp's foot and the ground around it never dip under the sea", () => {
+    for (let seed = 1; seed <= 60; seed++) {
+      for (let dz = 0; dz <= 90; dz += 6) {
+        for (let dx = -30; dx <= 30; dx += 6) {
+          const { height } = sampleColumn(seed * 7919, CASTLE_CENTER.x + dx, CASTLE_CENTER.z + dz);
+          expect(height).toBeGreaterThan(SEA_LEVEL);
+        }
+      }
+    }
   });
 });

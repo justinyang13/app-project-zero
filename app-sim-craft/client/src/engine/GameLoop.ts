@@ -19,10 +19,11 @@ import {
   BIG_AQUATIC_SPECIES,
 } from "./Fish";
 import { Dragon, createDragons } from "./Dragon";
+import { LightPool } from "./LightPool";
 import type { Rideable, RideInput } from "./Rideable";
 import { DEEP_LAKE_CENTER, DEEP_LAKE_RADIUS } from "./worldgen/deepLake";
 import { Car, type CarInput } from "./Car";
-import { pointAtProgress, LOOP_PERIMETER, FLAT_ROAD_Y } from "./worldgen/roads";
+import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER } from "./worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
 import { HeldItem } from "./HeldItem";
 import { Clouds } from "./Clouds";
@@ -35,7 +36,6 @@ import { CastleBanners } from "./CastleBanners";
 import { Torch } from "./Torch";
 import { Flag } from "./Flag";
 import { CAMPFIRE_SITES, CASTLE_CENTER, CASTLE_GATE_SPAWN, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "./worldgen/structures";
-import { CAVE_TORCH_OFFSETS, CHAMBER_CENTER } from "./worldgen/mountain";
 import { MiniMap, type MiniMapMarker } from "./MiniMap";
 import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
 import { sampleColumn, biomeKeyFromIndex, sampleBiomeIndexAt } from "./worldgen/terrain";
@@ -56,6 +56,12 @@ const MIN_RIDE_ZOOM = 0.5; // multiplier on a mount's own chase-cam distance, ad
 const MAX_RIDE_ZOOM = 6;
 const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped position
 const ENTER_VEHICLE_RANGE = 3;
+// Real (shader-evaluated) dynamic lights at once — see LightPool.ts: every extra one costs every lit fragment on screen, so lamps, camps, torches and headlights share this handful, re-aimed at whichever are nearest the camera.
+const LIGHT_POOL_SIZE = 6;
+const MAX_PIXEL_RATIO = 2;
+const MIN_PIXEL_RATIO = 0.75;
+const ADAPT_LOW_FPS = 38; // below this for 1.5s, drop the render resolution a step
+const ADAPT_HIGH_FPS = 57; // at/above this for 15s, take a step back up
 const CAR_COUNT = 6;
 const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0xecf0f1, 0xe67e22];
 const HOLD_REPEAT_INTERVAL = 0.15; // seconds between repeats while the primary action is held down
@@ -91,7 +97,6 @@ export class GameLoop {
   // Set by teleportToCastle: the player is held in place (no gravity) until the destination's terrain has streamed in, then snapped onto the ground.
   private teleportPending: { x: number; z: number } | null = null;
   private lastMapYaw = 0;
-  private readonly caveTorches: Torch[];
   private readonly cars: Car[] = [];
   private carsSpawned = false;
   private drivingCar: Car | null = null;
@@ -101,6 +106,7 @@ export class GameLoop {
   private readonly sky: Sky;
   private readonly campfires: CampfireVisual[];
   private readonly streetLamps: StreetLamp[];
+  private readonly lightPool: LightPool;
   private readonly castleBanners: CastleBanners;
   private readonly miniMap: MiniMap;
   private customMarkers: MapMarkerRecord[] = [];
@@ -136,6 +142,11 @@ export class GameLoop {
   private fpsFrameCount = 0;
   private fpsWindowStart = performance.now();
   private currentFps = 0;
+  // Dynamic resolution: if the frame rate sags, render at a lower pixel ratio (crisp UI is DOM, so only the 3D view softens) and creep back up when there's headroom.
+  private maxPixelRatio = 1;
+  private pixelRatio = 1;
+  private slowWindows = 0;
+  private fastWindows = 0;
   private rafHandle = 0;
   private disposed = false;
 
@@ -162,7 +173,9 @@ export class GameLoop {
     this.canvas = canvas;
 
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
-    this.renderer.setPixelRatio(window.devicePixelRatio);
+    this.maxPixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+    this.pixelRatio = this.maxPixelRatio;
+    this.renderer.setPixelRatio(this.pixelRatio);
     this.renderer.setSize(window.innerWidth, window.innerHeight);
 
     this.scene = new THREE.Scene();
@@ -176,6 +189,7 @@ export class GameLoop {
     this.mouseLook = new MouseLook(this.camera, canvas);
 
     this.sky = new Sky(this.scene);
+    this.lightPool = new LightPool(this.scene, LIGHT_POOL_SIZE);
 
     this.world = new World(seed);
     this.chunkManager = new ChunkManager(this.world, this.scene, saveManager, renderDistanceColumns);
@@ -194,6 +208,7 @@ export class GameLoop {
       this.player.position = { ...this.world.spawnPoint };
     }
     this.chunkManager.update(this.player.position.x, this.player.position.z);
+    this.lightPool.update(this.camera.position);
 
     const highlightGeometry = new THREE.EdgesGeometry(new THREE.BoxGeometry(1.002, 1.002, 1.002));
     this.highlightMesh = new THREE.LineSegments(highlightGeometry, new THREE.LineBasicMaterial({ color: 0x000000 }));
@@ -210,7 +225,7 @@ export class GameLoop {
     this.clouds = new Clouds();
     this.scene.add(this.clouds.group);
 
-    const { campfireYs, lampYs, peakY, caveFloorY } = getStructureAnchors(seed);
+    const { campfireYs, lampYs, peakY } = getStructureAnchors(seed);
     this.campfires = CAMPFIRE_SITES.map((site, i) => new CampfireVisual(site.x, campfireYs[i], site.z));
     for (const campfire of this.campfires) this.scene.add(campfire.group);
 
@@ -220,13 +235,8 @@ export class GameLoop {
     this.castleBanners = new CastleBanners();
     this.scene.add(this.castleBanners.group);
 
-    this.dragons = createDragons(caveFloorY, peakY);
+    this.dragons = createDragons(peakY);
     for (const dragon of this.dragons) this.scene.add(dragon.mesh);
-
-    this.caveTorches = CAVE_TORCH_OFFSETS.map(
-      (offset) => new Torch(CHAMBER_CENTER.x + offset.x, caveFloorY, CHAMBER_CENTER.z + offset.z),
-    );
-    for (const torch of this.caveTorches) this.scene.add(torch.group);
 
     this.syncFlagVisuals();
     this.syncTorchVisuals();
@@ -245,6 +255,31 @@ export class GameLoop {
     window.addEventListener("mouseup", this.handleMouseUp);
     canvas.addEventListener("contextmenu", this.handleContextMenu);
     canvas.addEventListener("wheel", this.handleWheel);
+  }
+
+  private adaptResolution(fps: number): void {
+    if (fps < ADAPT_LOW_FPS) {
+      this.fastWindows = 0;
+      if (++this.slowWindows >= 3 && this.pixelRatio > MIN_PIXEL_RATIO) {
+        this.slowWindows = 0;
+        this.setPixelRatio(Math.max(MIN_PIXEL_RATIO, this.pixelRatio - 0.25));
+      }
+    } else if (fps >= ADAPT_HIGH_FPS) {
+      this.slowWindows = 0;
+      if (++this.fastWindows >= 30 && this.pixelRatio < this.maxPixelRatio) {
+        this.fastWindows = 0;
+        this.setPixelRatio(Math.min(this.maxPixelRatio, this.pixelRatio + 0.25));
+      }
+    } else {
+      this.slowWindows = 0;
+      this.fastWindows = 0;
+    }
+  }
+
+  private setPixelRatio(ratio: number): void {
+    this.pixelRatio = ratio;
+    this.renderer.setPixelRatio(ratio);
+    this.renderer.setSize(window.innerWidth, window.innerHeight);
   }
 
   private handleResize = (): void => {
@@ -424,9 +459,22 @@ export class GameLoop {
     this.holdCooldown = HOLD_REPEAT_INTERVAL;
   }
 
-  /** Mirrors the desktop double-tap-Space fly toggle — a single tap is enough on touch, see ui/TouchActionButtons.tsx. */
+  /** Mirrors the desktop double-tap-Space gesture — a single tap is enough on touch, see ui/TouchActionButtons.tsx: nitro in a car, turbo on the dragon, otherwise the fly toggle. */
   toggleFlying(): void {
-    this.player.flying = !this.player.flying;
+    if (this.drivingCar) this.drivingCar.activateNitro();
+    else if (this.mounted) {
+      if (this.mounted instanceof Dragon) this.mounted.toggleTurbo();
+    } else this.player.flying = !this.player.flying;
+  }
+
+  /** The E key's action (hop in/out of a car, mount/dismount an animal or dragon) — the touch prompt button in ui/VehiclePrompt.tsx calls this. */
+  interact(): void {
+    this.handleInteractKey();
+  }
+
+  /** The F5 key's action: switch between first- and third-person views. */
+  toggleViewMode(): void {
+    this.viewMode = this.viewMode === "first" ? "third" : "first";
   }
 
   /** Feeds a raw touch-drag pixel delta through the exact same yaw/pitch math mouse-look uses — see Camera.ts's applyPointerDelta. */
@@ -658,7 +706,7 @@ export class GameLoop {
     for (let i = 0; i < CAR_COUNT; i++) {
       const progress = (LOOP_PERIMETER / CAR_COUNT) * i;
       const { x, z } = pointAtProgress(progress);
-      const y = findSurfaceY(this.world, x, z) ?? FLAT_ROAD_Y;
+      const y = findSurfaceY(this.world, x, z) ?? roadDeckYAtProgress(progress);
 
       const car = new Car(CAR_COLORS[i % CAR_COLORS.length], y, progress);
       this.cars.push(car);
@@ -877,8 +925,8 @@ export class GameLoop {
 
   private buildCarInput(): CarInput {
     return {
-      throttle: (this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0),
-      steer: (this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0),
+      throttle: clamp1((this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0) + this.touchMoveVector.y),
+      steer: clamp1((this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0) + this.touchMoveVector.x),
     };
   }
 
@@ -1048,7 +1096,6 @@ export class GameLoop {
     this.castleBanners.update(performance.now() / 1000);
     for (const campfire of this.campfires) campfire.update(dt);
     for (const torch of this.torchVisuals) torch.update(dt);
-    for (const torch of this.caveTorches) torch.update(dt);
     for (const flag of this.flagVisuals) flag.update(dt);
     const dark = isNight(timeOfDay);
     for (const car of this.cars) car.setHeadlightsOn(dark);
@@ -1124,6 +1171,7 @@ export class GameLoop {
       this.currentFps = Math.round((this.fpsFrameCount * 1000) / sinceWindowStart);
       this.fpsFrameCount = 0;
       this.fpsWindowStart = frameStart;
+      if (sinceWindowStart < 1500) this.adaptResolution(this.currentFps); // a longer window means the tab was hidden or stalled, not slow rendering
     }
 
     const frameTimeMs = performance.now() - frameStart;
@@ -1237,10 +1285,6 @@ export class GameLoop {
       this.scene.remove(dragon.mesh);
       dragon.dispose();
     }
-    for (const torch of this.caveTorches) {
-      this.scene.remove(torch.group);
-      torch.dispose();
-    }
     for (const flag of this.flagVisuals) {
       this.scene.remove(flag.group);
       flag.dispose();
@@ -1249,6 +1293,7 @@ export class GameLoop {
       this.scene.remove(torch.group);
       torch.dispose();
     }
+    this.lightPool.dispose(this.scene);
     this.renderer.dispose();
 
     this.savePlayerStateNow();

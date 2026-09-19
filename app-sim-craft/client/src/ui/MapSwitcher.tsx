@@ -182,8 +182,11 @@ export function MapSwitcher() {
         // Touch: stacked into the left-side collapsible-panel column up
         // top (below DebugOverlay), out of TouchJoystick.tsx's
         // bottom-left footprint — desktop keeps its original corner spot.
-        ...(isTouch ? { top: 46, left: 8 } : { bottom: 16, left: 16 }),
-        width: 220,
+        ...(isTouch
+          ? { top: 46, left: 8, zIndex: 5, boxSizing: "border-box", maxHeight: "calc(100vh - 60px)", overflowY: "auto" }
+          : { bottom: 16, left: 16 }),
+        // Collapsed on a phone it's just a compact header, clear of the minimap on the right.
+        width: isTouch && !open ? 150 : 220,
         background: "rgba(0, 0, 0, 0.55)",
         borderRadius: 6,
         padding: "8px 10px",
@@ -199,8 +202,8 @@ export function MapSwitcher() {
         style={{ display: "flex", justifyContent: "space-between", cursor: "pointer" }}
         onClick={() => setOpen((v) => !v)}
       >
-        <span>Map: {worldId ?? "..."}</span>
-        <span>{open ? "▾" : "▸"}</span>
+        <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", minWidth: 0 }}>Map: {worldId ?? "..."}</span>
+        <span style={{ flexShrink: 0, paddingLeft: 6 }}>{open ? "▾" : "▸"}</span>
       </div>
 
       {open && (

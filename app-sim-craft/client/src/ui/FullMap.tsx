@@ -5,6 +5,7 @@ import { FULL_MAP_HALF_RANGE } from "../engine/FullMapRender";
 import { ensureFullMapRender } from "../engine/fullMapCache";
 import { LANDMARKS } from "../engine/landmarks";
 import type { MiniMapMarkerKind } from "../engine/MiniMap";
+import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const MARKER_STYLE: Partial<Record<MiniMapMarkerKind, { color: string; radius: number; shape: "circle" | "diamond" }>> = {
   campfire: { color: "#ff8c2a", radius: 4, shape: "circle" },
@@ -41,6 +42,7 @@ function drawLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: nu
 }
 
 export function FullMap() {
+  const isTouch = useIsTouchDevice();
   const open = useMinimapStore((s) => s.fullMapOpen);
   const close = useMinimapStore((s) => s.closeFullMap);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -190,19 +192,23 @@ export function FullMap() {
           borderRadius: 4,
         }}
       >
-        <span>World Map — M or Esc to close · keep moving{you ? ` · you: x ${you.x}, z ${you.z}` : ""}</span>
+        <span>
+          {isTouch
+            ? `World Map${you ? ` · x ${you.x}, z ${you.z}` : ""}`
+            : `World Map — M or Esc to close · keep moving${you ? ` · you: x ${you.x}, z ${you.z}` : ""}`}
+        </span>
         <button
           onClick={close}
           title="Close map (M)"
           style={{
             pointerEvents: "auto",
-            padding: "0 7px",
+            padding: isTouch ? "6px 14px" : "0 7px",
             background: "rgba(0, 0, 0, 0.6)",
             border: "1px solid rgba(255, 255, 255, 0.5)",
             borderRadius: 3,
             color: "#fff",
             fontFamily: "monospace",
-            fontSize: 13,
+            fontSize: isTouch ? 18 : 13,
             cursor: "pointer",
             touchAction: "manipulation",
           }}

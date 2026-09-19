@@ -7,7 +7,7 @@
 // Painting happens in background workers (engine/fullMapCache.ts,
 // workers/map-render.worker.ts) so the map never freezes the game.
 import { sampleColumn, SEA_LEVEL } from "./worldgen/terrain";
-import { isRoadColumn } from "./worldgen/roads";
+import { roadKindAt } from "./worldgen/roads";
 import { DEEP_LAKE_FLOOR_Y } from "./worldgen/deepLake";
 
 export const FULL_MAP_HALF_RANGE = 560; // blocks either side of the origin
@@ -31,13 +31,17 @@ const BIOME_LAND: Record<string, [number, number, number]> = {
 
 /** One map pixel's color for a world column. */
 export function terrainColor(seed: number, wx: number, wz: number): [number, number, number] {
-  const { height, biome } = sampleColumn(seed, wx, wz);
-  if (isRoadColumn(wx, wz)) return [120, 120, 124]; // roads are flattened above water too (a causeway across the lake)
+  const { height, biome, blight } = sampleColumn(seed, wx, wz);
+  const road = roadKindAt(wx, wz);
+  if (road === 2) return [96, 150, 200]; // the lake bridge's steel-blue girder
+  if (road === 1) return [120, 120, 124]; // roads are flattened above water too
   if (height < SEA_LEVEL) {
     const depth = Math.min(1, (SEA_LEVEL - height) / (SEA_LEVEL - DEEP_LAKE_FLOOR_Y)); // the deep lake is the deepest water
     return [mix(84, 22, depth), mix(158, 58, depth), mix(228, 140, depth)];
   }
-  const base = BIOME_LAND[biome.key] ?? BIOME_LAND.meadow;
+  const land = BIOME_LAND[biome.key] ?? BIOME_LAND.meadow;
+  const base: [number, number, number] =
+    blight > 0 ? [mix(land[0], BIOME_LAND.crag[0], blight), mix(land[1], BIOME_LAND.crag[1], blight), mix(land[2], BIOME_LAND.crag[2], blight)] : land;
   // Relief shading: higher ground is lighter, and the mountain's upper slopes blend to bare rock and snow.
   const rise = Math.max(0, height - SEA_LEVEL);
   let color = shade(base, 0.82 + Math.min(1, rise / 60) * 0.3);

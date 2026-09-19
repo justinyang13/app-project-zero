@@ -8,6 +8,7 @@
 import * as THREE from "three";
 import type { World } from "./World";
 import { findSurfaceY } from "./Creature";
+import { poolLight, releaseLight } from "./LightPool";
 import { pointAtProgress } from "./worldgen/roads";
 
 export interface CarInput {
@@ -139,6 +140,7 @@ export class Car {
   }
 
   dispose(): void {
+    releaseLight(this.headlight);
     this.mesh.traverse((obj) => {
       if (obj instanceof THREE.Mesh) obj.geometry.dispose();
     });
@@ -196,7 +198,7 @@ function buildMesh(color: number): BuiltCarMesh {
     group.add(lens);
   }
 
-  const headlight = new THREE.SpotLight(HEADLIGHT_LENS_ON, 0, HEADLIGHT_DISTANCE, Math.PI / 5, 0.5, 1.2);
+  const headlight = poolLight(new THREE.SpotLight(HEADLIGHT_LENS_ON, 0, HEADLIGHT_DISTANCE, Math.PI / 5, 0.5, 1.2));
   headlight.position.set(0, bodyY, CAR_LENGTH / 2);
   const headlightTarget = new THREE.Object3D();
   headlightTarget.position.set(0, bodyY * 0.6, CAR_LENGTH / 2 + HEADLIGHT_DISTANCE);

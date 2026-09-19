@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import type { BuildMode } from "../state/hotbarStore";
 import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
 import { ToolIcon } from "./ToolIcon";
+import { useCompactViewport } from "../hooks/useCompactViewport";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const MODES: { mode: BuildMode; label: string; color: string; hotkey: string; icon: () => ReactElement }[] = [
@@ -27,6 +28,7 @@ function slotButtonStyle(selected: boolean, colorHex: string): React.CSSProperti
 
 export function Hotbar() {
   const isTouch = useIsTouchDevice();
+  const compact = useCompactViewport();
   const selectedIndex = useHotbarStore((s) => s.selectedIndex);
   const select = useHotbarStore((s) => s.select);
   const mode = useHotbarStore((s) => s.mode);
@@ -44,14 +46,16 @@ export function Hotbar() {
       <div
         style={{
           position: "fixed",
-          left: 0,
-          right: 0,
-          bottom: "max(240px, calc(env(safe-area-inset-bottom) + 240px))",
+          // Portrait: raised above the thumb-control row, full width. Landscape has no such room, so it sits low between the joystick and the action buttons instead.
+          left: compact ? 152 : 0,
+          right: compact ? 220 : 0,
+          bottom: compact ? 8 : "max(240px, calc(env(safe-area-inset-bottom) + 240px))",
           display: "flex",
           justifyContent: "center",
           overflowX: "auto",
           touchAction: "pan-x",
           padding: "0 8px",
+          zIndex: 5, // above the touch look-drag overlay, so slots stay tappable
         }}
       >
         <div style={{ display: "flex", gap: 6, background: "rgba(0, 0, 0, 0.4)", padding: 6, borderRadius: 6 }}>

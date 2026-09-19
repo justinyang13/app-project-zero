@@ -322,6 +322,15 @@ export const BLOCKS: BlockDef[] = [
   textured(40, "ashslate_ridge", "Ashslate Ridge Tile", 1.5, { all: "ashslate_ridge" }, 0x3a3e4e),
   textured(41, "gilded_trim", "Gilded Trim", 2.0, { all: "gilded_trim" }, 0x845c2a),
   textured(42, "rust_rock", "Rustrock", 1.8, { all: "rust_rock" }, 0x5a3a2c),
+  // The blighted ground around the crag: turf that darkens step by step
+  // (turf -> dusk -> withered -> gloom moss -> bare rock) so the meadow
+  // fades into the castle's dark rock instead of ending at a hard edge
+  // (see worldgen/castle/crag.ts's castleBlight).
+  flatTurf(43, "dusk_turf", "Dusk Turf", 0x589634),
+  flatTurf(44, "withered_turf", "Withered Turf", 0x3e622b),
+  // The lake bridge (worldgen/bridge.ts): a steel-blue box girder on pale concrete piers.
+  flatStone(45, "bridge_steel", "Bridge Steel", 0x6a9fcc),
+  flatStone(46, "bridge_concrete", "Bridge Concrete", 0xcac7be),
 ];
 
 /** A textured (pixel-art) block. `overrides` tweak the defaults — see the notes on BlockDef for what each does. */
@@ -351,6 +360,46 @@ function textured(
     dropTable: [{ itemKey: key, minCount: 1, maxCount: 1, chance: 1 }],
     color,
     ...overrides,
+  };
+}
+
+/** A turf variant: same as Turf but a different flat color. */
+function flatTurf(id: number, key: string, name: string, color: number): BlockDef {
+  return {
+    id,
+    key,
+    name,
+    hardness: 0.6,
+    toolType: "shovel",
+    toolTier: 0,
+    lightEmission: 0,
+    lightOpacity: 15,
+    flammable: false,
+    solid: true,
+    transparentToRender: false,
+    gravityAffected: false,
+    dropTable: [{ itemKey: "loam", minCount: 1, maxCount: 1, chance: 1 }],
+    color,
+  };
+}
+
+/** A plain flat-colored pickaxe block. */
+function flatStone(id: number, key: string, name: string, color: number): BlockDef {
+  return {
+    id,
+    key,
+    name,
+    hardness: 2.0,
+    toolType: "pickaxe",
+    toolTier: 0,
+    lightEmission: 0,
+    lightOpacity: 15,
+    flammable: false,
+    solid: true,
+    transparentToRender: false,
+    gravityAffected: false,
+    dropTable: [{ itemKey: key, minCount: 1, maxCount: 1, chance: 1 }],
+    color,
   };
 }
 

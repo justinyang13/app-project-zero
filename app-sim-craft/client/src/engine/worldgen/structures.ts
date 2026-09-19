@@ -10,7 +10,7 @@
 import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { getBlockByKey } from "../../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
-import { pointAtProgress, LOOP_PERIMETER, ROAD_WIDTH, FLAT_ROAD_Y } from "./roads";
+import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER, ROAD_WIDTH } from "./roads";
 import { getCastlePlan } from "./castle/blueprint";
 import { UNSET } from "./castle/plan";
 import {
@@ -26,17 +26,7 @@ import {
   PLAN_MIN_Z,
 } from "./castle/layout";
 import { getBlockById } from "../../data/blocks";
-import {
-  CAVE_BOUNDS,
-  CAVE_FLOOR_DIG,
-  CAVE_MOUTH,
-  CAVE_SPIKE_OFFSETS,
-  GREEN_DRAGON_PERCH,
-  CHAMBER_CENTER,
-  MOUNTAIN_CENTER,
-  SUMMIT_ROOST_RADIUS,
-  isCaveVoxel,
-} from "./mountain";
+import { MOUNTAIN_CENTER } from "./mountain";
 
 export { CASTLE_CENTER, CASTLE_GATE_SPAWN };
 
@@ -61,9 +51,8 @@ const CASTLE_NEAR_RADIUS = 150;
 
 // Several small camps scattered near spawn, each a fire pit ringed by
 // seating (see stampCampfireSite) — deliberately kept off the road grid
-// (worldgen/roads.ts bands are `mod(coord, 32) < 5`; every site below
-// sits at a `32k + 16` coordinate on both axes, dead center of a road
-// cell) so a camp never gets paved over.
+// (the loop road, worldgen/roads.ts, keeps well away from all of them) so
+// a camp never gets paved over.
 export const CAMPFIRE_SITES: { x: number; z: number }[] = [
   { x: 4, z: 6 }, // original camp, right by spawn
   { x: 16, z: -48 },
@@ -90,15 +79,15 @@ export const LAMP_SITES: { x: number; z: number }[] = Array.from(
     const { x, z, yaw } = pointAtProgress(i * LAMP_SPACING);
     const side = i % 2 === 0 ? 1 : -1;
     return {
-      x: Math.round(x + Math.cos(yaw) * LAMP_OFFSET * side),
-      z: Math.round(z - Math.sin(yaw) * LAMP_OFFSET * side),
+      x: Math.floor(x + Math.cos(yaw) * LAMP_OFFSET * side),
+      z: Math.floor(z - Math.sin(yaw) * LAMP_OFFSET * side),
     };
   },
 );
 
 // A residential neighborhood: a fixed grid of lots south of the loop
-// road (clear of it — the loop's own bounding box only reaches
-// |z| ≈ 90+TOWER_HALF, see worldgen/roads.ts), each with a differently
+// road (clear of it — the loop bends around the lots' northwest corner,
+// see worldgen/roads.ts), each with a differently
 // shaped, sized, and walled house plus a fenced yard. Every lot's
 // dimensions are
 // derived from its index with moduli chosen (4, 5, 5, 3, 2 — pairwise
@@ -162,7 +151,6 @@ let cachedCampfireYs: number[] = [];
 let cachedLampYs: number[] = [];
 let cachedHouseYs: number[] = [];
 let cachedPeakY = 0;
-let cachedCaveFloorY = 0;
 
 function ensureCache(seed: number): void {
   if (cachedSeed === seed) return;
@@ -171,21 +159,22 @@ function ensureCache(seed: number): void {
   const bridgeEnd = sampleColumn(seed, BRIDGE_CENTER.x + BRIDGE_HALF_LENGTH, BRIDGE_CENTER.z).height;
   cachedBridgeDeckY = Math.max(bridgeStart, bridgeEnd, SEA_LEVEL) + 1;
   cachedCampfireYs = CAMPFIRE_SITES.map((site) => sampleColumn(seed, site.x, site.z).height + 1);
-  // Anchored to the loop road's own constant elevation, not the natural
-  // terrain height at the post's shoulder offset — the road itself is
-  // flattened to FLAT_ROAD_Y regardless of terrain (roads.ts), so a
-  // terrain-height anchor would float the post above (or bury it below)
-  // the road wherever a hill was cut down or a lake causewayed over for
-  // it. This is what "sits at road-level" actually means.
-  cachedLampYs = LAMP_SITES.map(() => FLAT_ROAD_Y + 1);
+  // Anchored to the loop road's own elevation (its deck height at that
+  // point along the loop), not the natural terrain height at the post's
+  // shoulder offset — the road itself is flattened to its own level
+  // regardless of terrain (roads.ts), so a terrain-height anchor would
+  // float the post above (or bury it below) the road wherever a hill was
+  // cut down or a lake bridged for it, and on the lake bridge's arch the
+  // deck is well above any ground. This is what "sits at road-level"
+  // actually means.
+  cachedLampYs = LAMP_SITES.map((_, i) => roadDeckYAtProgress(i * LAMP_SPACING) + 1);
   cachedHouseYs = HOUSE_LOTS.map(
     (lot) => sampleColumn(seed, lot.x + Math.floor(lot.width / 2), lot.z + Math.floor(lot.depth / 2)).height + 1,
   );
   cachedPeakY = sampleColumn(seed, MOUNTAIN_CENTER.x, MOUNTAIN_CENTER.z).height;
-  cachedCaveFloorY = sampleColumn(seed, CAVE_MOUTH.x, CAVE_MOUTH.z).height - CAVE_FLOOR_DIG;
 }
 
-/** World-space anchor heights for these structures — exported so GameLoop can place each campfire's flame/light (or lamp's bulb/light) without waiting on chunk load. peakY/caveFloorY are the dragon mountain's summit height and its cave's floor height, used to place the giant Dragon and its cave torches. */
+/** World-space anchor heights for these structures — exported so GameLoop can place each campfire's flame/light (or lamp's bulb/light) without waiting on chunk load. peakY is the dragon hill's summit height, used to set the height of the giant dragons' flight circuits. */
 export function getStructureAnchors(
   seed: number,
 ): {
@@ -195,7 +184,6 @@ export function getStructureAnchors(
   lampYs: number[];
   houseYs: number[];
   peakY: number;
-  caveFloorY: number;
 } {
   ensureCache(seed);
   return {
@@ -205,7 +193,6 @@ export function getStructureAnchors(
     lampYs: cachedLampYs,
     houseYs: cachedHouseYs,
     peakY: cachedPeakY,
-    caveFloorY: cachedCaveFloorY,
   };
 }
 
@@ -496,87 +483,6 @@ function stampStreetLamps(seed: number, cx: number, cz: number, chunks: Chunk[])
   }
 }
 
-const CAVE_DAIS_RADIUS = 12;
-const CAVE_DAIS_HEIGHT = 3;
-
-/** The dragon's perch: a low, rounded sandstone mound at the chamber's center — raised just enough to read as a deliberate perch rather than bare cave floor. */
-function stampCaveDais(
-  cx: number,
-  cz: number,
-  chunks: Chunk[],
-  floorY: number,
-  center: { x: number; z: number } = CHAMBER_CENTER,
-): void {
-  for (let dx = -CAVE_DAIS_RADIUS; dx <= CAVE_DAIS_RADIUS; dx++) {
-    for (let dz = -CAVE_DAIS_RADIUS; dz <= CAVE_DAIS_RADIUS; dz++) {
-      const d = Math.hypot(dx, dz);
-      if (d > CAVE_DAIS_RADIUS) continue;
-      const mound = Math.round((1 - d / CAVE_DAIS_RADIUS) * CAVE_DAIS_HEIGHT);
-      for (let dy = 0; dy <= mound; dy++) {
-        setWorldVoxel(chunks, cx, cz, center.x + dx, floorY + dy, center.z + dz, SANDSTONE_ID);
-      }
-    }
-  }
-}
-
-/** A handful of stubby rock stalagmites scattered around the chamber floor for atmosphere. */
-function stampCaveSpikes(cx: number, cz: number, chunks: Chunk[], floorY: number): void {
-  for (const spike of CAVE_SPIKE_OFFSETS) {
-    const bx = CHAMBER_CENTER.x + spike.x;
-    const bz = CHAMBER_CENTER.z + spike.z;
-    for (let dy = 0; dy < spike.height; dy++) {
-      setWorldVoxel(chunks, cx, cz, bx, floorY + dy, bz, WALL_ID);
-    }
-  }
-}
-
-/** Carves the dragon's cave (a tunnel from the mountain's south flank into a large domed chamber — see worldgen/mountain.ts) out of the solid mountain, then furnishes the chamber with a perch dais and a few stalagmites. Digging only ever removes blocks, so unlike every other stamp here it needs no structureMaxYFor entry — the mountain's own height (folded into terrain.ts's sampleColumn) already reserves enough vertical chunks to contain it. */
-function stampDragonCave(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
-  if (!chunkOverlapsBox(cx, cz, CAVE_BOUNDS.minX, CAVE_BOUNDS.maxX, CAVE_BOUNDS.minZ, CAVE_BOUNDS.maxZ)) return;
-  const { caveFloorY } = getStructureAnchors(seed);
-
-  const minX = Math.max(CAVE_BOUNDS.minX, cx * CHUNK_SIZE);
-  const maxX = Math.min(CAVE_BOUNDS.maxX, cx * CHUNK_SIZE + CHUNK_SIZE - 1);
-  const minZ = Math.max(CAVE_BOUNDS.minZ, cz * CHUNK_SIZE);
-  const maxZ = Math.min(CAVE_BOUNDS.maxZ, cz * CHUNK_SIZE + CHUNK_SIZE - 1);
-  const maxY = caveFloorY + 40;
-
-  for (let wx = minX; wx <= maxX; wx++) {
-    for (let wz = minZ; wz <= maxZ; wz++) {
-      for (let wy = caveFloorY + 1; wy <= maxY; wy++) {
-        if (isCaveVoxel(wx, wy, wz, caveFloorY)) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-      }
-    }
-  }
-
-  stampCaveDais(cx, cz, chunks, caveFloorY);
-  stampCaveDais(cx, cz, chunks, caveFloorY, GREEN_DRAGON_PERCH);
-  stampCaveSpikes(cx, cz, chunks, caveFloorY);
-}
-
-const SUMMIT_CLEARANCE_RADIUS = SUMMIT_ROOST_RADIUS + 6;
-const SUMMIT_CLEARANCE_HEIGHT = 46; // room for a folded-winged, long-necked dragon plus its fire
-
-/** Flattens the mountain's very top into a round stone roost for the crimson dragon and clears the air above it, so the jagged ridge noise can't poke through the perched dragon. Only ever fills below/at the summit height and removes above it, so like the cave it needs no structureMaxYFor entry. */
-function stampSummitRoost(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
-  const r = SUMMIT_CLEARANCE_RADIUS;
-  if (!chunkOverlapsBox(cx, cz, MOUNTAIN_CENTER.x - r, MOUNTAIN_CENTER.x + r, MOUNTAIN_CENTER.z - r, MOUNTAIN_CENTER.z + r)) return;
-  const { peakY } = getStructureAnchors(seed);
-  for (let dx = -r; dx <= r; dx++) {
-    for (let dz = -r; dz <= r; dz++) {
-      const d = Math.hypot(dx, dz);
-      if (d > r) continue;
-      const wx = MOUNTAIN_CENTER.x + dx;
-      const wz = MOUNTAIN_CENTER.z + dz;
-      if (d <= SUMMIT_ROOST_RADIUS) {
-        for (let wy = peakY - 8; wy < peakY; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, WALL_ID);
-        setWorldVoxel(chunks, cx, cz, wx, peakY, wz, SANDSTONE_ID);
-      }
-      for (let wy = peakY + 1; wy <= peakY + SUMMIT_CLEARANCE_HEIGHT; wy++) setWorldVoxel(chunks, cx, cz, wx, wy, wz, AIR_ID);
-    }
-  }
-}
-
 /** Stamps every fixed structure that overlaps this chunk column. Mutates `chunks` in place. */
 export function stampStructures(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   stampBridge(seed, cx, cz, chunks);
@@ -584,6 +490,4 @@ export function stampStructures(seed: number, cx: number, cz: number, chunks: Ch
   stampCampfires(seed, cx, cz, chunks);
   stampStreetLamps(seed, cx, cz, chunks);
   stampResidentialArea(seed, cx, cz, chunks);
-  stampDragonCave(seed, cx, cz, chunks);
-  stampSummitRoost(seed, cx, cz, chunks);
 }

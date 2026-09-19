@@ -1,36 +1,29 @@
 // The giant landmark dragons — not part of the ambient Creature.ts roster
 // (species table, wander AI, ground-snapping — see that file's own notes
-// on scope). There are three, sharing everything but a DragonConfig: the
-// original lives in the cave carved into worldgen/mountain.ts's mountain,
-// resting on the chamber's dais and periodically launching out through
-// the cave mouth to circle the peak; the green-winged one shares that cave
-// (its own dais across the chamber) and flies a wider, higher circuit; the
-// crimson one roosts on a platform at the summit and circles wider and
-// higher still, the other way round.
-// Position/orientation are driven by a small explicit state machine keyed
-// on elapsed time within the current state, not a physics or pathfinding
-// system — good enough for a scripted, decorative flight loop that always
-// starts and ends at the same two anchored points (its perch and the
-// waypoint its launch/landing arcs pass through).
+// on scope). There are two, sharing everything but a DragonConfig: a
+// green-winged one and a crimson one with glowing scales, each endlessly
+// circling the hill in worldgen/mountain.ts at its own radius and height
+// (opposite ways round). They never land — there is no perch — so a
+// dragon that has been ridden and released simply flies back up to its
+// circuit and carries on.
+// Position/orientation are driven by a tiny explicit state machine, not a
+// physics or pathfinding system — good enough for a scripted, decorative
+// flight loop.
 import * as THREE from "three";
 import type { World } from "./World";
 import { findSurfaceY } from "./Creature";
+import { poolLight, releaseLight } from "./LightPool";
 import type { DismountSpot, Rideable, RideInput } from "./Rideable";
 import {
-  CAVE_MOUTH,
-  DRAGON_FLIGHT_ALTITUDE_ABOVE_PEAK,
-  DRAGON_FLIGHT_RADIUS,
-  DRAGON_PERCH,
   GREEN_DRAGON_ALTITUDE_ABOVE_PEAK,
   GREEN_DRAGON_FLIGHT_RADIUS,
-  GREEN_DRAGON_PERCH,
   MOUNTAIN_CENTER,
   SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK,
   SUMMIT_DRAGON_FLIGHT_RADIUS,
 } from "./worldgen/mountain";
 import { buildWing, getWingTexture, makeWingMaterial, type WingParts } from "./DragonWing";
 
-type DragonState = "perched" | "launching" | "flying" | "landing";
+type DragonState = "flying" | "returning";
 
 interface DragonPalette {
   body: number;
@@ -80,58 +73,33 @@ const CRIMSON_PALETTE: DragonPalette = {
 export interface DragonConfig {
   name: string;
   palette: DragonPalette;
-  perch: Vec3;
-  perchYaw: number;
-  waypoint: Vec3; // launch/landing arcs pass through here (the cave mouth, or above the summit)
   flightCenter: { x: number; z: number };
   flightRadius: number;
   flightAltitude: number;
   startTheta: number; // where on the circuit it joins/leaves
   direction: 1 | -1; // which way round
-  firstLaunchDelay: number;
 }
 
-/** The three dragons of the mountain, built from the anchors getStructureAnchors reports. */
-export function createDragons(caveFloorY: number, peakY: number): Dragon[] {
+/** The two dragons of the hill, circling it at their own heights, built from the summit height getStructureAnchors reports. */
+export function createDragons(peakY: number): Dragon[] {
   return [
-    new Dragon({
-      name: "dragon",
-      palette: BROWN_PALETTE,
-      perch: { x: DRAGON_PERCH.x, y: caveFloorY + 3, z: DRAGON_PERCH.z },
-      perchYaw: Math.PI,
-      waypoint: { x: CAVE_MOUTH.x, y: caveFloorY + 2, z: CAVE_MOUTH.z },
-      flightCenter: MOUNTAIN_CENTER,
-      flightRadius: DRAGON_FLIGHT_RADIUS,
-      flightAltitude: peakY + DRAGON_FLIGHT_ALTITUDE_ABOVE_PEAK,
-      startTheta: 0,
-      direction: 1,
-      firstLaunchDelay: 8 + Math.random() * 20,
-    }),
     new Dragon({
       name: "green dragon",
       palette: GREEN_WING_PALETTE,
-      perch: { x: GREEN_DRAGON_PERCH.x, y: caveFloorY + 3, z: GREEN_DRAGON_PERCH.z },
-      perchYaw: Math.PI,
-      waypoint: { x: CAVE_MOUTH.x, y: caveFloorY + 2, z: CAVE_MOUTH.z },
       flightCenter: MOUNTAIN_CENTER,
       flightRadius: GREEN_DRAGON_FLIGHT_RADIUS,
       flightAltitude: peakY + GREEN_DRAGON_ALTITUDE_ABOVE_PEAK,
       startTheta: Math.PI,
       direction: 1,
-      firstLaunchDelay: 30 + Math.random() * 25,
     }),
     new Dragon({
       name: "crimson dragon",
       palette: CRIMSON_PALETTE,
-      perch: { x: MOUNTAIN_CENTER.x, y: peakY + 1, z: MOUNTAIN_CENTER.z },
-      perchYaw: 0,
-      waypoint: { x: MOUNTAIN_CENTER.x, y: peakY + 32, z: MOUNTAIN_CENTER.z + 18 },
       flightCenter: MOUNTAIN_CENTER,
       flightRadius: SUMMIT_DRAGON_FLIGHT_RADIUS,
       flightAltitude: peakY + SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK,
       startTheta: 0,
       direction: -1,
-      firstLaunchDelay: 20 + Math.random() * 25,
     }),
   ];
 }
@@ -139,15 +107,14 @@ export function createDragons(caveFloorY: number, peakY: number): Dragon[] {
 const LEG_HEIGHT = 5.4; // ground clearance under the belly — everything else is built upward from here
 // Its own flight is deliberately slower than the player's (Player.ts's
 // FLY_SPEED is 10.8 blocks/sec) so a player who takes off after it can
-// actually catch up and mount it. Launch and landing arcs are timed from
-// their length at TRANSIT_SPEED rather than a fixed duration, so a long
-// trip home (after being ridden far away) doesn't turn into a sprint —
+// actually catch up and mount it. The trip back up to its circuit is timed from
+// its length at TRANSIT_SPEED rather than a fixed duration, so a long
+// trip back to its circuit (after being ridden far away) doesn't turn into a sprint —
 // the smoothstep easing peaks at ~1.5x the average, still under the
 // player's speed.
-const DRAGON_TRANSIT_SPEED = 5; // blocks/sec average along a launch/landing arc
+const DRAGON_TRANSIT_SPEED = 5; // blocks/sec average on the way back up to its circuit after a ride
 const DRAGON_CRUISE_SPEED = 5.5; // blocks/sec circling the mountain
 const MIN_TRANSIT_DURATION = 6;
-const FLY_MIN_DURATION = 45;
 const FLAP_SPEED = 2.6; // rad/sec
 const FLAP_AMPLITUDE = 0.62;
 const BANK_ANGLE = 0.22;
@@ -167,7 +134,6 @@ const RIDE_TURN_RATE = 1.6; // radians/sec
 const RIDE_CLIMB_SPEED = 14; // blocks/sec
 const RIDE_BANK_ANGLE = 0.5;
 const RIDE_GROUND_SEARCH_DEPTH = 40; // how far below its feet a ridden dragon looks for ground to stop a dive on
-const DISMOUNT_NEAR_PERCH_DIST = 3; // close enough to the dais that landing is skipped in favor of just settling there directly
 
 // Double-tap Space while riding toggles turbo: 400x the normal top speed
 // and acceleration (and coast-down friction, so letting go of W still
@@ -192,14 +158,6 @@ function lerp(a: number, b: number, t: number): number {
 function smoothstep(t: number): number {
   const c = Math.max(0, Math.min(1, t));
   return c * c * (3 - 2 * c);
-}
-
-/** Quadratic Bezier through three keyframe points — used for both the launch (dais -> mouth -> sky) and landing (sky -> mouth -> dais) arcs. */
-function bezier(p0: Vec3, p1: Vec3, p2: Vec3, u: number): Vec3 {
-  const a = (1 - u) * (1 - u);
-  const b = 2 * (1 - u) * u;
-  const c = u * u;
-  return { x: a * p0.x + b * p1.x + c * p2.x, y: a * p0.y + b * p1.y + c * p2.y, z: a * p0.z + b * p1.z + c * p2.z };
 }
 
 function addBox(
@@ -262,7 +220,7 @@ function buildFireBreath(): FireBreathParts {
     z += length * 0.7; // overlap segments so the stream reads as continuous, not stacked cones
   }
 
-  const light = new THREE.PointLight(0xff8c2a, 0, 16, 2);
+  const light = poolLight(new THREE.PointLight(0xff8c2a, 0, 16, 2));
   light.position.z = z * 0.4;
   group.add(light);
 
@@ -470,9 +428,9 @@ export class Dragon implements Rideable {
   private yaw = 0;
   private bank = 0;
 
-  private state: DragonState = "perched";
+  private state: DragonState = "flying";
   private stateTime = 0;
-  private restTimer = 0; // set from the config: the first launch comes fairly soon so the player doesn't have to wait long to see it fly
+  private theta: number; // angle round the circuit while flying
   private flapPhase = 0;
   private idlePhase = Math.random() * Math.PI * 2;
 
@@ -483,9 +441,8 @@ export class Dragon implements Rideable {
 
   // True while the player has mounted it — see mount()/dismount() below.
   // While ridden, update() runs tickRidden's player-controlled movement
-  // instead of the perched/launching/flying/landing state machine, which
-  // stays frozen at whatever state it was in (dismount() resumes it
-  // sensibly rather than wherever it happened to be paused).
+  // instead of the flying/returning state machine, which stays frozen
+  // until dismount() sends it back up to its circuit.
   ridden = false;
   turbo = false;
   private rideSpeed = 0;
@@ -510,16 +467,11 @@ export class Dragon implements Rideable {
   private readonly parts: DragonMeshParts;
   private readonly config: DragonConfig;
   private readonly loopPeriod: number; // seconds per full circuit of the mountain while flying
-  private readonly perch: Vec3;
-  private readonly mouthGround: Vec3;
-  private readonly skyJoin: Vec3;
-  // The landing arc's start point — normally this.skyJoin (see the
-  // "flying" state below), but dismount() points it at wherever the
-  // player actually left the dragon, so a landing flown after a ride
-  // arcs back from there instead of teleporting to the sky-circle first.
-  private landingStart: Vec3;
-  private launchDuration = MIN_TRANSIT_DURATION;
-  private landingDuration = MIN_TRANSIT_DURATION;
+  // Where it's heading while "returning" to the circuit after a ride.
+  private returnFrom: Vec3 = { x: 0, y: 0, z: 0 };
+  private returnTo: Vec3 = { x: 0, y: 0, z: 0 };
+  private returnTheta = 0;
+  private returnDuration = MIN_TRANSIT_DURATION;
 
   constructor(config: DragonConfig) {
     this.config = config;
@@ -527,15 +479,9 @@ export class Dragon implements Rideable {
     this.parts = buildDragonMesh(config.palette);
     this.mesh = this.parts.group;
 
-    this.perch = { ...config.perch };
-    this.mouthGround = { ...config.waypoint };
     this.loopPeriod = (2 * Math.PI * config.flightRadius) / DRAGON_CRUISE_SPEED;
-    this.skyJoin = this.circlePoint(config.startTheta, config.flightAltitude);
-    this.landingStart = this.skyJoin;
-    this.launchDuration = this.transitDuration(this.perch, this.skyJoin);
-    this.restTimer = config.firstLaunchDelay;
-
-    this.position = { ...this.perch };
+    this.theta = config.startTheta;
+    this.position = this.circlePoint(this.theta, config.flightAltitude);
     this.mesh.position.set(this.position.x, this.position.y, this.position.z);
   }
 
@@ -557,17 +503,20 @@ export class Dragon implements Rideable {
     this.rideSpeed = 0;
   }
 
-  /** How long an arc through the cave mouth from `from` to `to` takes at the dragon's own (slower-than-the-player) transit speed. */
-  private transitDuration(from: Vec3, to: Vec3): number {
-    const d = (a: Vec3, b: Vec3): number => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
-    return Math.max(MIN_TRANSIT_DURATION, (d(from, this.mouthGround) + d(this.mouthGround, to)) / DRAGON_TRANSIT_SPEED);
-  }
-
-  /** Starts a landing from wherever it is right now — the end of a normal flight, or where a rider dismounted. */
-  private beginLanding(): void {
-    this.landingStart = { ...this.position };
-    this.landingDuration = this.transitDuration(this.landingStart, this.perch);
-    this.state = "landing";
+  /** Heads back up to the circuit from wherever it is — after a ride, this is how it gets home. It rejoins at the point of the circle nearest to it (a little ahead of that, in its direction of travel). */
+  private beginReturn(): void {
+    const c = this.config.flightCenter;
+    const nearest = Math.atan2(this.position.x - c.x, this.position.z - c.z);
+    this.returnTheta = nearest + this.config.direction * 0.15;
+    this.returnFrom = { ...this.position };
+    this.returnTo = this.circlePoint(this.returnTheta, this.config.flightAltitude);
+    const d = Math.hypot(
+      this.returnTo.x - this.returnFrom.x,
+      this.returnTo.y - this.returnFrom.y,
+      this.returnTo.z - this.returnFrom.z,
+    );
+    this.returnDuration = Math.max(MIN_TRANSIT_DURATION, d / DRAGON_TRANSIT_SPEED);
+    this.state = "returning";
     this.stateTime = 0;
   }
 
@@ -576,7 +525,7 @@ export class Dragon implements Rideable {
     if (this.ridden) this.turbo = !this.turbo;
   }
 
-  /** Player dismounts. Close to the dais already, it just settles there; otherwise it flies itself home via the normal landing arc, now starting from wherever it actually is instead of the sky-circle. Returns where to put the player. */
+  /** Player dismounts; the dragon flies itself back up to its circuit from wherever it is. Returns where to put the player. */
   dismount(world: World): DismountSpot {
     // Beside the dragon, on the ground if it's close enough to safely step
     // down to — but dismounted mid-flight there's no ground under it at
@@ -591,14 +540,7 @@ export class Dragon implements Rideable {
 
     this.ridden = false;
     this.turbo = false;
-    const distFromPerch = Math.hypot(this.position.x - this.perch.x, this.position.y - this.perch.y, this.position.z - this.perch.z);
-    if (distFromPerch < DISMOUNT_NEAR_PERCH_DIST) {
-      this.state = "perched";
-      this.stateTime = 0;
-      this.restTimer = 20 + Math.random() * 40;
-    } else {
-      this.beginLanding();
-    }
+    this.beginReturn();
     return spot;
   }
 
@@ -624,8 +566,7 @@ export class Dragon implements Rideable {
     this.position.y += input.climb * RIDE_CLIMB_SPEED * dt;
 
     // Diving stops at the ground: nearest solid block at or below the
-    // dragon's feet (searched downward from where it is, so the cave's
-    // ceiling above it isn't mistaken for ground).
+    // dragon's feet (searched downward from where it is, ).
     if (world) {
       const x = Math.floor(this.position.x);
       const z = Math.floor(this.position.z);
@@ -660,64 +601,36 @@ export class Dragon implements Rideable {
     if (this.ridden && rideInput) {
       this.tickRidden(dt, rideInput, world);
       // Keeps flapping even while slow/hovering under player control, not
-      // fully folded the way idle-perched wings are.
+      // fully folded the way idle wings are.
       const speedFrac = Math.min(1, Math.abs(this.rideSpeed) / RIDE_MAX_SPEED);
       wingOpenness = 0.55 + speedFrac * 0.45;
     } else {
       this.stateTime += dt;
-      if (this.state === "perched") {
-        this.restTimer -= dt;
-        this.position = { ...this.perch };
-        this.bank = 0;
-        // Slow idle sway — a faint breathing/settling motion rather than a dead statue.
-        this.yaw = this.config.perchYaw + Math.sin(this.idlePhase * 0.15) * 0.25;
-        wingOpenness = 0;
-        if (this.restTimer <= 0) {
-          this.state = "launching";
-          this.stateTime = 0;
-        }
-      } else if (this.state === "launching") {
-        const u = smoothstep(this.stateTime / this.launchDuration);
-        const pos = bezier(this.perch, this.mouthGround, this.skyJoin, u);
-        const posAhead = bezier(this.perch, this.mouthGround, this.skyJoin, Math.min(1, u + 0.01));
+      const dir = this.config.direction;
+      if (this.state === "returning") {
+        const u = smoothstep(this.stateTime / this.returnDuration);
+        const a = this.returnFrom;
+        const b = this.returnTo;
+        const pos = { x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u, z: a.z + (b.z - a.z) * u };
+        this.facePoints(a, b);
         this.position = pos;
-        this.facePoints(pos, posAhead);
-        wingOpenness = smoothstep((u - 0.3) / 0.5);
         this.bank = 0;
-        if (this.stateTime >= this.launchDuration) {
+        wingOpenness = 1;
+        if (this.stateTime >= this.returnDuration) {
           this.state = "flying";
           this.stateTime = 0;
+          this.theta = this.returnTheta;
         }
-      } else if (this.state === "flying") {
-        const dir = this.config.direction;
-        const phase = (this.stateTime / this.loopPeriod) * Math.PI * 2; // how far round the circuit, direction-independent
-        const theta = this.config.startTheta + dir * phase;
-        const bob = Math.sin(this.stateTime * 0.6) * 1.5;
-        const pos = this.circlePoint(theta, this.skyJoin.y + bob);
-        const posAhead = this.circlePoint(theta + dir * 0.02, this.skyJoin.y + bob);
+      } else {
+        this.theta += dir * (dt / this.loopPeriod) * Math.PI * 2;
+        const bob = Math.sin(this.idlePhase * 0.6) * 1.5;
+        const altitude = this.config.flightAltitude + bob;
+        const pos = this.circlePoint(this.theta, altitude);
+        const posAhead = this.circlePoint(this.theta + dir * 0.02, altitude);
         this.position = pos;
         this.facePoints(pos, posAhead);
         this.bank = BANK_ANGLE * dir;
         wingOpenness = 1;
-        const loopsDone = this.stateTime / this.loopPeriod;
-        const nearStartPoint = phase % (Math.PI * 2) < 0.12; // back around to where it joined the circuit
-        if (this.stateTime >= FLY_MIN_DURATION && loopsDone >= 1 && nearStartPoint) {
-          this.beginLanding();
-        }
-      } else {
-        // landing
-        const u = smoothstep(this.stateTime / this.landingDuration);
-        const pos = bezier(this.landingStart, this.mouthGround, this.perch, u);
-        const posAhead = bezier(this.landingStart, this.mouthGround, this.perch, Math.min(1, u + 0.01));
-        this.position = pos;
-        this.facePoints(pos, posAhead);
-        wingOpenness = 1 - smoothstep((u - 0.5) / 0.45);
-        this.bank = 0;
-        if (this.stateTime >= this.landingDuration) {
-          this.state = "perched";
-          this.stateTime = 0;
-          this.restTimer = 30 + Math.random() * 60;
-        }
       }
     }
 
@@ -736,21 +649,18 @@ export class Dragon implements Rideable {
     this.parts.tailPivot.rotation.y = Math.sin(this.idlePhase * 0.5) * 0.18 * (1 - wingOpenness * 0.5) + this.bank * -0.6;
     this.rideBlend += ((this.ridden ? 1 : 0) - this.rideBlend) * Math.min(1, dt * 4);
     this.firstPersonBlend += ((this.ridden && this.firstPerson ? 1 : 0) - this.firstPersonBlend) * Math.min(1, dt * 8);
-    const flyBlend = smoothstep((wingOpenness - 0.15) / 0.6); // 0 perched -> 1 airborne
+    const flyBlend = smoothstep((wingOpenness - 0.15) / 0.6); // 0 folded -> 1 airborne
     this.animateLegs(flyBlend);
     this.animateNeckAndHead(flyBlend);
 
-    // Fire breath: while ridden, or while perched/actually flying on its
-    // own — not mid launch/landing, where the dragon is transiting the
-    // tunnel and a jet of flame would clip oddly through the cave walls.
-    const canBreathe = this.ridden || this.state === "perched" || this.state === "flying";
+    // Fire breath: any time it likes — it is always in the open air.
     if (this.breathing) {
       this.breathElapsed += dt;
-      if (this.breathElapsed >= BREATH_DURATION || !canBreathe) {
+      if (this.breathElapsed >= BREATH_DURATION) {
         this.breathing = false;
         this.breathTimer = BREATH_MIN_INTERVAL + Math.random() * (BREATH_MAX_INTERVAL - BREATH_MIN_INTERVAL);
       }
-    } else if (canBreathe) {
+    } else {
       this.breathTimer -= dt;
       if (this.breathTimer <= 0) {
         this.breathing = true;
@@ -779,7 +689,7 @@ export class Dragon implements Rideable {
   /**
    * The neck ripples with a wave that travels down it from the shoulders
    * (stronger in flight, tied to the wingbeat) and the head counter-bobs
-   * and looks around — idly when perched, less so airborne. Breathing
+   * and looks around. Breathing
    * fire rears the head up. While ridden the neck drops forward-and-down
    * and the head levels out; in first person the neck/head also fade to mostly
    * see-through so they can't fill the rider's view (see firstPersonBlend).
@@ -833,6 +743,7 @@ export class Dragon implements Rideable {
   }
 
   dispose(): void {
+    releaseLight(this.parts.fireBreath.light);
     this.mesh.traverse((obj) => {
       if (obj instanceof THREE.Mesh) obj.geometry.dispose();
     });

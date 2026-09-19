@@ -12,7 +12,7 @@
 import { CHUNK_SIZE, Chunk } from "../Chunk";
 import { getBlockByKey } from "../../data/blocks";
 import { SEA_LEVEL, type ColumnSample } from "./terrain";
-import { isRoadColumn } from "./roads";
+import { isRoadCorridorColumn } from "./roads";
 
 const LOG_ID = getBlockByKey("log").id;
 const PINE_LEAF_ID = getBlockByKey("leaves_pine").id;
@@ -109,14 +109,15 @@ function placeCherry(seed: number, chunks: Chunk[], lx: number, lz: number, heig
 export function placeTrees(seed: number, cx: number, cz: number, columns: ColumnSample[], chunks: Chunk[]): void {
   for (let lx = SMALL_MARGIN; lx < CHUNK_SIZE - SMALL_MARGIN; lx++) {
     for (let lz = SMALL_MARGIN; lz < CHUNK_SIZE - SMALL_MARGIN; lz++) {
-      const { height, biome } = columns[lx * CHUNK_SIZE + lz];
+      const { height, biome, blight } = columns[lx * CHUNK_SIZE + lz];
       if (height < SEA_LEVEL) continue; // underwater/beach column, no trees
-      const density = TREE_DENSITY[biome.key] ?? 0;
+      if (blight > 0.6) continue; // nothing green grows in the castle's shadow
+      const density = (TREE_DENSITY[biome.key] ?? 0) * (1 - blight / 0.6); // thinning out as the ground darkens
       if (density <= 0) continue;
 
       const worldX = cx * CHUNK_SIZE + lx;
       const worldZ = cz * CHUNK_SIZE + lz;
-      if (isRoadColumn(worldX, worldZ)) continue; // keep roads clear of trees
+      if (isRoadCorridorColumn(worldX, worldZ)) continue; // keep roads (and the bridge girder over their shoulders) clear of trees
       if (hash01(seed, worldX, worldZ, 1) >= density) continue;
 
       const kindRoll = hash01(seed, worldX, worldZ, 4);

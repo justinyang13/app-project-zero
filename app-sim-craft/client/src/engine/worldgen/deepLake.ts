@@ -10,12 +10,11 @@
 // Sized to be a proper inland sea: ~10x the original area (radius 70 -> 221)
 // and as deep as the world allows — chunks start at y=0, so with the sea at
 // y=64 the floor can drop at most ~60 blocks (a 5x-deeper 130 would fall
-// below the bottom of the world). Placed east of the loop road's east turn
-// (roads.ts: a semicircle of radius 90 centered at (130, 0)) with its west
-// rim just past the campfires/castle/village side of the map, so it drowns
-// none of them and clear of the dragon mountain; the road itself bridges
-// the stretch of the lake its turn crosses, on pillars with room for fish
-// to swim beneath (see terrain.ts's bridge columns).
+// below the bottom of the world). Placed east of the
+// campfires/castle/village side of the map, so it drowns none of them,
+// and clear of the dragon mountain; the loop road (roads.ts) crosses its
+// western reach on a tall arched viaduct on piers with room for fish and
+// whales to swim beneath (see worldgen/bridge.ts).
 export const DEEP_LAKE_CENTER = { x: 300, z: 0 };
 export const DEEP_LAKE_RADIUS = 221;
 /** World Y of the lake bed at its deepest — a few blocks of solid ground above the bottom of the world. */
