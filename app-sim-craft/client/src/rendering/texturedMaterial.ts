@@ -101,8 +101,16 @@ void main() {`,
         `#include <map_fragment>
   // Tiles are painted top-row-first, texture "up" is -v; one tile per block.
   vec2 blockUv = vec2(vTUv.x, -vTUv.y);
+  // vTile.y > 1: animation frames stepped by time; < -1: interchangeable variants picked per block by a position hash.
   float frameCount = floor(vTile.y + 0.5);
-  float frame = frameCount > 1.5 ? floor(mod(uTime * ${ANIMATION_FPS.toFixed(1)}, frameCount)) : 0.0;
+  float frame = 0.0;
+  if (frameCount > 1.5) {
+    frame = floor(mod(uTime * ${ANIMATION_FPS.toFixed(1)}, frameCount));
+  } else if (frameCount < -1.5) {
+    vec2 cell = floor(blockUv);
+    float pick = fract(sin(dot(cell, vec2(127.1, 311.7))) * 43758.5453);
+    frame = floor(pick * -frameCount);
+  }
   vec3 tileCoord = vec3(fract(blockUv), floor(vTile.x + 0.5) + frame);
   vec2 gx = dFdx(blockUv);
   vec2 gy = dFdy(blockUv);

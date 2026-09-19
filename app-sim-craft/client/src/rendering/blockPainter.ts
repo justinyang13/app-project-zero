@@ -595,6 +595,222 @@ function paintGlowVine(t: Tile): void {
   }
 }
 
+// --- everyday ground and building materials --------------------------------
+// Painted after Minecraft-style pixel art: mottled greens, pebbly dirt, a
+// ragged grass fringe over dirt on the sides of every step, gravel, sand,
+// stone. Each has several variants (see data/blockTextures.ts) so a wide
+// flat area doesn't show one 16x16 pattern repeating.
+
+interface GrassPalette {
+  dark: RGB;
+  mid: RGB;
+  light: RGB;
+}
+const GRASS: GrassPalette = { dark: [66, 128, 42], mid: [94, 165, 58], light: [128, 202, 80] };
+const GRASS_DUSK: GrassPalette = { dark: [62, 104, 40], mid: [86, 138, 52], light: [116, 168, 68] };
+const GRASS_WITHERED: GrassPalette = { dark: [52, 82, 38], mid: [74, 108, 48], light: [102, 134, 60] };
+
+function grassPixel(x: number, y: number, seed: number, pal: GrassPalette): RGB {
+  const patch = tileNoise(x, y, 4, seed + 1) * 0.7 + tileNoise(x, y, 2, seed + 2) * 0.3;
+  let c = patch < 0.5 ? mix(pal.dark, pal.mid, patch * 2) : mix(pal.mid, pal.light, (patch - 0.5) * 2);
+  const n = hash(x, y, seed + 3);
+  c = scale(c, 0.93 + n * 0.14);
+  if (n > 0.95) c = mix(c, pal.light, 0.7); // a bright blade
+  else if (n < 0.05) c = scale(c, 0.72); // a shaded gap
+  return c;
+}
+
+function paintGrassTop(t: Tile, variant: number, pal: GrassPalette): void {
+  const seed = 700 + variant * 53;
+  t.fill((x, y) => grassPixel(x, y, seed, pal));
+}
+
+function dirtPixel(x: number, y: number, seed: number): RGB {
+  const patch = tileNoise(x, y, 3, seed + 1);
+  let c = mix([106, 74, 49], [140, 100, 70], patch);
+  const n = hash(x, y, seed + 2);
+  c = scale(c, 0.9 + n * 0.2);
+  if (n > 0.93) c = mix(c, [166, 124, 88], 0.6); // a pale fleck
+  else if (n < 0.08) c = scale(c, 0.66); // a dark clod
+  if (hash(x, y, seed + 3) > 0.985) c = [138, 134, 126]; // the odd pebble
+  return c;
+}
+
+function paintDirt(t: Tile, variant: number): void {
+  const seed = 740 + variant * 61;
+  t.fill((x, y) => dirtPixel(x, y, seed));
+}
+
+/** Dirt with a ragged fringe of grass hanging over its top edge — the face you see on every step of a hillside. */
+function paintGrassSide(t: Tile, variant: number, pal: GrassPalette): void {
+  const seed = 770 + variant * 67;
+  t.fill((x, y) => dirtPixel(x, y, seed));
+  for (let x = 0; x < S; x++) {
+    const rows = 2 + Math.floor(hash(x, 0, seed + 10) * 3); // 2-4 rows of solid grass
+    for (let y = 0; y < rows; y++) {
+      let c = grassPixel(x, y, seed + 11, pal);
+      if (y === rows - 1) c = scale(c, 0.86); // the underside of the fringe sits in shade
+      t.set(x, y, c);
+    }
+    if (hash(x, 1, seed + 12) > 0.6) t.set(x, rows, scale(grassPixel(x, rows, seed + 13, pal), 0.78)); // hanging blades
+  }
+}
+
+function paintStone(t: Tile, variant: number): void {
+  const seed = 800 + variant * 71;
+  t.fill((x, y) => {
+    const blotch = tileNoise(x, y, 4, seed + 1) * 0.65 + tileNoise(x, y, 2, seed + 2) * 0.35;
+    let c = mix([104, 104, 108], [148, 148, 150], blotch);
+    const n = hash(x, y, seed + 3);
+    c = scale(c, 0.94 + n * 0.12);
+    if (n < 0.04) c = scale(c, 0.62); // pits and hairline cracks
+    else if (n > 0.96) c = mix(c, [176, 176, 178], 0.6);
+    return c;
+  });
+}
+
+/** Rounded cobbles of varied size, each its own tone, mortared with dark gaps. */
+function paintCobble(t: Tile, variant: number): void {
+  const seed = 830 + variant * 73;
+  const rowHeights = [5, 6, 5];
+  const cobbleAt = (x: number, y: number): { tone: number; edge: boolean } => {
+    let rowStart = 0;
+    let row = 0;
+    for (let i = 0; i < rowHeights.length; i++) {
+      if (y < rowStart + rowHeights[i]) {
+        row = i;
+        break;
+      }
+      rowStart += rowHeights[i];
+    }
+    const offset = row * 3 + variant * 2;
+    const widths = [6, 5, 5];
+    const period = 16;
+    const xx = (x + offset) % period;
+    let cs = 0;
+    let idx = 0;
+    for (let i = 0; i < widths.length; i++) {
+      if (xx < cs + widths[i]) {
+        idx = i;
+        break;
+      }
+      cs += widths[i];
+    }
+    const localX = xx - cs;
+    const localY = y - rowStart;
+    const edge = localX === widths[idx] - 1 || localY === rowHeights[row] - 1 || (localX === 0 && localY === 0);
+    return { tone: hash(row, idx, seed), edge };
+  };
+  t.fill((x, y) => {
+    const { tone, edge } = cobbleAt(x, y);
+    if (edge) return scale([66, 66, 70], 0.85 + hash(x, y, seed + 1) * 0.3);
+    let c = mix([120, 120, 124], [156, 154, 152], tone);
+    c = scale(c, 0.92 + hash(x, y, seed + 2) * 0.16);
+    return c;
+  });
+}
+
+function paintSand(t: Tile, variant: number): void {
+  const seed = 860 + variant * 79;
+  t.fill((x, y) => {
+    let c = mix([212, 192, 138], [230, 214, 162], tileNoise(x, y, 3, seed + 1));
+    const n = hash(x, y, seed + 2);
+    c = scale(c, 0.95 + n * 0.1);
+    if (n > 0.95) c = mix(c, [244, 232, 186], 0.7);
+    else if (n < 0.05) c = mix(c, [186, 164, 112], 0.7);
+    return c;
+  });
+}
+
+function paintSandstoneTop(t: Tile, variant: number): void {
+  const seed = 890 + variant * 83;
+  t.fill((x, y) => scale(mix([206, 184, 128], [224, 204, 150], tileNoise(x, y, 4, seed + 1)), 0.96 + hash(x, y, seed + 2) * 0.08));
+}
+
+function paintSandstoneSide(t: Tile, variant: number): void {
+  const seed = 910 + variant * 89;
+  t.fill((x, y) => {
+    const band = (y + variant * 3) % 6;
+    let c = mix([206, 184, 128], [226, 206, 152], tileNoise(x, y * 0.5, 4, seed + 1));
+    if (band === 0) c = scale(c, 0.84); // a dark stratum line
+    else if (band === 1) c = scale(c, 1.04);
+    return scale(c, 0.95 + hash(x, y, seed + 2) * 0.1);
+  });
+}
+
+function paintGravel(t: Tile, variant: number): void {
+  const seed = 940 + variant * 97;
+  t.fill((x, y) => {
+    // Pebbles on a jittered 3-pixel grid, each its own grey-brown, with a lit top-left and shaded bottom-right.
+    const cx = Math.floor(x / 3);
+    const cy = Math.floor(y / 3);
+    const tone = hash(cx, cy, seed);
+    let c = mix([112, 104, 96], [176, 168, 156], tone);
+    const lx = x % 3;
+    const ly = y % 3;
+    if (lx === 0 && ly === 0) c = scale(c, 1.1);
+    if (lx === 2 || ly === 2) c = scale(c, 0.78);
+    return scale(c, 0.94 + hash(x, y, seed + 1) * 0.12);
+  });
+}
+
+function paintFarmlandTop(t: Tile, variant: number): void {
+  const seed = 970 + variant * 101;
+  t.fill((x, y) => {
+    const row = (y + variant) % 4;
+    let c: RGB = row === 0 ? [58, 38, 25] : row === 3 ? [82, 55, 36] : [96, 64, 42];
+    c = scale(c, 0.92 + hash(x, y, seed + 1) * 0.16);
+    if (hash(x, y, seed + 2) > 0.96) c = mix(c, [120, 84, 58], 0.6);
+    return c;
+  });
+}
+
+function paintAsphalt(t: Tile, variant: number): void {
+  const seed = 990 + variant * 103;
+  t.fill((x, y) => {
+    let c = scale([60, 60, 65], 0.94 + hash(x, y, seed + 1) * 0.12);
+    const n = hash(x, y, seed + 2);
+    if (n > 0.96) c = mix(c, [96, 96, 102], 0.7); // a bright chip of aggregate
+    else if (n < 0.04) c = scale(c, 0.7);
+    return c;
+  });
+}
+
+function paintPlanks(t: Tile, variant: number): void {
+  const seed = 1010 + variant * 107;
+  t.fill((x, y) => {
+    const board = Math.floor(y / 4);
+    const seam = y % 4 === 3;
+    const jointAt = Math.floor(hash(board, 0, seed) * 8) + (board % 2) * 8;
+    const joint = x === jointAt % 16;
+    let c = mix([184, 142, 88], [206, 166, 108], hash(board, 1, seed + 1));
+    c = scale(c, 0.94 + hash(x >> 1, y, seed + 2) * 0.1); // the grain runs along each board
+    if (seam || joint) c = scale([112, 80, 46], 0.85 + hash(x, y, seed + 3) * 0.3);
+    return c;
+  });
+}
+
+function paintPlaster(t: Tile, variant: number): void {
+  const seed = 1040 + variant * 109;
+  t.fill((x, y) => scale(mix([238, 232, 216], [222, 214, 194], tileNoise(x, y, 4, seed + 1) * 0.7), 0.97 + hash(x, y, seed + 2) * 0.06));
+}
+
+/** Overlapping rows of roof shingles, each a slightly different shade, darker along its lower edge. */
+function paintRoof(t: Tile, variant: number, base: RGB, seed: number): void {
+  t.fill((x, y) => {
+    const row = Math.floor(y / 4);
+    const offset = (row % 2) * 4 + variant * 2;
+    const col = Math.floor((x + offset) / 8);
+    let c = scale(base, 0.86 + hash(col, row, seed) * 0.28);
+    const inRow = y % 4;
+    const inCol = (x + offset) % 8;
+    if (inRow === 3) c = scale(c, 0.62); // the shadow under each course
+    else if (inRow === 0) c = scale(c, 1.12);
+    if (inCol === 7) c = scale(c, 0.78); // the gap between shingles
+    return scale(c, 0.95 + hash(x, y, seed + 1) * 0.1);
+  });
+}
+
 const PAINTERS: Record<string, (t: Tile, frame: number, frames: number) => void> = {
   gloomstone: (t) => paintGloomstone(t),
   gloom_brick: (t) => paintBrick(t, 5, BRICK),
@@ -635,6 +851,26 @@ const PAINTERS: Record<string, (t: Tile, frame: number, frames: number) => void>
   snow_side: (t) => paintSnowSide(t),
   loam_dirt: (t) => paintLoamDirt(t),
   glow_vine: (t) => paintGlowVine(t),
+  grass_top: (t, v) => paintGrassTop(t, v, GRASS),
+  grass_side: (t, v) => paintGrassSide(t, v, GRASS),
+  grass_dusk_top: (t, v) => paintGrassTop(t, v, GRASS_DUSK),
+  grass_dusk_side: (t, v) => paintGrassSide(t, v, GRASS_DUSK),
+  grass_withered_top: (t, v) => paintGrassTop(t, v, GRASS_WITHERED),
+  grass_withered_side: (t, v) => paintGrassSide(t, v, GRASS_WITHERED),
+  dirt: (t, v) => paintDirt(t, v),
+  stone: (t, v) => paintStone(t, v),
+  cobble: (t, v) => paintCobble(t, v),
+  sand: (t, v) => paintSand(t, v),
+  sandstone_top: (t, v) => paintSandstoneTop(t, v),
+  sandstone_side: (t, v) => paintSandstoneSide(t, v),
+  gravel: (t, v) => paintGravel(t, v),
+  farmland_top: (t, v) => paintFarmlandTop(t, v),
+  asphalt: (t, v) => paintAsphalt(t, v),
+  planks: (t, v) => paintPlanks(t, v),
+  plaster: (t, v) => paintPlaster(t, v),
+  roof_terracotta: (t, v) => paintRoof(t, v, [190, 90, 56], 1100),
+  roof_brown: (t, v) => paintRoof(t, v, [128, 82, 50], 1110),
+  roof_slate: (t, v) => paintRoof(t, v, [98, 108, 122], 1120),
 };
 
 /** Paints every texture layer, in registry order (an animated texture yields one tile per frame). */
@@ -643,7 +879,8 @@ export function paintAllTiles(): PaintedTile[] {
   for (const def of TEXTURE_DEFS) {
     const painter = PAINTERS[def.key];
     if (!painter) throw new Error(`No painter for block texture: ${def.key}`);
-    const frames = textureFrames(def.key);
+    // A painter is called once per layer: for animated textures that is the frame, for varied ones the variant index.
+    const frames = def.variants ?? textureFrames(def.key);
     for (let f = 0; f < frames; f++) {
       const tile = new Tile();
       painter(tile, f, frames);

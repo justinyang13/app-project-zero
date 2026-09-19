@@ -373,7 +373,38 @@ export const BLOCKS: BlockDef[] = [
   leafVariant(74, "leaves_lime", "Lime Leaves", 0xa0e24f),
   leafVariant(75, "leaves_cherry_dark", "Dusk Blossom Leaves", 0xb84c7c),
   leafVariant(76, "leaves_snowy", "Snow-laden Leaves", 0xf2f8fc),
+  flatBlock(77, "cobblestone", "Cobblestone", 0x8c8c90, "pickaxe", 1.8),
 ];
+
+// The everyday terrain and building blocks were flat colors; give them the
+// pixel-art textures painted in rendering/blockPainter.ts (grass with a
+// fringe over dirt on every step, pebbly dirt, mottled stone, gravel, sand,
+// planks, shingles...). Applied here, after the catalog, so each block keeps
+// its id, drops and hardness — only how it's drawn changes.
+const GROUND_TEXTURES: Record<string, BlockTexture> = {
+  loam: { all: "dirt" },
+  turf: { top: "grass_top", side: "grass_side", bottom: "dirt" },
+  greystone: { all: "stone" },
+  dune_sand: { all: "sand" },
+  frost_turf: { top: "snow_top", side: "snow_side", bottom: "loam_dirt" },
+  sandstone: { top: "sandstone_top", bottom: "sandstone_top", side: "sandstone_side" },
+  log: { top: "oak_log_top", bottom: "oak_log_top", side: "oak_bark" },
+  plank: { all: "planks" },
+  roof_tile: { all: "roof_terracotta" },
+  asphalt: { all: "asphalt" },
+  dusk_turf: { top: "grass_dusk_top", side: "grass_dusk_side", bottom: "dirt" },
+  withered_turf: { top: "grass_withered_top", side: "grass_withered_side", bottom: "dirt" },
+  whitewash: { all: "plaster" },
+  shingle_brown: { all: "roof_brown" },
+  shingle_slate: { all: "roof_slate" },
+  path_gravel: { all: "gravel" },
+  farmland: { top: "farmland_top", bottom: "dirt", side: "dirt" },
+  cobblestone: { all: "cobble" },
+};
+for (const def of BLOCKS) {
+  const tex = GROUND_TEXTURES[def.key];
+  if (tex) def.tex = tex;
+}
 
 /** A textured (pixel-art) block. `overrides` tweak the defaults — see the notes on BlockDef for what each does. */
 function textured(

@@ -74,6 +74,7 @@ export function TouchActionButtons() {
   const isTouch = useIsTouchDevice();
   const compact = useCompactViewport();
   const flying = useHudStore((s) => s.debug.flying);
+  const turbo = useHudStore((s) => s.debug.turbo);
   const inVehicle = useHudStore((s) => s.vehiclePrompt?.includes("exit") === true || s.vehiclePrompt?.includes("dismount") === true);
   const mode = useHotbarStore((s) => s.mode);
   const cycleMode = useHotbarStore((s) => s.cycleMode);
@@ -146,7 +147,7 @@ export function TouchActionButtons() {
         👁
       </button>
 
-      {/* Fly toggle — a single tap, no need to replicate desktop's double-tap-Space gesture on touch. In a car or on the dragon the same gesture is nitro/turbo. */}
+      {/* Fly / turbo — a single tap, no need to replicate desktop's double-tap-Space gesture on touch: starts flying; while flying it toggles turbo (land by flying down, as on desktop). In a car or on the dragon it's nitro/turbo. */}
       <button
         onPointerDown={(e) => {
           e.preventDefault();
@@ -158,11 +159,12 @@ export function TouchActionButtons() {
           width: 48,
           height: 48,
           fontSize: 18,
-          borderColor: flying && !inVehicle ? "#7dc4ff" : "rgba(255, 255, 255, 0.4)",
+          borderColor: turbo || (flying && !inVehicle) ? "#7dc4ff" : "rgba(255, 255, 255, 0.4)",
+          background: turbo && !inVehicle ? "rgba(90, 160, 255, 0.55)" : "rgba(0, 0, 0, 0.45)",
         }}
-        title={inVehicle ? "Nitro / turbo" : flying ? "Stop flying" : "Start flying"}
+        title={inVehicle ? "Nitro / turbo" : flying ? "Turbo flight (fly down to land)" : "Start flying"}
       >
-        {inVehicle ? "⚡" : "✈"}
+        {inVehicle || flying ? "⚡" : "✈"}
       </button>
 
       {flying && !inVehicle && (

@@ -12,7 +12,7 @@ import { riverCenterZ } from "./ground";
 const id = (key: string): number => getBlockByKey(key).id;
 const PLANK = id("plank");
 const LOG = id("log");
-const COBBLE = id("greystone");
+const COBBLE = id("cobblestone");
 const PLASTER = id("whitewash");
 const GRAVEL = id("path_gravel");
 const SOIL = id("farmland");

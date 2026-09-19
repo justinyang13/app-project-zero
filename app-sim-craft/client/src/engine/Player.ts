@@ -19,6 +19,7 @@ const HALF_WIDTH = PLAYER_WIDTH / 2;
 const WALK_SPEED = 4.3;
 const SPRINT_SPEED = 5.6;
 const FLY_SPEED = 10.8;
+const FLY_TURBO_MULTIPLIER = 2.6; // double-tap Space while flying (see GameLoop.ts) — about 28 blocks/sec
 const SWIM_SPEED = 2.6; // water resists movement — slower than even a walk
 const SWIM_VERTICAL_SPEED = 3.0; // deliberate rise/dive while holding flyUp/flyDown in water
 // Buoyancy, not gravity — much weaker downward pull, clamped to a slow
@@ -46,6 +47,8 @@ export class Player {
   velocity = { x: 0, y: 0, z: 0 };
   onGround = false;
   flying = false;
+  /** Fast flight, toggled by double-tapping Space while flying; ends whenever flight does. */
+  turbo = false;
   swimming = false;
 
   private intersectsSolid(world: World, x: number, y: number, z: number): boolean {
@@ -119,7 +122,9 @@ export class Player {
     this.swimming = !this.flying && this.isInLiquid(world, this.position.x, this.position.y, this.position.z);
     const swimming = this.swimming;
 
-    const speed = this.flying ? FLY_SPEED : swimming ? SWIM_SPEED : input.sprint ? SPRINT_SPEED : WALK_SPEED;
+    if (!this.flying) this.turbo = false;
+    const flySpeed = this.turbo ? FLY_SPEED * FLY_TURBO_MULTIPLIER : FLY_SPEED;
+    const speed = this.flying ? flySpeed : swimming ? SWIM_SPEED : input.sprint ? SPRINT_SPEED : WALK_SPEED;
     let wishX = forwardVec.x * input.forward + rightVec.x * input.right;
     let wishZ = forwardVec.z * input.forward + rightVec.z * input.right;
     let wishY = 0;
@@ -150,7 +155,7 @@ export class Player {
       // Space/Shift still give pure vertical control on top of whatever
       // looking up/down already contributes — handy for climbing/
       // descending straight while looking level.
-      this.velocity.y = wishY * speed + ((input.flyUp ? 1 : 0) - (input.flyDown ? 1 : 0)) * FLY_SPEED;
+      this.velocity.y = wishY * speed + ((input.flyUp ? 1 : 0) - (input.flyDown ? 1 : 0)) * flySpeed;
     } else if (swimming) {
       // Reuses flying's Space/Shift vertical keys as swim up/dive down —
       // holding neither drifts gently instead of free-falling (gravity)
@@ -200,6 +205,11 @@ export class Player {
       if (this.velocity.y < 0) {
         ny = Math.floor(ny) + 1;
         this.onGround = true;
+        // Flying down into the ground lands you (double-tap Space no longer does — it's turbo now).
+        if (this.flying) {
+          this.flying = false;
+          this.turbo = false;
+        }
       } else if (this.velocity.y > 0) {
         ny = Math.floor(ny + PLAYER_HEIGHT) - PLAYER_HEIGHT;
       }

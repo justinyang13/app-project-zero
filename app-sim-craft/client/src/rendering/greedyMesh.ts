@@ -6,7 +6,7 @@
 // Foliage (leaves) is the one exception: it carries UVs so
 // ChunkManager.ts can texture it with an alpha-cutout pattern instead.
 import { AIR_ID, BLOCKS, WATER_ID, getBlockById, type BlockDef } from "../data/blocks";
-import { textureFrames, textureLayer } from "../data/blockTextures";
+import { textureFrames, textureLayer, textureVariants } from "../data/blockTextures";
 import { CHUNK_SIZE } from "../engine/Chunk";
 
 type Axis = 0 | 1 | 2; // 0 = X, 1 = Y, 2 = Z
@@ -70,16 +70,18 @@ export type BlockLightSampler = (lx: number, ly: number, lz: number) => number;
 // Per-block, per-face texture layer tables (face order: +x -x +y -y +z -z),
 // built once so the hot meshing loop is a pair of array lookups.
 const FACE_TILE = new Int16Array(BLOCKS.length * 6).fill(-1);
-const BLOCK_FRAMES = new Uint8Array(BLOCKS.length);
+// Per face: > 1 = that many animation frames, < -1 = that many position-hashed variants, else a single tile.
+const FACE_FRAMES = new Int8Array(BLOCKS.length * 6).fill(1);
 for (const def of BLOCKS) {
   if (!def.tex) continue;
   const pick = (face: number): string | undefined => (face === 2 ? def.tex!.top : face === 3 ? def.tex!.bottom : def.tex!.side) ?? def.tex!.all;
   for (let face = 0; face < 6; face++) {
     const key = pick(face);
-    if (key) FACE_TILE[def.id * 6 + face] = textureLayer(key);
+    if (!key) continue;
+    FACE_TILE[def.id * 6 + face] = textureLayer(key);
+    const variants = textureVariants(key);
+    FACE_FRAMES[def.id * 6 + face] = variants > 1 ? -variants : textureFrames(key);
   }
-  const frameKey = def.tex.all ?? def.tex.side ?? def.tex.top;
-  BLOCK_FRAMES[def.id] = frameKey ? textureFrames(frameKey) : 1;
 }
 
 function faceIndex(axis: Axis, dir: number): number {
@@ -328,8 +330,9 @@ function emitTexturedQuad(
 ): void {
   const faceVal = dir > 0 ? slice + 1 : slice;
   const corners: [number, number][] = dir > 0 ? [[u0, v0], [u1, v0], [u1, v1], [u0, v1]] : [[u0, v0], [u0, v1], [u1, v1], [u1, v0]];
-  const layer = FACE_TILE[def.id * 6 + faceIndex(axis, dir)];
-  const frames = BLOCK_FRAMES[def.id];
+  const face = def.id * 6 + faceIndex(axis, dir);
+  const layer = FACE_TILE[face];
+  const frames = FACE_FRAMES[face];
   const brightness = lightToBrightness(light);
   const [gr, gg, gb] = glowColor(glowLevel);
 
@@ -365,7 +368,7 @@ function emitCrossShapes(out: TexBuffers, blocks: Uint16Array, skyLight: Uint8Ar
     const y = (i >> 5) & 31;
     const z = (i >> 10) & 31;
     const layer = FACE_TILE[id * 6];
-    const frames = BLOCK_FRAMES[id];
+    const frames = FACE_FRAMES[id * 6];
     const brightness = lightToBrightness(skyLight[i]);
     const diagonals: [number, number, number, number][] = [
       [x, z, x + 1, z + 1],

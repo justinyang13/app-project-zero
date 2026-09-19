@@ -67,6 +67,9 @@ const HOLD_REPEAT_INTERVAL = 0.15; // seconds between repeats while the primary 
 
 type ViewMode = "first" | "third";
 
+const BASE_FOV = 70;
+const TURBO_FOV = 84;
+
 function clamp1(v: number): number {
   return Math.max(-1, Math.min(1, v));
 }
@@ -182,7 +185,7 @@ export class GameLoop {
 
     this.scene = new THREE.Scene();
 
-    this.camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 1000);
+    this.camera = new THREE.PerspectiveCamera(BASE_FOV, window.innerWidth / window.innerHeight, 0.1, 1000);
     // The camera itself needs to be part of the scene graph for its
     // children (the held-item viewmodel below) to render at all — a
     // camera doesn't have to be in the scene to be used for rendering,
@@ -373,7 +376,8 @@ export class GameLoop {
         if (this.drivingCar) this.drivingCar.activateNitro();
         else if (this.mounted) {
           if (this.mounted instanceof Dragon) this.mounted.toggleTurbo();
-        } else this.player.flying = !this.player.flying;
+        } else if (this.player.flying) this.player.turbo = !this.player.turbo;
+        else this.player.flying = true;
       }
       this.lastSpaceTapTime = now;
     }
@@ -480,12 +484,13 @@ export class GameLoop {
     this.holdCooldown = HOLD_REPEAT_INTERVAL;
   }
 
-  /** Mirrors the desktop double-tap-Space gesture — a single tap is enough on touch, see ui/TouchActionButtons.tsx: nitro in a car, turbo on the dragon, otherwise the fly toggle. */
+  /** Mirrors the desktop double-tap-Space gesture — a single tap is enough on touch, see ui/TouchActionButtons.tsx: nitro in a car, turbo on the dragon, and on foot it starts flying, then toggles turbo flight (landing is flying down into the ground, like on desktop). */
   toggleFlying(): void {
     if (this.drivingCar) this.drivingCar.activateNitro();
     else if (this.mounted) {
       if (this.mounted instanceof Dragon) this.mounted.toggleTurbo();
-    } else this.player.flying = !this.player.flying;
+    } else if (this.player.flying) this.player.turbo = !this.player.turbo;
+    else this.player.flying = true;
   }
 
   /** The E key's action (hop in/out of a car, mount/dismount an animal or dragon) — the touch prompt button in ui/VehiclePrompt.tsx calls this. */
@@ -1112,6 +1117,12 @@ export class GameLoop {
     const timeState = useTimeStore.getState();
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
     this.clouds.update(dt, this.player.position.x, this.player.position.z, timeOfDay);
+    // Turbo flight widens the view a little for a sense of speed.
+    const targetFov = this.player.flying && this.player.turbo && !driving && !riding ? TURBO_FOV : BASE_FOV;
+    if (Math.abs(this.camera.fov - targetFov) > 0.05) {
+      this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 6);
+      this.camera.updateProjectionMatrix();
+    }
     this.sky.update(this.player.position, timeOfDay);
     updateTexturedMaterial(performance.now() / 1000, 1 - dayFactorAt(timeOfDay));
     this.castleBanners.update(performance.now() / 1000);
@@ -1214,6 +1225,7 @@ export class GameLoop {
       pendingChunkOps: this.chunkManager.pendingCount,
       carCount: this.cars.length,
       flying: this.player.flying,
+      turbo: this.player.turbo,
       swimming: this.player.swimming,
       viewMode: this.viewMode,
       timeOfDay,

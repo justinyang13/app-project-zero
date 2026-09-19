@@ -9,6 +9,13 @@ export const TEXTURE_SIZE = 16;
 export interface TextureDef {
   key: string;
   frames: number;
+  /**
+   * Interchangeable look-alikes painted on consecutive layers: the shader
+   * picks one per block position from a hash, so a big flat meadow or road
+   * doesn't visibly repeat one 16x16 tile. (A texture is either animated —
+   * `frames` — or varied — `variants` — never both.)
+   */
+  variants?: number;
 }
 
 export const TEXTURE_DEFS: TextureDef[] = [
@@ -51,15 +58,38 @@ export const TEXTURE_DEFS: TextureDef[] = [
   { key: "snow_side", frames: 1 },
   { key: "loam_dirt", frames: 1 },
   { key: "glow_vine", frames: 1 },
+  // Everyday ground and building materials (painted in rendering/blockPainter.ts).
+  { key: "grass_top", frames: 1, variants: 4 },
+  { key: "grass_side", frames: 1, variants: 2 },
+  { key: "grass_dusk_top", frames: 1, variants: 4 },
+  { key: "grass_dusk_side", frames: 1, variants: 2 },
+  { key: "grass_withered_top", frames: 1, variants: 4 },
+  { key: "grass_withered_side", frames: 1, variants: 2 },
+  { key: "dirt", frames: 1, variants: 4 },
+  { key: "stone", frames: 1, variants: 4 },
+  { key: "cobble", frames: 1, variants: 2 },
+  { key: "sand", frames: 1, variants: 4 },
+  { key: "sandstone_top", frames: 1, variants: 2 },
+  { key: "sandstone_side", frames: 1, variants: 2 },
+  { key: "gravel", frames: 1, variants: 4 },
+  { key: "farmland_top", frames: 1, variants: 2 },
+  { key: "asphalt", frames: 1, variants: 4 },
+  { key: "planks", frames: 1, variants: 2 },
+  { key: "plaster", frames: 1, variants: 2 },
+  { key: "roof_terracotta", frames: 1, variants: 2 },
+  { key: "roof_brown", frames: 1, variants: 2 },
+  { key: "roof_slate", frames: 1, variants: 2 },
 ];
 
 const layerByKey = new Map<string, number>();
 const framesByKey = new Map<string, number>();
+const variantsByKey = new Map<string, number>();
 let nextLayer = 0;
 for (const def of TEXTURE_DEFS) {
   layerByKey.set(def.key, nextLayer);
   framesByKey.set(def.key, def.frames);
-  nextLayer += def.frames;
+  variantsByKey.set(def.key, def.variants ?? 1);
+  nextLayer += def.variants ?? def.frames;
 }
 
 /** Total layers in the texture array (animated textures count once per frame). */
@@ -74,4 +104,9 @@ export function textureLayer(key: string): number {
 
 export function textureFrames(key: string): number {
   return framesByKey.get(key) ?? 1;
+}
+
+/** How many interchangeable variants a texture has (1 if it has just the one look). */
+export function textureVariants(key: string): number {
+  return variantsByKey.get(key) ?? 1;
 }

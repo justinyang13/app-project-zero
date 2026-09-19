@@ -22,7 +22,7 @@ describe("meshChunkGreedy", () => {
 
   it("emits exactly one merged quad per face for a single solid voxel surrounded by air", () => {
     const { blocks, skyLight } = emptyChunk();
-    const stone = getBlockByKey("greystone").id;
+    const stone = getBlockByKey("bridge_concrete").id;
     blocks[5 | (5 << 5) | (5 << 10)] = stone;
 
     const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES);
@@ -33,7 +33,7 @@ describe("meshChunkGreedy", () => {
 
   it("greedily merges a flat 32x32 solid slab's top face into a single quad", () => {
     const { blocks, skyLight } = emptyChunk();
-    const turf = getBlockByKey("turf").id;
+    const turf = getBlockByKey("bridge_steel").id;
     for (let x = 0; x < CHUNK_SIZE; x++) {
       for (let z = 0; z < CHUNK_SIZE; z++) {
         blocks[x | (0 << 5) | (z << 10)] = turf; // a full y=0 layer, nothing above or below it
@@ -50,7 +50,7 @@ describe("meshChunkGreedy", () => {
 
   it("does not emit a face between two touching solid voxels of the same block", () => {
     const { blocks, skyLight } = emptyChunk();
-    const stone = getBlockByKey("greystone").id;
+    const stone = getBlockByKey("bridge_concrete").id;
     blocks[5 | (5 << 5) | (5 << 10)] = stone;
     blocks[6 | (5 << 5) | (5 << 10)] = stone; // touching along +X
 
@@ -106,7 +106,7 @@ describe("meshChunkGreedy", () => {
 
   it("does not render a face against an opaque neighbor-chunk boundary voxel", () => {
     const { blocks, skyLight } = emptyChunk();
-    const stone = getBlockByKey("greystone").id;
+    const stone = getBlockByKey("bridge_concrete").id;
     blocks[(CHUNK_SIZE - 1) | (5 << 5) | (5 << 10)] = stone; // touching the +X chunk edge
 
     const boundaryPx = new Uint16Array(CHUNK_SIZE * CHUNK_SIZE);
@@ -162,5 +162,22 @@ describe("meshChunkGreedy", () => {
     const result = meshChunkGreedy(blocks, skyLight, EMPTY_BOUNDARIES);
     // The brick keeps all 6 faces (it sees through the lattice); the lattice loses only the one pressed against opaque brick.
     expect(result.texPositions.length / 3).toBe(44);
+  });
+});
+
+describe("textured ground", () => {
+  it("draws grass, dirt, stone and sand in the textured layer, with position-hashed variants", () => {
+    for (const key of ["turf", "loam", "greystone", "dune_sand", "path_gravel", "asphalt"]) {
+      const id = getBlockByKey(key).id;
+      const blocks = new Uint16Array(32 * 32 * 32);
+      blocks[16 | (16 << 5) | (16 << 10)] = id;
+      const mesh = meshChunkGreedy(blocks, new Uint8Array(32 * 32 * 32).fill(15), EMPTY_BOUNDARIES);
+      expect(mesh.indices.length, `${key} is not in the flat layer`).toBe(0);
+      expect(mesh.texIndices.length, key).toBe(36);
+      // Every face carries a negative frame count: "pick one of N looks by block position".
+      const variantCounts = new Set<number>();
+      for (let i = 1; i < mesh.texTiles.length; i += 2) variantCounts.add(mesh.texTiles[i]);
+      expect([...variantCounts].every((v) => v <= -2), key).toBe(true);
+    }
   });
 });
