@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useMinimapStore } from "../state/minimapStore";
-import { getActiveGameLoop } from "../engine/activeGameLoop";
-import { FULL_MAP_HALF_RANGE } from "../engine/FullMapRender";
-import { ensureFullMapRender } from "../engine/fullMapCache";
-import { LANDMARKS } from "../engine/landmarks";
-import type { MiniMapMarkerKind } from "../engine/MiniMap";
+import { getActiveGame } from "../session/activeGame";
+import { FULL_MAP_HALF_RANGE } from "../map/FullMapRender";
+import { ensureFullMapRender } from "../map/fullMapCache";
+import { LANDMARKS } from "../map/landmarks";
+import type { MiniMapMarkerKind } from "../map/MiniMap";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const MARKER_STYLE: Partial<Record<MiniMapMarkerKind, { color: string; radius: number; shape: "circle" | "diamond" }>> = {
@@ -64,7 +64,7 @@ export function FullMap() {
 
     let raf = 0;
     const draw = (): void => {
-      const snapshot = getActiveGameLoop()?.getMapSnapshot();
+      const snapshot = getActiveGame()?.getMapSnapshot();
       if (snapshot) {
         const render = ensureFullMapRender(snapshot.seed);
         const scale = size / (FULL_MAP_HALF_RANGE * 2);

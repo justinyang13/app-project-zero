@@ -2,6 +2,7 @@
 // only ever receives a throttled, read-only projection of GameLoop/World
 // state — it is never the primary store for simulation data.
 import { create } from "zustand";
+import type { MountHint } from "../core/mountHint";
 
 export interface DebugSnapshot {
   fps: number;
@@ -23,26 +24,21 @@ export interface DebugSnapshot {
   timeOfDay: number; // fraction of a day, [0, 1) — whatever Sky is actually rendering right now
 }
 
-// A ready-to-display message rather than an "enter"/"exit" enum — there
-// are now two very different things to mount (a car, the dragon), each
-// wanting its own wording, and a free-text prompt scales to that without
-// the store needing to know what each vehicle is called.
-export type VehiclePrompt = string | null;
-
 interface HudState {
   debugVisible: boolean;
   toggleDebug: () => void;
   debug: DebugSnapshot;
   setDebug: (snapshot: DebugSnapshot) => void;
-  vehiclePrompt: VehiclePrompt;
-  setVehiclePrompt: (prompt: VehiclePrompt) => void;
+  /** What the E key would do right now (null when there is nothing to get on or off) — the UI words it. */
+  mountHint: MountHint | null;
+  setMountHint: (hint: MountHint | null) => void;
 }
 
 export const useHudStore = create<HudState>((set) => ({
   debugVisible: false,
   toggleDebug: () => set((s) => ({ debugVisible: !s.debugVisible })),
-  vehiclePrompt: null,
-  setVehiclePrompt: (vehiclePrompt) => set({ vehiclePrompt }),
+  mountHint: null,
+  setMountHint: (mountHint) => set({ mountHint }),
   debug: {
     fps: 0,
     frameTimeMs: 0,

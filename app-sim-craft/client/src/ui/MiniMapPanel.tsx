@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { useMinimapStore, MINIMAP_ZOOM_LEVELS } from "../state/minimapStore";
-import { getActiveGameLoop } from "../engine/activeGameLoop";
+import { getActiveGame } from "../session/activeGame";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
 const LEGEND: { color: string; label: string }[] = [
@@ -59,7 +59,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           }}
         />
         <button
-          onClick={() => getActiveGameLoop()?.teleportToCastle()}
+          onClick={() => getActiveGame()?.teleportToCastle()}
           title="Back to the castle (H)"
           style={{ ...zoomButtonStyle(false, isTouch ? 132 : HOME_ANGLE, size, buttonSize), fontSize: isTouch ? 13 : 12 }}
         >

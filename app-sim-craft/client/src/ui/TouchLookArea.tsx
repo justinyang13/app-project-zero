@@ -1,6 +1,6 @@
 import { useRef } from "react";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
-import { getActiveGameLoop } from "../engine/activeGameLoop";
+import { getActiveGame } from "../session/activeGame";
 
 /**
  * Transparent full-height overlay across the right ~60% of the screen —
@@ -35,7 +35,7 @@ export function TouchLookArea() {
     const dx = e.clientX - lastPoint.current.x;
     const dy = e.clientY - lastPoint.current.y;
     lastPoint.current = { x: e.clientX, y: e.clientY };
-    getActiveGameLoop()?.applyTouchLookDelta(dx, dy);
+    getActiveGame()?.applyTouchLookDelta(dx, dy);
   }
 
   function handlePointerEnd(e: React.PointerEvent<HTMLDivElement>) {

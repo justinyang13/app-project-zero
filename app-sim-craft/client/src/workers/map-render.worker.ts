@@ -1,7 +1,7 @@
 // Paints bands of the full-screen overview map (engine/FullMapRender.ts)
 // off the main thread, so charting the terrain never stutters the game.
 import * as Comlink from "comlink";
-import { FULL_MAP_HALF_RANGE, FULL_MAP_PIXELS, FULL_MAP_STEP, terrainColor } from "../engine/FullMapRender";
+import { FULL_MAP_HALF_RANGE, FULL_MAP_PIXELS, FULL_MAP_STEP, terrainColor } from "../map/FullMapRender";
 
 const api = {
   /** RGBA pixels for `rows` map rows starting at `startRow`, FULL_MAP_PIXELS wide. */

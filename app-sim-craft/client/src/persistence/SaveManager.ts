@@ -4,7 +4,6 @@
 // chunk eviction — while WorldRepository owns *how* (the on-disk layout).
 // Operates on whichever named world id it's given at load(); see
 // persistence/worldSelection.ts for how that id is resolved.
-import { hashSeedString } from "../worldgen/noise";
 import { chunkKey, type Chunk } from "../core/Chunk";
 import type { PlayerSnapshot } from "../core/playerState";
 import {
@@ -23,10 +22,6 @@ export interface LoadedWorldInfo {
   playerState: PlayerSnapshot | null;
 }
 
-function randomSeed(): number {
-  return hashSeedString(crypto.getRandomValues(new Uint32Array(2)).join("-"));
-}
-
 export class SaveManager {
   private worldId!: string;
   private readonly chunkDiffs = new Map<string, Map<number, number>>();
@@ -36,7 +31,7 @@ export class SaveManager {
 
   async load(worldId: string): Promise<LoadedWorldInfo> {
     this.worldId = worldId;
-    const { record, isNew } = await openWorld(worldId, randomSeed);
+    const { record, isNew } = await openWorld(worldId);
 
     for (const [coordKey, overrides] of await loadChunkOverrides(worldId)) {
       this.chunkDiffs.set(coordKey, new Map(overrides));

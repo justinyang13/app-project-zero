@@ -1,7 +1,8 @@
 import { useRef, useState } from "react";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
-import { getActiveGameLoop } from "../engine/activeGameLoop";
-import { clampToRadius, computeJoystickVector } from "../engine/touchMath";
+import { getActiveGame } from "../session/activeGame";
+import { clampToRadius, computeJoystickVector } from "../input/touchMath";
+import { EDGE_MARGIN, safeBottom } from "./touchLayout";
 
 const PAD_DIAMETER = 120;
 const PAD_RADIUS = PAD_DIAMETER / 2;
@@ -42,7 +43,7 @@ export function TouchJoystick() {
     if (activePointerId.current !== e.pointerId) return;
     activePointerId.current = null;
     setThumbOffset({ x: 0, y: 0 });
-    getActiveGameLoop()?.setTouchMoveVector(0, 0);
+    getActiveGame()?.setTouchMoveVector(0, 0);
   }
 
   function updateFromPoint(clientX: number, clientY: number) {
@@ -50,7 +51,7 @@ export function TouchJoystick() {
     const dy = clientY - center.current.y;
     setThumbOffset(clampToRadius(dx, dy, PAD_RADIUS));
     const vector = computeJoystickVector(dx, dy, PAD_RADIUS);
-    getActiveGameLoop()?.setTouchMoveVector(vector.x, vector.y);
+    getActiveGame()?.setTouchMoveVector(vector.x, vector.y);
   }
 
   return (
@@ -62,7 +63,7 @@ export function TouchJoystick() {
       onPointerCancel={handlePointerEnd}
       style={{
         position: "fixed",
-        bottom: "max(16px, env(safe-area-inset-bottom) + 16px)",
+        bottom: safeBottom(EDGE_MARGIN),
         left: "max(16px, env(safe-area-inset-left) + 16px)",
         width: PAD_DIAMETER,
         height: PAD_DIAMETER,

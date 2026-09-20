@@ -22,7 +22,7 @@ import { PlayerController, type MovementBasis } from "./PlayerController";
 import { RenderView } from "./RenderView";
 import { HudPublisher } from "./HudPublisher";
 import { WorldProps } from "./WorldProps";
-import { collectMapMarkers, landmarkMarkers } from "./mapMarkers";
+import { collectMapMarkers, landmarkMarkers } from "../map/mapMarkers";
 import { InputManager, type GameActions } from "../input/InputManager";
 import type { Creature } from "../entities/Creature";
 import type { Fish } from "../entities/Fish";
@@ -43,7 +43,8 @@ import { Clouds } from "./Clouds";
 import { Sky, dayFactorAt, getSystemTimeOfDay, isNight } from "./Sky";
 import { Flag } from "./Flag";
 import { Torch } from "./Torch";
-import { MiniMap, type MiniMapMarker } from "./MiniMap";
+import { MiniMap, type MiniMapMarker } from "../map/MiniMap";
+import type { MapSnapshot } from "../map/MapSnapshot";
 import { CASTLE_GATE_SPAWN, getStructureAnchors } from "../worldgen/structures";
 import { sampleColumn } from "../worldgen/terrain";
 import { SaveManager } from "../persistence/SaveManager";
@@ -250,7 +251,7 @@ export class GameLoop implements GameActions {
   // ---------------------------------------------------------------------------
   // Actions — what input (keys, mouse, and the touch controls in ui/) asks the
   // game to do. GameActions covers the keyboard/mouse path; the rest are the
-  // touch UI's entry points, reached through engine/activeGameLoop.ts.
+  // touch UI's entry points, reached through session/activeGame.ts.
   // ---------------------------------------------------------------------------
 
   /** The E key's action (hop in/out of a car, mount/dismount an animal or dragon) — the touch prompt button in ui/VehiclePrompt.tsx calls this. */
@@ -327,8 +328,7 @@ export class GameLoop implements GameActions {
     this.input.setTouchJump(held);
   }
 
-  /** What the full-screen map (ui/FullMap.tsx) needs each frame it's open: the seed to sample terrain from, where the player is and which way they face, and the live landmark markers (not the swarm of creatures/fish). */
-  getMapSnapshot(): { seed: number; playerX: number; playerZ: number; playerYaw: number; markers: MiniMapMarker[] } {
+  getMapSnapshot(): MapSnapshot {
     const position = this.controller.player.position;
     return {
       seed: this.world.seed,
@@ -417,7 +417,7 @@ export class GameLoop implements GameActions {
     this.fishPopulation.update(spawnContext, dt);
     this.carPopulation.update(spawnContext, dt);
 
-    this.hud.publishPrompt(this.controller.prompt());
+    this.hud.publishMountHint(this.controller.hint());
     this.build.update(dt, this.input.primaryActionHeld);
 
     this.view.render(this.scene, this.camera);

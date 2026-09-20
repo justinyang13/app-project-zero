@@ -5,6 +5,7 @@
 import type * as THREE from "three";
 import type { World } from "../core/World";
 import { getBlockById } from "../data/blocks";
+import { sameMountHint, type MountHint } from "../core/mountHint";
 import { useHudStore } from "../state/hudStore";
 import { biomeKeyFromIndex, sampleBiomeIndexAt } from "../worldgen/terrain";
 import type { MouseLook } from "./Camera";
@@ -36,17 +37,17 @@ export interface FrameReport {
 export class HudPublisher {
   private readonly sources: HudSources;
   private lastDebugPublish = 0;
-  private lastPrompt: string | null = null;
+  private lastHint: MountHint | null = null;
 
   constructor(sources: HudSources) {
     this.sources = sources;
   }
 
-  /** The E-key hint (or null). Only touches the store when it changes. */
-  publishPrompt(prompt: string | null): void {
-    if (prompt === this.lastPrompt) return;
-    this.lastPrompt = prompt;
-    useHudStore.getState().setVehiclePrompt(prompt);
+  /** What E would do (or null). Only touches the store when it changes. */
+  publishMountHint(hint: MountHint | null): void {
+    if (sameMountHint(hint, this.lastHint)) return;
+    this.lastHint = hint;
+    useHudStore.getState().setMountHint(hint);
   }
 
   publishDebug(report: FrameReport): void {

@@ -5,6 +5,14 @@ import { ToolIcon } from "./ToolIcon";
 import { ModeGlyph } from "./ModeGlyph";
 import { useCompactViewport } from "../hooks/useCompactViewport";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
+import {
+  COMPACT_LEFT_RESERVE,
+  COMPACT_PICKER_ABOVE_TOGGLE,
+  COMPACT_RIGHT_RESERVE,
+  EDGE_MARGIN,
+  PORTRAIT_PICKER_BOTTOM,
+  safeBottom,
+} from "./touchLayout";
 
 const MODES: { mode: BuildMode; label: string; color: string; hotkey: string }[] = [
   { mode: "break", label: "Break", color: "#e0645a", hotkey: "Z" },
@@ -42,8 +50,8 @@ export function Hotbar() {
 
   if (isTouch) {
     // Below the thumb controls' row the block picker is one small button, in the bottom row between the joystick and the action buttons; tapping it opens the tool + block choices above that row.
-    const bottomRowInset = "max(16px, calc(env(safe-area-inset-bottom) + 16px))";
-    const sideSpace = compact ? 152 + 220 : 0;
+    const bottomRowInset = safeBottom(EDGE_MARGIN);
+    const sideSpace = compact ? COMPACT_LEFT_RESERVE + COMPACT_RIGHT_RESERVE : 0;
     // Slots shrink (down from 48px) so the whole row fits the space beside the thumb controls — no scrolling to find a block.
     const slotSize = `min(48px, calc((100vw - ${sideSpace + TOUCH_HOTBAR_CHROME}px) / ${HOTBAR_SLOTS.length}))`;
     const selectedBlock = HOTBAR_SLOTS[selectedIndex];
@@ -56,7 +64,7 @@ export function Hotbar() {
             ...slotButtonStyle(true, `#${selectedBlock.color.toString(16).padStart(6, "0")}`, 44),
             position: "fixed",
             bottom: bottomRowInset,
-            left: compact ? 152 : "max(140px, calc(50% - 56px))",
+            left: compact ? COMPACT_LEFT_RESERVE : "max(140px, calc(50% - 56px))",
             zIndex: 5, // above the touch look-drag overlay, so it stays tappable
             boxShadow: "0 1px 6px rgba(0, 0, 0, 0.5)",
           }}
@@ -74,10 +82,10 @@ export function Hotbar() {
           <div
             style={{
               position: "fixed",
-              left: compact ? 152 : 0,
-              right: compact ? 220 : 0,
+              left: compact ? COMPACT_LEFT_RESERVE : 0,
+              right: compact ? COMPACT_RIGHT_RESERVE : 0,
               // Portrait: above the thumb-control columns. Landscape: right above the toggle.
-              bottom: compact ? "calc(max(16px, env(safe-area-inset-bottom) + 16px) + 52px)" : "max(240px, calc(env(safe-area-inset-bottom) + 240px))",
+              bottom: compact ? `calc(${safeBottom(EDGE_MARGIN)} + ${COMPACT_PICKER_ABOVE_TOGGLE}px)` : safeBottom(PORTRAIT_PICKER_BOTTOM),
               display: "flex",
               justifyContent: "center",
               padding: "0 8px",

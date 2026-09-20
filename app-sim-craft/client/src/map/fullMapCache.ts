@@ -3,7 +3,7 @@
 // workers, kicked off shortly after the game starts (preloadFullMap) so the
 // map is normally ready by the time the player first presses M. Opening the
 // map earlier just joins the render already in flight.
-import { WorkerPool } from "./WorkerPool";
+import { WorkerPool } from "../engine/WorkerPool";
 import type { MapRenderApi } from "../workers/map-render.worker";
 import { FULL_MAP_PIXELS } from "./FullMapRender";
 

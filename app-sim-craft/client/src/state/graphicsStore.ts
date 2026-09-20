@@ -3,7 +3,7 @@
 // can trade looks for frame rate. Persisted per browser in localStorage (a
 // per-viewer convenience, like the touch-controls override).
 import { create } from "zustand";
-import { isTouchDeviceNow } from "../hooks/useIsTouchDevice";
+import { isTouchDeviceNow } from "../platform/touchMode";
 
 export type CloudQuality = "off" | "low" | "high";
 export type GraphicsPreset = "low" | "medium" | "high" | "ultra" | "custom";

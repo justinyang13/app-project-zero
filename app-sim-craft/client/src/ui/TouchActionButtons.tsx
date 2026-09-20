@@ -1,9 +1,11 @@
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
-import { getActiveGameLoop } from "../engine/activeGameLoop";
+import { getActiveGame } from "../session/activeGame";
+import { isMounted } from "../core/mountHint";
 import { useHudStore } from "../state/hudStore";
 import { useHotbarStore } from "../state/hotbarStore";
 import { ModeGlyph } from "./ModeGlyph";
 import { useCompactViewport } from "../hooks/useCompactViewport";
+import { EDGE_MARGIN, safeBottom, safeRight } from "./touchLayout";
 
 // All touch targets are >=44px per the platform accessibility minimum
 // (Apple HIG / WCAG 2.5.5) — see each button's width/height below.
@@ -68,7 +70,7 @@ export function TouchActionButtons() {
   const compact = useCompactViewport();
   const flying = useHudStore((s) => s.debug.flying);
   const turbo = useHudStore((s) => s.debug.turbo);
-  const inVehicle = useHudStore((s) => s.vehiclePrompt?.includes("exit") === true || s.vehiclePrompt?.includes("dismount") === true);
+  const inVehicle = useHudStore((s) => isMounted(s.mountHint));
   const mode = useHotbarStore((s) => s.mode);
   const cycleMode = useHotbarStore((s) => s.cycleMode);
 
@@ -77,8 +79,8 @@ export function TouchActionButtons() {
   const layout = compact ? LANDSCAPE : PORTRAIT;
   const at = (spot: Spot): React.CSSProperties => ({
     position: "fixed",
-    bottom: `max(${16 + spot.bottom}px, calc(env(safe-area-inset-bottom) + ${16 + spot.bottom}px))`,
-    right: `max(${16 + spot.right}px, calc(env(safe-area-inset-right) + ${16 + spot.right}px))`,
+    bottom: safeBottom(EDGE_MARGIN + spot.bottom),
+    right: safeRight(EDGE_MARGIN + spot.right),
   });
 
   return (
@@ -89,12 +91,12 @@ export function TouchActionButtons() {
       <button
         onPointerDown={(e) => {
           e.preventDefault();
-          getActiveGameLoop()?.setPrimaryActionHeld(true);
-          getActiveGameLoop()?.triggerPrimaryAction();
+          getActiveGame()?.setPrimaryActionHeld(true);
+          getActiveGame()?.triggerPrimaryAction();
         }}
-        onPointerUp={() => getActiveGameLoop()?.setPrimaryActionHeld(false)}
-        onPointerCancel={() => getActiveGameLoop()?.setPrimaryActionHeld(false)}
-        onPointerLeave={() => getActiveGameLoop()?.setPrimaryActionHeld(false)}
+        onPointerUp={() => getActiveGame()?.setPrimaryActionHeld(false)}
+        onPointerCancel={() => getActiveGame()?.setPrimaryActionHeld(false)}
+        onPointerLeave={() => getActiveGame()?.setPrimaryActionHeld(false)}
         style={{ ...BUTTON_STYLE_BASE, ...at(layout.primary), width: 64, height: 64, fontSize: 26 }}
         title={`${mode} (hold to repeat)`}
       >
@@ -105,11 +107,11 @@ export function TouchActionButtons() {
       <button
         onPointerDown={(e) => {
           e.preventDefault();
-          getActiveGameLoop()?.setTouchJump(true);
+          getActiveGame()?.setTouchJump(true);
         }}
-        onPointerUp={() => getActiveGameLoop()?.setTouchJump(false)}
-        onPointerCancel={() => getActiveGameLoop()?.setTouchJump(false)}
-        onPointerLeave={() => getActiveGameLoop()?.setTouchJump(false)}
+        onPointerUp={() => getActiveGame()?.setTouchJump(false)}
+        onPointerCancel={() => getActiveGame()?.setTouchJump(false)}
+        onPointerLeave={() => getActiveGame()?.setTouchJump(false)}
         style={{ ...BUTTON_STYLE_BASE, ...at(layout.jump), width: 56, height: 56, fontSize: 22 }}
         title="Jump"
       >
@@ -132,7 +134,7 @@ export function TouchActionButtons() {
       <button
         onPointerDown={(e) => {
           e.preventDefault();
-          getActiveGameLoop()?.toggleViewMode();
+          getActiveGame()?.toggleViewMode();
         }}
         style={{ ...BUTTON_STYLE_BASE, ...at(layout.view), width: 44, height: 44, fontSize: 18 }}
         title="Switch first/third-person view (F5)"
@@ -144,7 +146,7 @@ export function TouchActionButtons() {
       <button
         onPointerDown={(e) => {
           e.preventDefault();
-          getActiveGameLoop()?.toggleFlying();
+          getActiveGame()?.toggleFlying();
         }}
         style={{
           ...BUTTON_STYLE_BASE,

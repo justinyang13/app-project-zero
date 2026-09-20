@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { getTouchOverride, isTouchDeviceNow, resolveTouchMode, setTouchOverride } from "./useIsTouchDevice";
+import { getTouchOverride, isTouchDeviceNow, resolveTouchMode, setTouchOverride } from "./touchMode";
 
 class MemoryStorage implements Storage {
   private store = new Map<string, string>();

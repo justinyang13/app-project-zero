@@ -1,13 +1,15 @@
 import { useHudStore } from "../state/hudStore";
+import { describeMountHint } from "./mountHintText";
+import { COMPACT_LEFT_RESERVE, COMPACT_PROMPT_BOTTOM, COMPACT_RIGHT_RESERVE, PORTRAIT_PROMPT_BOTTOM, safeBottom } from "./touchLayout";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 import { useCompactViewport } from "../hooks/useCompactViewport";
-import { getActiveGameLoop } from "../engine/activeGameLoop";
+import { getActiveGame } from "../session/activeGame";
 
 export function VehiclePrompt() {
-  const prompt = useHudStore((s) => s.vehiclePrompt);
+  const hint = useHudStore((s) => s.mountHint);
   const isTouch = useIsTouchDevice();
   const compact = useCompactViewport();
-  if (!prompt) return null;
+  if (!hint) return null;
 
   if (isTouch) {
     // There's no E key on a phone: the prompt itself becomes the button that does what E does (hop in/out of a car, mount/dismount).
@@ -15,9 +17,9 @@ export function VehiclePrompt() {
       <div
         style={{
           position: "fixed",
-          left: compact ? 152 : 0,
-          right: compact ? 220 : 0,
-          bottom: compact ? 74 : "max(310px, calc(env(safe-area-inset-bottom) + 310px))",
+          left: compact ? COMPACT_LEFT_RESERVE : 0,
+          right: compact ? COMPACT_RIGHT_RESERVE : 0,
+          bottom: compact ? COMPACT_PROMPT_BOTTOM : safeBottom(PORTRAIT_PROMPT_BOTTOM),
           display: "flex",
           justifyContent: "center",
           pointerEvents: "none",
@@ -27,7 +29,7 @@ export function VehiclePrompt() {
         <button
           onPointerDown={(e) => {
             e.preventDefault();
-            getActiveGameLoop()?.interact();
+            getActiveGame()?.interact();
           }}
           style={{
             pointerEvents: "auto",
@@ -44,7 +46,7 @@ export function VehiclePrompt() {
             touchAction: "manipulation",
           }}
         >
-          {prompt.replace(/^Press E to /, "Tap to ")}
+          {describeMountHint(hint, "tap")}
         </button>
       </div>
     );
@@ -68,7 +70,7 @@ export function VehiclePrompt() {
         whiteSpace: "nowrap",
       }}
     >
-      {prompt}
+      {describeMountHint(hint, "key")}
     </div>
   );
 }

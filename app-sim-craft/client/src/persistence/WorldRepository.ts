@@ -5,6 +5,7 @@
 // same chunk coordinate) and player state under the world id. SaveManager
 // drives it during play; worldExport, worldSelection and worldNames build on it.
 import type { PlayerSnapshot } from "../core/playerState";
+import { hashSeedString } from "../worldgen/noise";
 import { openSimCraftDB, type PlayerStateRecord, type WorldRecord } from "./db";
 
 export const SCHEMA_VERSION = 1;
@@ -43,8 +44,12 @@ export async function getWorld(worldId: string): Promise<WorldRecord | undefined
   return db.get("worlds", worldId);
 }
 
-/** Loads a world's record, creating it (with a fresh seed) if it doesn't exist, and stamps it as just played. */
-export async function openWorld(worldId: string, newSeed: () => number): Promise<{ record: WorldRecord; isNew: boolean }> {
+function newWorldSeed(): number {
+  return hashSeedString(crypto.getRandomValues(new Uint32Array(2)).join("-"));
+}
+
+/** Loads a world's record, creating it (with a fresh random seed) if it doesn't exist, and stamps it as just played. */
+export async function openWorld(worldId: string): Promise<{ record: WorldRecord; isNew: boolean }> {
   const db = await openSimCraftDB();
   let record = await db.get("worlds", worldId);
   const isNew = !record;
@@ -52,7 +57,7 @@ export async function openWorld(worldId: string, newSeed: () => number): Promise
     record = {
       id: worldId,
       name: worldId,
-      seed: newSeed(),
+      seed: newWorldSeed(),
       worldType: "standard",
       createdAt: Date.now(),
       lastPlayedAt: Date.now(),

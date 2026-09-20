@@ -10,6 +10,7 @@ import { findSurfaceY } from "../core/worldQueries";
 import { Player, type PlayerInput } from "./Player";
 import type { Rideable, RideInput } from "../entities/Rideable";
 import type { Vec3 } from "../entities/Entity";
+import type { MountHint } from "../core/mountHint";
 
 /** Which way is "forward" and "right" for this step's movement (already yaw-only when walking, the full look direction when flying). */
 export interface MovementBasis {
@@ -119,13 +120,13 @@ export class PlayerController {
     if (target) this.mount(target);
   }
 
-  /** The E-key hint shown on screen (and as the touch button's label): how to get off, or what's in reach. */
-  prompt(): string | null {
+  /** What E would do right now: get off whatever the player is on, or climb onto what's in reach. */
+  hint(): MountHint | null {
     const mount = this.mounted;
-    if (mount) return mount.mountKind === "vehicle" ? "Press E to exit vehicle" : "Press E to dismount";
+    if (mount) return { kind: mount.mountKind === "vehicle" ? "exit-vehicle" : "dismount" };
     const nearby = this.findNearbyMount();
     if (!nearby) return null;
-    return nearby.mountKind === "vehicle" ? "Press E to drive" : `Press E to ride the ${nearby.rideName}`;
+    return nearby.mountKind === "vehicle" ? { kind: "drive" } : { kind: "ride", name: nearby.rideName };
   }
 
   /** Puts the player at `to` and holds them there until the ground under (to.x, to.z) has streamed in, dropping whatever they were riding. */

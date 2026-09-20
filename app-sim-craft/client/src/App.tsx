@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { GameLoop } from "./engine/GameLoop";
-import { setActiveGameLoop } from "./engine/activeGameLoop";
-import { preloadFullMap } from "./engine/fullMapCache";
+import { setActiveGame } from "./session/activeGame";
+import { preloadFullMap } from "./map/fullMapCache";
 import { useGraphicsStore } from "./state/graphicsStore";
 import { DebugOverlay } from "./ui/DebugOverlay";
 import { Hotbar } from "./ui/Hotbar";
@@ -62,7 +62,7 @@ export function App() {
         return;
       }
       loop = created;
-      setActiveGameLoop(created);
+      setActiveGame(created);
       loop.start();
       cancelPreload = preloadFullMap(created.getMapSnapshot().seed);
     });
@@ -70,7 +70,7 @@ export function App() {
     return () => {
       cancelled = true;
       cancelPreload?.();
-      setActiveGameLoop(null);
+      setActiveGame(null);
       loop?.dispose();
     };
   }, [readyWorldId]);

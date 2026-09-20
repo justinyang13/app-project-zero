@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getTouchOverride, setTouchOverride, type TouchOverride } from "../hooks/useIsTouchDevice";
+import { getTouchOverride, setTouchOverride, type TouchOverride } from "../platform/touchMode";
 
 const CYCLE: TouchOverride[] = [null, "touch", "desktop"];
 
