@@ -1,9 +1,9 @@
 // Chunk streaming: requests generation/meshing for columns near the
 // player, evicts far ones, per spec/01-tech-stack-architecture.md §5 and
-// spec/15-performance.md §3. Owns the worker pools and the Three.js mesh
-// per loaded chunk.
-import * as THREE from "three";
-import { CHUNK_SIZE, Chunk, chunkKey, type ChunkCoord } from "./Chunk";
+// spec/15-performance.md §3. Owns the worker pools; the Three.js meshes for
+// each loaded chunk live in rendering/ChunkRenderer.ts.
+import type * as THREE from "three";
+import { CHUNK_SIZE, Chunk, chunkKey, localIndex, type ChunkCoord } from "./Chunk";
 import { World } from "./World";
 import { relightAfterEdit } from "./Lighting";
 import { WorkerPool, defaultPoolSize } from "./WorkerPool";
@@ -11,8 +11,7 @@ import type { TerrainGenApi, GeneratedChunkData } from "../workers/terrain-gen.w
 import type { MeshApi } from "../workers/mesh.worker";
 import type { BoundaryLayers } from "../rendering/greedyMesh";
 import type { SaveManager } from "../persistence/SaveManager";
-import { getLeafTexture } from "../rendering/leafTexture";
-import { getTexturedMaterial } from "../rendering/texturedMaterial";
+import { ChunkRenderer } from "../rendering/ChunkRenderer";
 
 // Measured against spec/15-performance.md §1's budget (~10ms of the 16.6ms
 // frame for render+sim) with the debug overlay's frame-time readout: at this
@@ -22,70 +21,45 @@ import { getTexturedMaterial } from "../rendering/texturedMaterial";
 export const RENDER_DISTANCE_COLUMNS = 10; // chunk columns in each horizontal direction
 const EVICT_MARGIN = 1;
 
-const material = new THREE.MeshLambertMaterial({ vertexColors: true });
-// Water gets its own mesh/material per chunk (see rendering/greedyMesh.ts's
-// waterPositions/etc.) rather than baking transparency into the single
-// opaque terrain material above — depthWrite off avoids z-fighting against
-// the lakebed/walls it's blended over, and DoubleSide keeps the underside
-// of the surface visible while swimming beneath it.
-const waterMaterial = new THREE.MeshLambertMaterial({
-  vertexColors: true,
-  transparent: true,
-  opacity: 0.68,
-  depthWrite: false,
-  side: THREE.DoubleSide,
-});
-// Foliage (leaves) also gets its own mesh/material — an alpha-cutout
-// texture (see rendering/leafTexture.ts) instead of a flat solid color,
-// tinted per leaf variant by vertexColors same as everything else.
-// alphaTest (not `transparent`) gives crisp cut-out edges with no
-// transparency sort order to get wrong, and DoubleSide so a leaf face
-// doesn't vanish when looked at from inside the canopy.
-const foliageMaterial = new THREE.MeshLambertMaterial({
-  vertexColors: true,
-  map: getLeafTexture(),
-  alphaTest: 0.5,
-  side: THREE.DoubleSide,
-});
-
 function columnKey(cx: number, cz: number): string {
   return `${cx},${cz}`;
 }
 
 function extractLayer(chunk: Chunk, axis: "x" | "y" | "z", value: number): Uint16Array {
   const out = new Uint16Array(CHUNK_SIZE * CHUNK_SIZE);
-  if (axis === "x") {
-    for (let y = 0; y < CHUNK_SIZE; y++)
-      for (let z = 0; z < CHUNK_SIZE; z++) out[y * CHUNK_SIZE + z] = chunk.blocks[value | (y << 5) | (z << 10)];
-  } else if (axis === "y") {
-    for (let x = 0; x < CHUNK_SIZE; x++)
-      for (let z = 0; z < CHUNK_SIZE; z++) out[x * CHUNK_SIZE + z] = chunk.blocks[x | (value << 5) | (z << 10)];
-  } else {
-    for (let x = 0; x < CHUNK_SIZE; x++)
-      for (let y = 0; y < CHUNK_SIZE; y++) out[x * CHUNK_SIZE + y] = chunk.blocks[x | (y << 5) | (value << 10)];
+  for (let a = 0; a < CHUNK_SIZE; a++) {
+    for (let b = 0; b < CHUNK_SIZE; b++) {
+      const index = axis === "x" ? localIndex(value, a, b) : axis === "y" ? localIndex(a, value, b) : localIndex(a, b, value);
+      out[a * CHUNK_SIZE + b] = chunk.blocks[index];
+    }
   }
   return out;
 }
 
+/** One in-flight meshing request for a chunk. */
+interface MeshJob {
+  chunk: Chunk;
+  /** Set once a worker has taken the chunk's data — from then on a change needs a second pass. */
+  dispatched: boolean;
+  /** The chunk changed after `dispatched`, so this job's result is already out of date. */
+  remesh: boolean;
+}
+
 export class ChunkManager {
   private readonly world: World;
-  private readonly scene: THREE.Scene;
   private readonly saveManager: SaveManager;
   private readonly terrainPool: WorkerPool<TerrainGenApi>;
   private readonly meshPool: WorkerPool<MeshApi>;
-  private readonly meshes = new Map<string, THREE.Mesh>();
-  private readonly waterMeshes = new Map<string, THREE.Mesh>();
-  private readonly foliageMeshes = new Map<string, THREE.Mesh>();
-  private readonly texturedMeshes = new Map<string, THREE.Mesh>();
-  private readonly loadedColumns = new Set<string>();
+  private readonly renderer: ChunkRenderer;
+  private readonly loadedColumns = new Map<string, Chunk[]>();
   private readonly pendingColumns = new Set<string>();
-  private readonly pendingMeshes = new Set<string>();
+  private readonly pendingMeshes = new Map<string, MeshJob>();
   private lastPlayerColumn: { cx: number; cz: number } | null = null;
   private renderDistanceColumns: number;
 
   constructor(world: World, scene: THREE.Scene, saveManager: SaveManager, renderDistanceColumns: number = RENDER_DISTANCE_COLUMNS) {
     this.world = world;
-    this.scene = scene;
+    this.renderer = new ChunkRenderer(scene);
     this.saveManager = saveManager;
     this.renderDistanceColumns = renderDistanceColumns;
     this.terrainPool = new WorkerPool<TerrainGenApi>(
@@ -137,7 +111,7 @@ export class ChunkManager {
     }
 
     const evictDistance = this.renderDistanceColumns + EVICT_MARGIN;
-    for (const key of this.loadedColumns) {
+    for (const key of this.loadedColumns.keys()) {
       const [lcx, lcz] = key.split(",").map(Number);
       if (Math.abs(lcx - cx) > evictDistance || Math.abs(lcz - cz) > evictDistance) {
         this.evictColumn(lcx, lcz);
@@ -166,11 +140,11 @@ export class ChunkManager {
       const diff = this.saveManager.getChunkDiff(chunkKey(chunk.coord));
       if (!diff) continue;
       chunk.modifiedFromGenerated = true;
-      for (const [localIndex, blockId] of diff) chunk.blocks[localIndex] = blockId;
-      for (const [localIndex] of diff) {
-        const x = localIndex & 31;
-        const y = (localIndex >> 5) & 31;
-        const z = (localIndex >> 10) & 31;
+      for (const [index, blockId] of diff) chunk.blocks[index] = blockId;
+      for (const [index] of diff) {
+        const x = index & 31;
+        const y = (index >> 5) & 31;
+        const z = (index >> 10) & 31;
         relightAfterEdit(
           this.world,
           chunk.coord.cx * CHUNK_SIZE + x,
@@ -181,7 +155,7 @@ export class ChunkManager {
     }
 
     this.pendingColumns.delete(key);
-    this.loadedColumns.add(key);
+    this.loadedColumns.set(key, chunks);
 
     for (const chunk of chunks) {
       this.scheduleMesh(chunk.coord);
@@ -191,39 +165,21 @@ export class ChunkManager {
 
   private evictColumn(cx: number, cz: number): void {
     const key = columnKey(cx, cz);
+    const chunks = this.loadedColumns.get(key);
     this.loadedColumns.delete(key);
+    if (!chunks) return;
 
-    for (const [chunkKeyStr, chunk] of this.world.chunks) {
-      if (chunk.coord.cx !== cx || chunk.coord.cz !== cz) continue;
-      const mesh = this.meshes.get(chunkKeyStr);
-      if (mesh) {
-        this.scene.remove(mesh);
-        mesh.geometry.dispose();
-        this.meshes.delete(chunkKeyStr);
-      }
-      const waterMesh = this.waterMeshes.get(chunkKeyStr);
-      if (waterMesh) {
-        this.scene.remove(waterMesh);
-        waterMesh.geometry.dispose();
-        this.waterMeshes.delete(chunkKeyStr);
-      }
-      const foliageMesh = this.foliageMeshes.get(chunkKeyStr);
-      if (foliageMesh) {
-        this.scene.remove(foliageMesh);
-        foliageMesh.geometry.dispose();
-        this.foliageMeshes.delete(chunkKeyStr);
-      }
-      const texturedMesh = this.texturedMeshes.get(chunkKeyStr);
-      if (texturedMesh) {
-        this.scene.remove(texturedMesh);
-        texturedMesh.geometry.dispose();
-        this.texturedMeshes.delete(chunkKeyStr);
-      }
+    for (const chunk of chunks) {
+      const ck = chunkKey(chunk.coord);
+      // Dropping the job also makes any in-flight mesh for this chunk discard its result when it lands.
+      this.pendingMeshes.delete(ck);
+      this.renderer.remove(ck);
       if (chunk.modifiedFromGenerated) void this.saveManager.saveChunkNow(chunk);
-      this.world.chunks.delete(chunkKeyStr);
+      this.world.chunks.delete(ck);
     }
   }
 
+  /** Re-meshes all six face-adjacent neighbours — needed when a chunk first appears, since their border faces were culled against nothing. */
   scheduleNeighborRemesh(coord: ChunkCoord): void {
     const neighbors: ChunkCoord[] = [
       { cx: coord.cx + 1, cy: coord.cy, cz: coord.cz },
@@ -238,6 +194,19 @@ export class ChunkManager {
     }
   }
 
+  /** Only the neighbours an edit at chunk-local (lx, ly, lz) can affect: those across a border the edited voxel touches. */
+  private scheduleBorderNeighborRemesh(coord: ChunkCoord, lx: number, ly: number, lz: number): void {
+    const last = CHUNK_SIZE - 1;
+    const touching: ChunkCoord[] = [];
+    if (lx === 0) touching.push({ ...coord, cx: coord.cx - 1 });
+    if (lx === last) touching.push({ ...coord, cx: coord.cx + 1 });
+    if (ly === 0) touching.push({ ...coord, cy: coord.cy - 1 });
+    if (ly === last) touching.push({ ...coord, cy: coord.cy + 1 });
+    if (lz === 0) touching.push({ ...coord, cz: coord.cz - 1 });
+    if (lz === last) touching.push({ ...coord, cz: coord.cz + 1 });
+    for (const n of touching) this.scheduleMesh(n);
+  }
+
   /** Places/breaks one block: writes it, persists the diff, re-lights, and re-meshes every affected chunk. */
   applyEdit(wx: number, wy: number, wz: number, blockId: number): boolean {
     const chunk = this.world.setBlock(wx, wy, wz, blockId);
@@ -246,37 +215,44 @@ export class ChunkManager {
     const lx = wx - chunk.coord.cx * CHUNK_SIZE;
     const ly = wy - chunk.coord.cy * CHUNK_SIZE;
     const lz = wz - chunk.coord.cz * CHUNK_SIZE;
-    this.saveManager.recordEdit(chunkKey(chunk.coord), lx | (ly << 5) | (lz << 10), blockId);
+    this.saveManager.recordEdit(chunkKey(chunk.coord), localIndex(lx, ly, lz), blockId);
 
     const touched = relightAfterEdit(this.world, wx, wy, wz);
     this.scheduleMesh(chunk.coord);
-    this.scheduleNeighborRemesh(chunk.coord);
+    this.scheduleBorderNeighborRemesh(chunk.coord, lx, ly, lz);
     for (const coord of touched) this.scheduleMesh(coord);
     return true;
   }
 
-  /** Re-meshes one chunk (used both for initial load and after an edit). */
+  /**
+   * Re-meshes one chunk (used both for initial load and after an edit). A
+   * request for a chunk whose job hasn't reached a worker yet is a no-op —
+   * the worker will read the chunk's latest data when it starts. One that
+   * arrives after that is remembered and re-run when the current pass lands,
+   * so an edit made mid-mesh is never lost.
+   */
   scheduleMesh(coord: ChunkCoord): void {
     const key = chunkKey(coord);
     const chunk = this.world.getChunk(coord);
     if (!chunk) return;
-    if (this.pendingMeshes.has(key)) return;
-    this.pendingMeshes.add(key);
-    void this.meshOne(chunk);
+    const existing = this.pendingMeshes.get(key);
+    if (existing && existing.chunk === chunk) {
+      if (existing.dispatched) existing.remesh = true;
+      return;
+    }
+    const job: MeshJob = { chunk, dispatched: false, remesh: false };
+    this.pendingMeshes.set(key, job);
+    void this.runMeshJob(key, job);
   }
 
-  private async meshOne(chunk: Chunk): Promise<void> {
-    const key = chunkKey(chunk.coord);
-    const { cx, cy, cz } = chunk.coord;
-
+  private boundaryLayers({ cx, cy, cz }: ChunkCoord): BoundaryLayers {
     const px = this.world.getChunk({ cx: cx + 1, cy, cz });
     const nx = this.world.getChunk({ cx: cx - 1, cy, cz });
     const py = this.world.getChunk({ cx, cy: cy + 1, cz });
     const ny = this.world.getChunk({ cx, cy: cy - 1, cz });
     const pz = this.world.getChunk({ cx, cy, cz: cz + 1 });
     const nz = this.world.getChunk({ cx, cy, cz: cz - 1 });
-
-    const boundaries: BoundaryLayers = {
+    return {
       px: px ? extractLayer(px, "x", 0) : null,
       nx: nx ? extractLayer(nx, "x", CHUNK_SIZE - 1) : null,
       py: py ? extractLayer(py, "y", 0) : null,
@@ -284,111 +260,37 @@ export class ChunkManager {
       pz: pz ? extractLayer(pz, "z", 0) : null,
       nz: nz ? extractLayer(nz, "z", CHUNK_SIZE - 1) : null,
     };
+  }
 
-    const result = await this.meshPool.run((api) => api.meshChunk(chunk.blocks, chunk.skyLight, boundaries, cx, cy, cz));
+  private async runMeshJob(key: string, job: MeshJob): Promise<void> {
+    const { chunk } = job;
+    const { cx, cy, cz } = chunk.coord;
+
+    let result;
+    try {
+      result = await this.meshPool.run((api) => {
+        // Read at dispatch, not when the job was queued, so a long queue never meshes stale data.
+        job.dispatched = true;
+        return api.meshChunk(chunk.blocks, chunk.skyLight, this.boundaryLayers(chunk.coord), cx, cy, cz);
+      });
+    } catch (err) {
+      if (this.pendingMeshes.get(key) === job) this.pendingMeshes.delete(key);
+      console.error(`Meshing chunk ${key} failed`, err);
+      return;
+    }
+
+    // Evicted (or evicted and reloaded as a new Chunk) while the worker was busy: nothing to show.
+    if (this.pendingMeshes.get(key) !== job) return;
     this.pendingMeshes.delete(key);
+
     chunk.dirty = false;
-
-    const existing = this.meshes.get(key);
-    if (existing) {
-      this.scene.remove(existing);
-      existing.geometry.dispose();
-      this.meshes.delete(key);
-    }
-    const existingWater = this.waterMeshes.get(key);
-    if (existingWater) {
-      this.scene.remove(existingWater);
-      existingWater.geometry.dispose();
-      this.waterMeshes.delete(key);
-    }
-    const existingFoliage = this.foliageMeshes.get(key);
-    if (existingFoliage) {
-      this.scene.remove(existingFoliage);
-      existingFoliage.geometry.dispose();
-      this.foliageMeshes.delete(key);
-    }
-    const existingTextured = this.texturedMeshes.get(key);
-    if (existingTextured) {
-      this.scene.remove(existingTextured);
-      existingTextured.geometry.dispose();
-      this.texturedMeshes.delete(key);
-    }
-
-    if (result.indices.length > 0) {
-      const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.BufferAttribute(result.positions, 3));
-      geometry.setAttribute("normal", new THREE.BufferAttribute(result.normals, 3));
-      geometry.setAttribute("color", new THREE.BufferAttribute(result.colors, 3));
-      geometry.setIndex(new THREE.BufferAttribute(result.indices, 1));
-
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
-      this.scene.add(mesh);
-      this.meshes.set(key, mesh);
-    }
-
-    if (result.waterIndices.length > 0) {
-      const waterGeometry = new THREE.BufferGeometry();
-      waterGeometry.setAttribute("position", new THREE.BufferAttribute(result.waterPositions, 3));
-      waterGeometry.setAttribute("normal", new THREE.BufferAttribute(result.waterNormals, 3));
-      waterGeometry.setAttribute("color", new THREE.BufferAttribute(result.waterColors, 3));
-      waterGeometry.setIndex(new THREE.BufferAttribute(result.waterIndices, 1));
-
-      const waterMesh = new THREE.Mesh(waterGeometry, waterMaterial);
-      waterMesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
-      this.scene.add(waterMesh);
-      this.waterMeshes.set(key, waterMesh);
-    }
-
-    if (result.foliageIndices.length > 0) {
-      const foliageGeometry = new THREE.BufferGeometry();
-      foliageGeometry.setAttribute("position", new THREE.BufferAttribute(result.foliagePositions, 3));
-      foliageGeometry.setAttribute("normal", new THREE.BufferAttribute(result.foliageNormals, 3));
-      foliageGeometry.setAttribute("color", new THREE.BufferAttribute(result.foliageColors, 3));
-      foliageGeometry.setAttribute("uv", new THREE.BufferAttribute(result.foliageUvs, 2));
-      foliageGeometry.setIndex(new THREE.BufferAttribute(result.foliageIndices, 1));
-
-      const foliageMesh = new THREE.Mesh(foliageGeometry, foliageMaterial);
-      foliageMesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
-      this.scene.add(foliageMesh);
-      this.foliageMeshes.set(key, foliageMesh);
-    }
-
-    if (result.texIndices.length > 0) {
-      const texGeometry = new THREE.BufferGeometry();
-      texGeometry.setAttribute("position", new THREE.BufferAttribute(result.texPositions, 3));
-      texGeometry.setAttribute("normal", new THREE.BufferAttribute(result.texNormals, 3));
-      texGeometry.setAttribute("color", new THREE.BufferAttribute(result.texColors, 3));
-      texGeometry.setAttribute("tuv", new THREE.BufferAttribute(result.texUvs, 2));
-      texGeometry.setAttribute("tile", new THREE.BufferAttribute(result.texTiles, 2));
-      texGeometry.setAttribute("glow", new THREE.BufferAttribute(result.texGlow, 3));
-      texGeometry.setIndex(new THREE.BufferAttribute(result.texIndices, 1));
-
-      const texMesh = new THREE.Mesh(texGeometry, getTexturedMaterial());
-      texMesh.position.set(cx * CHUNK_SIZE, cy * CHUNK_SIZE, cz * CHUNK_SIZE);
-      this.scene.add(texMesh);
-      this.texturedMeshes.set(key, texMesh);
-    }
+    this.renderer.update(key, chunk.coord, result);
+    if (job.remesh) this.scheduleMesh(chunk.coord);
   }
 
   dispose(): void {
     this.terrainPool.dispose();
     this.meshPool.dispose();
-    for (const mesh of this.meshes.values()) {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-    }
-    for (const mesh of this.waterMeshes.values()) {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-    }
-    for (const mesh of this.foliageMeshes.values()) {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-    }
-    for (const mesh of this.texturedMeshes.values()) {
-      this.scene.remove(mesh);
-      mesh.geometry.dispose();
-    }
+    this.renderer.dispose();
   }
 }

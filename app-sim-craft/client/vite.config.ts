@@ -15,5 +15,8 @@ export default defineConfig(({ command }) => ({
     // — jsdom will come back once there are React component tests.
     environment: "node",
     globals: true,
+    // Worldgen tests generate whole columns of terrain; under a loaded CI
+    // runner (or vitest's own parallel workers) that can pass the 5s default.
+    testTimeout: 30_000,
   },
 }));

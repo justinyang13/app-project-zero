@@ -64,6 +64,11 @@ export interface MeshedChunk {
   texIndices: Uint32Array;
 }
 
+/** Every typed array in a meshed chunk's buffers, for handing across a worker boundary without copying. */
+export function meshTransferables(mesh: MeshedChunk): ArrayBuffer[] {
+  return Object.values(mesh).map((array: Float32Array | Uint32Array) => array.buffer as ArrayBuffer);
+}
+
 /** Block-light level (0-15) at a chunk-local coordinate — may lie outside 0..31 (a neighboring chunk). Supplied by the caller (workers/mesh.worker.ts) so this module stays free of castle-specific knowledge. */
 export type BlockLightSampler = (lx: number, ly: number, lz: number) => number;
 
