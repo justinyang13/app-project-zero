@@ -5,13 +5,15 @@
 // of one generic failure.
 import type { WorldExportBlob } from "../persistence/worldExport";
 
-// Hard-coded to the owner's own Tailscale-only server — this app has no
+// Defaults to the owner's own Tailscale-only server — this app has no
 // login/registration system, and the server is reachable only from this
-// tailnet, so there's nothing meaningful for a player to configure here.
-// Not a secret (Tailscale itself is the access control), just not a
-// player-facing setting. Runs on the iMac now (moved off the Mac Mini,
-// which was 100.64.70.111).
-export const SYNC_SERVER_URL = "http://100.97.31.56:4177";
+// tailnet, so there's nothing meaningful for a player to configure. Not a
+// secret (Tailscale itself is the access control), just not a player-facing
+// setting. Override at build/dev time with VITE_SYNC_SERVER_URL (see
+// .env.example) to point at a different server, e.g. a local one.
+const DEFAULT_SYNC_SERVER_URL = "http://100.97.31.56:4177";
+
+export const SYNC_SERVER_URL: string = import.meta.env.VITE_SYNC_SERVER_URL || DEFAULT_SYNC_SERVER_URL;
 
 export type SyncErrorKind = "network" | "not-found" | "too-large" | "invalid-name" | "server";
 

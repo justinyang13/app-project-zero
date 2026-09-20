@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { Player, type PlayerInput } from "./Player";
+import { Player } from "./Player";
+import type { PlayerInput } from "../core/controls";
 import type { World } from "../core/World";
 
 /** A flat world: solid ground up to and including y = 63, air above. */

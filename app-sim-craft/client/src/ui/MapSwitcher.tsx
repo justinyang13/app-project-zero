@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { useWorldStore } from "../state/worldStore";
-import { listWorlds } from "../persistence/WorldRepository";
 import {
   INVALID_MAP_NAME_ERROR,
   createWorld,
+  listOtherWorlds,
   loadWorldFromCloud,
   renameCurrentWorld,
   resolveMapName,
@@ -12,7 +12,6 @@ import {
   type CloudPrompts,
   type FlowResult,
 } from "../session/worldSession";
-import type { WorldRecord } from "../persistence/db";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 import { HUD_ACTION_BLUE, HUD_NEUTRAL, hudButton, hudInput, hudPanel } from "./styles";
 
@@ -26,7 +25,7 @@ export function MapSwitcher({ embedded = false }: { embedded?: boolean }) {
   const isTouch = useIsTouchDevice();
   const worldId = useWorldStore((s) => s.worldId);
   const [open, setOpen] = useState(false);
-  const [others, setOthers] = useState<WorldRecord[]>([]);
+  const [others, setOthers] = useState<{ id: string }[]>([]);
   // Shared by Rename/Save/Load — Rename applies it to the current map's
   // own name; Save/Load use it as the cloud (and, for Load, local) map
   // name, defaulting to the current map when left blank.
@@ -38,7 +37,7 @@ export function MapSwitcher({ embedded = false }: { embedded?: boolean }) {
 
   useEffect(() => {
     if (!open) return;
-    void listWorlds().then((worlds) => setOthers(worlds.filter((w) => w.id !== worldId)));
+    void listOtherWorlds(worldId).then(setOthers);
   }, [open, worldId]);
 
   /** Runs one flow from the service: shows it as busy, then surfaces how it ended. A flow that reloads the page stays busy — the page is going away. */

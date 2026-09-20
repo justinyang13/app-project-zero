@@ -8,13 +8,19 @@
 // reload already re-runs the exact same load path a normal launch uses.
 // flushAll() + dispose() first guarantees nothing writes under the old id after
 // rows for the new one start moving.
-import { slugify } from "../persistence/slug";
-import { openWorld, renameWorld } from "../persistence/WorldRepository";
+import { slugify } from "../core/slug";
+import { listWorlds, openWorld, renameWorld } from "../persistence/WorldRepository";
 import { setActiveWorldId } from "../persistence/worldSelection";
 import { validateWorldName } from "../persistence/worldNames";
 import { exportWorld, importWorld } from "../persistence/worldExport";
 import { pullMap, pushMap, SYNC_SERVER_URL } from "../sync/syncClient";
 import { getActiveGame } from "./activeGame";
+
+/** The other local worlds one could switch to. */
+export async function listOtherWorlds(currentWorldId: string | null): Promise<{ id: string }[]> {
+  const worlds = await listWorlds();
+  return worlds.filter((w) => w.id !== currentWorldId).map((w) => ({ id: w.id }));
+}
 
 /** How a flow ended: the page is reloading into another world, or it finished (with an error and/or a status line for the UI to show). */
 export type FlowResult = { outcome: "reloading" } | { outcome: "finished"; error?: string; status?: string };

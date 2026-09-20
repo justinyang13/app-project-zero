@@ -4,7 +4,7 @@
 // This is deliberately run *before* SaveManager.load()/GameLoop.create() ever
 // starts an autosave timer for the target world, so there is no window where a
 // periodic autosave could race the rename transaction.
-import { randomSlug } from "./slug";
+import { randomSlug } from "../core/slug";
 import { getWorld, renameWorld } from "./WorldRepository";
 
 /** The fixed id every world was saved under before named multi-world support existed. */

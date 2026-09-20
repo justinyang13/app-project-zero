@@ -7,8 +7,9 @@
 // an `if (riding)` check.
 import type { World } from "../core/World";
 import { findSurfaceY } from "../core/worldQueries";
-import { Player, type PlayerInput } from "./Player";
-import type { Rideable, RideInput } from "../entities/Rideable";
+import { Player } from "./Player";
+import type { PlayerInput, RideInput } from "../core/controls";
+import type { Rideable } from "../entities/Rideable";
 import type { Vec3 } from "../entities/Entity";
 import type { MountHint } from "../core/mountHint";
 

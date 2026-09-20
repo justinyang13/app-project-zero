@@ -9,6 +9,7 @@
 // 17-game-modes-progression.md for the systems this will plug into once
 // gathered items, food, and Survival/Creative mode selection exist.
 import type { World } from "../core/World";
+import type { PlayerInput } from "../core/controls";
 import { isLiquid, isSolidBlock } from "../data/blocks";
 
 export const PLAYER_WIDTH = 0.6;
@@ -32,15 +33,6 @@ const SWIM_DRIFT_TERMINAL = 1.2;
 const GRAVITY = 27.8;
 const JUMP_VELOCITY = 8.33;
 const FALL_TERMINAL = 15; // < 1 block/tick at 20Hz, so per-tick collision can't tunnel through a 1-thick floor
-
-export interface PlayerInput {
-  forward: number; // -1..1
-  right: number; // -1..1
-  jump: boolean;
-  sprint: boolean;
-  flyUp: boolean;
-  flyDown: boolean;
-}
 
 export class Player {
   position = { x: 0, y: 96, z: 0 }; // feet position

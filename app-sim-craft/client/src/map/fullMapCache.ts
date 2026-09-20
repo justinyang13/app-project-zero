@@ -3,8 +3,8 @@
 // workers, kicked off shortly after the game starts (preloadFullMap) so the
 // map is normally ready by the time the player first presses M. Opening the
 // map earlier just joins the render already in flight.
-import { WorkerPool } from "../engine/WorkerPool";
-import type { MapRenderApi } from "../workers/map-render.worker";
+import { WorkerPool } from "../workers/WorkerPool";
+import type { MapRenderApi } from "./mapRender.worker";
 import { FULL_MAP_PIXELS } from "./FullMapRender";
 
 const BAND_ROWS = 10;
@@ -35,7 +35,7 @@ export function ensureFullMapRender(seed: number): FullMapRender {
   ctx.fillRect(0, 0, FULL_MAP_PIXELS, FULL_MAP_PIXELS);
 
   const pool = new WorkerPool<MapRenderApi>(
-    () => new Worker(new URL("../workers/map-render.worker.ts", import.meta.url), { type: "module" }),
+    () => new Worker(new URL("./mapRender.worker.ts", import.meta.url), { type: "module" }),
     POOL_SIZE,
   );
   let cancelled = false;

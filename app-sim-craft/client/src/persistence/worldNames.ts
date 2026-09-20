@@ -1,6 +1,6 @@
 // Naming rules for local worlds: a raw user-typed name becomes a slug that must
 // be valid and not already taken.
-import { isValidSlug, slugify } from "./slug";
+import { isValidSlug, slugify } from "../core/slug";
 import { listWorlds } from "./WorldRepository";
 
 export async function worldNameAvailable(name: string, excludingId: string | null = null): Promise<boolean> {

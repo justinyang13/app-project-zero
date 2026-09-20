@@ -6,11 +6,22 @@ no server, no account, and no backend. Inspired by the voxel sandbox genre
 (Minecraft chief among them) but original in art, naming, and lore
 throughout, so it stands as its own IP rather than a clone.
 
-**Status:** Specification stage. Nothing has been implemented yet. This
-folder currently holds the full design specification — the blueprint an
-implementer (human or AI) works from to build the game in phases. See
-[`spec/22-roadmap-milestones.md`](spec/22-roadmap-milestones.md) for the
-suggested build order once implementation starts.
+**Status:** A playable prototype is implemented in [`client/`](client/) —
+procedural terrain with biomes, a dragon hill, a castle, a village, a lake and a
+loop road with cars; creatures, fish, sharks and whales; mounts (animals, cars,
+dragons); break/place/torch/flag building; day/night; saves with named worlds;
+optional cloud sync via [`sync-server/`](sync-server/); and touch controls. The
+spec below is the design target it is built toward, not a description of what
+exists — for what the code actually does and how it is organised, read
+[`ARCHITECTURE.md`](ARCHITECTURE.md).
+
+```bash
+cd client
+npm ci
+npm run dev      # http://localhost:5173
+npm test         # unit tests + the architecture (layering) test
+npm run build
+```
 
 ## Why this exists
 

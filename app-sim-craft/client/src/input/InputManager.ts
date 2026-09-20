@@ -4,8 +4,7 @@
 // state — on desktop the touch fields never leave their zero/false defaults,
 // so merging them is inert. What each key does lives in the ON_PRESS table
 // below, so adding a hotkey is one line.
-import type { PlayerInput } from "../engine/Player";
-import type { RideInput } from "../entities/Rideable";
+import type { PlayerInput, RideInput } from "../core/controls";
 import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
 import { useHudStore } from "../state/hudStore";
 import { useMinimapStore } from "../state/minimapStore";

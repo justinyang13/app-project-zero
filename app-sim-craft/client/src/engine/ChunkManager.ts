@@ -6,7 +6,7 @@ import type * as THREE from "three";
 import { CHUNK_SIZE, Chunk, chunkKey, localIndex, localX, localY, localZ, type ChunkCoord } from "../core/Chunk";
 import { World } from "../core/World";
 import { relightAfterEdit } from "../core/Lighting";
-import { WorkerPool, defaultPoolSize } from "./WorkerPool";
+import { WorkerPool, defaultPoolSize } from "../workers/WorkerPool";
 import type { TerrainGenApi, GeneratedChunkData } from "../workers/terrain-gen.worker";
 import type { MeshApi } from "../workers/mesh.worker";
 import type { BoundaryLayers } from "../rendering/greedyMesh";

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { randomSlug, slugify } from "../persistence/slug";
+import { randomSlug, slugify } from "../core/slug";
 
 interface WorldNameModalProps {
   title: string;

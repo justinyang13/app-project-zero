@@ -200,6 +200,10 @@ performance win that may not even be necessary on target hardware.
 
 ## 7. Folder structure
 
+> The tree below is the layout this chapter *proposed*. The implemented layout has
+> diverged (`core/`, `entities/`, `session/`, `input/`, …) — see
+> [`ARCHITECTURE.md`](../ARCHITECTURE.md) for what the code does today.
+
 ```
 app-sim-craft/
   spec/                        # this specification (pre-implementation)

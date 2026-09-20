@@ -5,13 +5,8 @@
 // (ground-snapping, staying in water, free flight); GameLoop only glues the
 // player's position and camera to it.
 import type { World } from "../core/World";
+import type { RideInput } from "../core/controls";
 import type { Entity, Vec3 } from "./Entity";
-
-export interface RideInput {
-  throttle: number; // -1..1
-  steer: number; // -1..1
-  climb: number; // -1..1 (ignored by ground-bound mounts)
-}
 
 export interface DismountSpot {
   x: number;

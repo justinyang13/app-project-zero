@@ -25,7 +25,9 @@ const logsDir = join(ROOT, "logs");
 mkdirSync(logsDir, { recursive: true });
 
 const db = createDb(DB_PATH);
-const app = createApp(db);
+// Comma-separated list of browser origins allowed to call this server; the built-in defaults apply when unset.
+const allowedOrigins = process.env.SIMCRAFT_ALLOWED_ORIGINS?.split(",").map((o) => o.trim()).filter(Boolean);
+const app = createApp(db, allowedOrigins?.length ? allowedOrigins : undefined);
 
 const hasCerts = existsSync(CERT_PATH) && existsSync(KEY_PATH);
 
