@@ -129,8 +129,6 @@ export class GameLoop {
   // combining them with keyboard state below is a no-op on desktop.
   private touchMoveVector = { x: 0, y: 0 };
   private touchJumpHeld = false;
-  private touchFlyUpHeld = false;
-  private touchFlyDownHeld = false;
 
   // Whether the primary action (left mouse / the touch action button) is
   // currently held down — every mode repeats its action while it is (see
@@ -534,14 +532,6 @@ export class GameLoop {
 
   setTouchJump(held: boolean): void {
     this.touchJumpHeld = held;
-  }
-
-  setTouchFlyUp(held: boolean): void {
-    this.touchFlyUpHeld = held;
-  }
-
-  setTouchFlyDown(held: boolean): void {
-    this.touchFlyDownHeld = held;
   }
 
   private overlapsPlayer(bx: number, by: number, bz: number): boolean {
@@ -981,12 +971,11 @@ export class GameLoop {
       steer: clamp1((this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0) + this.touchMoveVector.x),
       // Same up/down keys as free flight: Space climbs, Shift (or Ctrl) descends.
       climb:
-        (this.pressed.has("Space") || this.touchJumpHeld || this.touchFlyUpHeld ? 1 : 0) -
+        (this.pressed.has("Space") || this.touchJumpHeld ? 1 : 0) -
         (this.pressed.has("ShiftLeft") ||
         this.pressed.has("ShiftRight") ||
         this.pressed.has("ControlLeft") ||
-        this.pressed.has("ControlRight") ||
-        this.touchFlyDownHeld
+        this.pressed.has("ControlRight")
           ? 1
           : 0),
     };
@@ -1006,8 +995,8 @@ export class GameLoop {
       right: clamp1(keyboardRight + this.touchMoveVector.x),
       jump: this.pressed.has("Space") || this.touchJumpHeld,
       sprint: this.pressed.has("ControlLeft") || this.pressed.has("ControlRight"),
-      flyUp: this.pressed.has("Space") || this.touchFlyUpHeld,
-      flyDown: this.pressed.has("ShiftLeft") || this.pressed.has("ShiftRight") || this.touchFlyDownHeld,
+      flyUp: this.pressed.has("Space") || this.touchJumpHeld,
+      flyDown: this.pressed.has("ShiftLeft") || this.pressed.has("ShiftRight"),
     };
   }
 

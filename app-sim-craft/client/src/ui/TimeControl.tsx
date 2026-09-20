@@ -17,7 +17,8 @@ function formatClock(t: number): string {
   return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`;
 }
 
-export function TimeControl() {
+/** `embedded`: touch only — rendered inside the settings window (ui/GraphicsPanel.tsx) instead of floating at the top left. */
+export function TimeControl({ embedded = false }: { embedded?: boolean }) {
   const isTouch = useIsTouchDevice();
   const [expanded, setExpanded] = useState(false);
   const mode = useTimeStore((s) => s.mode);
@@ -34,16 +35,12 @@ export function TimeControl() {
   // — screen space is much tighter here than on desktop, and this panel
   // doesn't need to be always-visible.
   if (isTouch) {
+    if (!embedded) return null;
     return (
       <div
         onKeyDown={(e) => e.stopPropagation()}
         onKeyUp={(e) => e.stopPropagation()}
         style={{
-          position: "fixed",
-          top: 84,
-          left: 8,
-          zIndex: 5, // above the touch look-drag overlay
-          width: expanded ? 190 : 150,
           background: "rgba(0, 0, 0, 0.55)",
           borderRadius: 6,
           color: "#fff",

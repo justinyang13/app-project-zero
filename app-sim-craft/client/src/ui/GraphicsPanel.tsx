@@ -10,6 +10,9 @@ import {
 } from "../state/graphicsStore";
 import { useHudStore } from "../state/hudStore";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
+import { TimeControl } from "./TimeControl";
+import { MapSwitcher } from "./MapSwitcher";
+import { DebugOverlay } from "./DebugOverlay";
 
 const PRESET_LABELS: { key: Exclude<GraphicsPreset, "custom">; label: string }[] = [
   { key: "low", label: "Low" },
@@ -40,7 +43,9 @@ function chipStyle(active: boolean): React.CSSProperties {
 }
 
 /**
- * A ⚙ button that opens the graphics settings: a preset (Low → Ultra) and
+ * A ⚙ button that opens the settings window. On a phone that window also
+ * holds the Time, Map and Debug panels (they used to be stacked, and
+ * overlapping, down the top left). Its graphics settings: a preset (Low → Ultra) and
  * the individual dials behind it — how far the world draws, the render
  * resolution, how many dynamic lights are live, and cloud detail. Changes
  * apply immediately and are remembered (state/graphicsStore.ts).
@@ -99,9 +104,18 @@ export function GraphicsPanel() {
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13 }}>
-            <strong>Graphics</strong>
+            <strong>{isTouch ? "Settings" : "Graphics"}</strong>
             <span style={{ opacity: 0.7 }}>{fps > 0 ? `${fps} fps` : ""}</span>
           </div>
+
+          {isTouch && (
+            <>
+              <TimeControl embedded />
+              <MapSwitcher embedded />
+              <DebugOverlay embedded />
+              <strong>Graphics</strong>
+            </>
+          )}
 
           <div>
             <div style={{ marginBottom: 4, opacity: 0.8 }}>Quality preset{settings.preset === "custom" ? " (custom)" : ""}</div>

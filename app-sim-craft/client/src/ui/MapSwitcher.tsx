@@ -26,7 +26,8 @@ function formatTimestamp(ms: number): string {
   return new Date(ms).toLocaleString();
 }
 
-export function MapSwitcher() {
+/** `embedded`: touch only — rendered inside the settings window (ui/GraphicsPanel.tsx) instead of floating at the top left. */
+export function MapSwitcher({ embedded = false }: { embedded?: boolean }) {
   const isTouch = useIsTouchDevice();
   const worldId = useWorldStore((s) => s.worldId);
   const [open, setOpen] = useState(false);
@@ -173,20 +174,15 @@ export function MapSwitcher() {
     window.location.reload();
   }
 
+  if (isTouch && !embedded) return null;
+
   return (
     <div
       onKeyDown={(e) => e.stopPropagation()}
       onKeyUp={(e) => e.stopPropagation()}
       style={{
-        position: "fixed",
-        // Touch: stacked into the left-side collapsible-panel column up
-        // top (below DebugOverlay), out of TouchJoystick.tsx's
-        // bottom-left footprint — desktop keeps its original corner spot.
-        ...(isTouch
-          ? { top: 46, left: 8, zIndex: 5, boxSizing: "border-box", maxHeight: "calc(var(--app-h, 100vh) - 60px)", overflowY: "auto" }
-          : { bottom: 16, left: 16 }),
-        // Collapsed on a phone it's just a compact header, clear of the minimap on the right.
-        width: isTouch && !open ? 150 : 220,
+        // Touch: a collapsible section of the settings window (ui/GraphicsPanel.tsx); desktop keeps its corner spot.
+        ...(isTouch ? { position: "static", boxSizing: "border-box", width: "100%" } : { position: "fixed", bottom: 16, left: 16, width: 220 }),
         background: "rgba(0, 0, 0, 0.55)",
         borderRadius: 6,
         padding: "8px 10px",

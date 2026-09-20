@@ -1,15 +1,16 @@
-import { useState, type ReactElement } from "react";
+import { useState } from "react";
 import type { BuildMode } from "../state/hotbarStore";
 import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
 import { ToolIcon } from "./ToolIcon";
+import { ModeGlyph } from "./ModeGlyph";
 import { useCompactViewport } from "../hooks/useCompactViewport";
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 
-const MODES: { mode: BuildMode; label: string; color: string; hotkey: string; icon: () => ReactElement }[] = [
-  { mode: "break", label: "Break", color: "#e0645a", hotkey: "Z", icon: () => <ToolIcon tool="pickaxe" size={20} /> },
-  { mode: "place", label: "Build", color: "#6fbf3f", hotkey: "X", icon: () => <BuildGlyph /> },
-  { mode: "torch", label: "Torch", color: "#ffb347", hotkey: "C", icon: () => <TorchGlyph /> },
-  { mode: "flag", label: "Flag", color: "#ff4fd8", hotkey: "V", icon: () => <FlagGlyph /> },
+const MODES: { mode: BuildMode; label: string; color: string; hotkey: string }[] = [
+  { mode: "break", label: "Break", color: "#e0645a", hotkey: "Z" },
+  { mode: "place", label: "Build", color: "#6fbf3f", hotkey: "X" },
+  { mode: "torch", label: "Torch", color: "#ffb347", hotkey: "C" },
+  { mode: "flag", label: "Flag", color: "#ff4fd8", hotkey: "V" },
 ];
 
 /** Space the touch hotbar's frame takes besides its slots: side padding + panel padding + gaps. */
@@ -40,73 +41,115 @@ export function Hotbar() {
   const [expanded, setExpanded] = useState(false);
 
   if (isTouch) {
-    // Slots shrink (down from 48px) so the whole row fits the space beside the thumb controls — no scrolling to find a block.
+    // Below the thumb controls' row the block picker is one small button, in the bottom row between the joystick and the action buttons; tapping it opens the tool + block choices above that row.
+    const bottomRowInset = "max(16px, calc(env(safe-area-inset-bottom) + 16px))";
     const sideSpace = compact ? 152 + 220 : 0;
+    // Slots shrink (down from 48px) so the whole row fits the space beside the thumb controls — no scrolling to find a block.
     const slotSize = `min(48px, calc((100vw - ${sideSpace + TOUCH_HOTBAR_CHROME}px) / ${HOTBAR_SLOTS.length}))`;
-    // Centered-and-wider-than-the-viewport (desktop's layout) doesn't
-    // fit a narrow phone screen at all, let alone leave room for
-    // TouchJoystick.tsx/TouchActionButtons.tsx in both bottom corners —
-    // raised above that row entirely, horizontally scrollable as a
-    // fallback, and the mode-select icons are dropped (redundant with
-    // TouchActionButtons.tsx's own mode-cycle button and the primary
-    // action button's mode icon) to save width.
+    const selectedBlock = HOTBAR_SLOTS[selectedIndex];
     return (
-      <div
-        style={{
-          position: "fixed",
-          // Portrait: raised above the thumb-control row, full width. Landscape has no such room, so it sits low between the joystick and the action buttons instead.
-          left: compact ? 152 : 0,
-          right: compact ? 220 : 0,
-          bottom: compact ? 8 : "max(240px, calc(env(safe-area-inset-bottom) + 240px))",
-          display: "flex",
-          overflowX: "auto",
-          touchAction: "pan-x",
-          padding: "0 8px",
-          zIndex: 5, // above the touch look-drag overlay, so slots stay tappable
-        }}
-      >
-        {!expanded ? (
-          <button
-            onClick={() => setExpanded(true)}
-            title="Choose a block"
+      <>
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          title="Choose a tool or block"
+          style={{
+            ...slotButtonStyle(true, `#${selectedBlock.color.toString(16).padStart(6, "0")}`, 44),
+            position: "fixed",
+            bottom: bottomRowInset,
+            left: compact ? 152 : "max(140px, calc(50% - 56px))",
+            zIndex: 5, // above the touch look-drag overlay, so it stays tappable
+            boxShadow: "0 1px 6px rgba(0, 0, 0, 0.5)",
+          }}
+        >
+          <span style={{ position: "absolute", top: 1, left: 4, fontSize: 10, color: "#fff", textShadow: "0 0 2px #000", fontFamily: "monospace" }}>
+            {selectedIndex + 1}
+          </span>
+          <span style={{ position: "absolute", top: 1, right: 4, fontSize: 9, color: "#fff", textShadow: "0 0 2px #000" }}>{expanded ? "▾" : "▴"}</span>
+          <span style={{ position: "absolute", bottom: 1, right: 1 }}>
+            <ToolIcon tool={selectedBlock.toolType} />
+          </span>
+        </button>
+
+        {expanded && (
+          <div
             style={{
-              ...slotButtonStyle(true, `#${HOTBAR_SLOTS[selectedIndex].color.toString(16).padStart(6, "0")}`, 44),
-              margin: "0 auto",
-              boxShadow: "0 1px 6px rgba(0, 0, 0, 0.5)",
+              position: "fixed",
+              left: compact ? 152 : 0,
+              right: compact ? 220 : 0,
+              // Portrait: above the thumb-control columns. Landscape: right above the toggle.
+              bottom: compact ? "calc(max(16px, env(safe-area-inset-bottom) + 16px) + 52px)" : "max(240px, calc(env(safe-area-inset-bottom) + 240px))",
+              display: "flex",
+              justifyContent: "center",
+              padding: "0 8px",
+              zIndex: 5,
+              pointerEvents: "none",
             }}
           >
-            <span style={{ position: "absolute", top: 1, left: 4, fontSize: 10, color: "#fff", textShadow: "0 0 2px #000", fontFamily: "monospace" }}>
-              {selectedIndex + 1}
-            </span>
-            <span style={{ position: "absolute", top: 1, right: 4, fontSize: 9, color: "#fff", textShadow: "0 0 2px #000" }}>▴</span>
-            <span style={{ position: "absolute", bottom: 1, right: 1 }}>
-              <ToolIcon tool={HOTBAR_SLOTS[selectedIndex].toolType} />
-            </span>
-          </button>
-        ) : (
-        /* margin: auto centers the row but, unlike justify-content: center, never clips its start when it overflows. */
-        <div style={{ display: "flex", gap: 6, background: "rgba(0, 0, 0, 0.4)", padding: 6, borderRadius: 6, margin: "0 auto" }}>
-          {HOTBAR_SLOTS.map((block, i) => (
-            <button
-              key={block.key}
-              onClick={() => {
-                select(i);
-                setExpanded(false);
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                gap: 6,
+                background: "rgba(0, 0, 0, 0.5)",
+                padding: 6,
+                borderRadius: 6,
+                pointerEvents: "auto",
               }}
-              style={slotButtonStyle(i === selectedIndex, `#${block.color.toString(16).padStart(6, "0")}`, slotSize)}
-              title={`${block.name} (breaks with: ${block.toolType === "none" ? "any tool" : block.toolType})`}
             >
-              <span style={{ position: "absolute", top: 2, left: 4, fontSize: 10, color: "#fff", textShadow: "0 0 2px #000", fontFamily: "monospace" }}>
-                {i + 1}
-              </span>
-              <span style={{ position: "absolute", bottom: 1, right: 1 }}>
-                <ToolIcon tool={block.toolType} />
-              </span>
-            </button>
-          ))}
-        </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {MODES.map((m) => (
+                  <button
+                    key={m.mode}
+                    onClick={() => setMode(m.mode)}
+                    title={m.label}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 1,
+                      width: 56,
+                      height: 44,
+                      border: `2px solid ${mode === m.mode ? m.color : "rgba(255,255,255,0.3)"}`,
+                      borderRadius: 6,
+                      background: mode === m.mode ? "rgba(255,255,255,0.15)" : "rgba(0, 0, 0, 0.4)",
+                      color: "#fff",
+                      fontFamily: "monospace",
+                      fontSize: 9,
+                      touchAction: "manipulation",
+                      padding: 0,
+                    }}
+                  >
+                    <ModeGlyph mode={m.mode} size={20} />
+                    {m.label}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: 6 }}>
+                {HOTBAR_SLOTS.map((block, i) => (
+                  <button
+                    key={block.key}
+                    onClick={() => {
+                      select(i);
+                      setExpanded(false);
+                    }}
+                    style={slotButtonStyle(i === selectedIndex, `#${block.color.toString(16).padStart(6, "0")}`, slotSize)}
+                    title={`${block.name} (breaks with: ${block.toolType === "none" ? "any tool" : block.toolType})`}
+                  >
+                    <span style={{ position: "absolute", top: 2, left: 4, fontSize: 10, color: "#fff", textShadow: "0 0 2px #000", fontFamily: "monospace" }}>
+                      {i + 1}
+                    </span>
+                    <span style={{ position: "absolute", bottom: 1, right: 1 }}>
+                      <ToolIcon tool={block.toolType} />
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
-      </div>
+      </>
     );
   }
 
@@ -142,7 +185,7 @@ export function Hotbar() {
               touchAction: "manipulation",
             }}
           >
-            {m.icon()}
+            <ModeGlyph mode={m.mode} />
           </button>
         ))}
       </div>
@@ -192,39 +235,5 @@ export function Hotbar() {
         ))}
       </div>
     </div>
-  );
-}
-
-/** A small placed-cube glyph for Build mode — the counterpart to the pickaxe glyph used for Break. */
-function BuildGlyph() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 16 16" style={{ display: "block" }}>
-      <path d="M8 2 L13.5 5 L13.5 11 L8 14 L2.5 11 L2.5 5 Z" fill="#cfe8cf" stroke="#e8e8e8" strokeWidth="0.8" />
-      <path d="M8 2 L13.5 5 L8 8 L2.5 5 Z" fill="#e6f5e6" stroke="#e8e8e8" strokeWidth="0.8" />
-    </svg>
-  );
-}
-
-/** A small torch-and-flame glyph for Torch mode. */
-function TorchGlyph() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 16 16" style={{ display: "block" }}>
-      <path d="M7.3 7 L7.3 14 L8.7 14 L8.7 7 Z" fill="#8a5a35" />
-      <path
-        d="M8 1 Q11 3.5 9.5 6 Q9.2 6.6 8 6.6 Q6.8 6.6 6.5 6 Q5 3.5 8 1 Z"
-        fill="#ff8c2a"
-      />
-      <path d="M8 3 Q9.2 4.3 8.6 5.6 Q8.4 6 8 6 Q7.6 6 7.4 5.6 Q6.8 4.3 8 3 Z" fill="#ffe066" />
-    </svg>
-  );
-}
-
-/** A small flag-on-a-pole glyph for Flag mode. */
-function FlagGlyph() {
-  return (
-    <svg width={20} height={20} viewBox="0 0 16 16" style={{ display: "block" }}>
-      <path d="M4 1 L4 15" stroke="#e8e8e8" strokeWidth="1.4" strokeLinecap="round" />
-      <path d="M4 2 L13 4.2 L4 6.4 Z" fill="#ff4fd8" />
-    </svg>
   );
 }

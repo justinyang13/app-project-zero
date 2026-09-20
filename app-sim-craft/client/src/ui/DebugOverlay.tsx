@@ -28,24 +28,22 @@ View: ${debug.viewMode} person (F5 to switch)
 Pointer lock: ${debug.pointerLocked ? "on" : "off (click to look)"}`;
 }
 
-export function DebugOverlay() {
+/** `embedded`: touch only — rendered inside the settings window (ui/GraphicsPanel.tsx) instead of floating at the top left. */
+export function DebugOverlay({ embedded = false }: { embedded?: boolean }) {
   const isTouch = useIsTouchDevice();
   const debugVisible = useHudStore((s) => s.debugVisible);
   const toggleDebug = useHudStore((s) => s.toggleDebug);
   const debug = useHudStore((s) => s.debug);
 
   if (isTouch) {
-    // No F3 key on touch — a small always-visible header is the toggle
-    // instead (same collapse pattern as ui/MapSwitcher.tsx), so the
+    // No F3 key on touch — a collapsible section of the settings window
+    // is the toggle instead (same pattern as ui/MapSwitcher.tsx), so the
     // debug panel doesn't permanently eat screen space that's much
     // tighter here than on desktop.
+    if (!embedded) return null;
     return (
       <div
         style={{
-          position: "fixed",
-          top: 8,
-          left: 8,
-          zIndex: 5,
           fontFamily: "monospace",
           fontSize: 12,
           color: "#fff",
@@ -64,7 +62,7 @@ export function DebugOverlay() {
         >
           Debug {debugVisible ? "▾" : "▸"}
         </div>
-        {debugVisible && <div style={{ ...PANEL_STYLE, marginTop: 4, borderRadius: 4 }}>{debugText(debug)}</div>}
+        {debugVisible && <div style={{ ...PANEL_STYLE, marginTop: 4, borderRadius: 4, whiteSpace: "pre-wrap", fontSize: 10 }}>{debugText(debug)}</div>}
       </div>
     );
   }

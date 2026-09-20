@@ -12,6 +12,10 @@ body {
   /* No double-tap-to-zoom (pinch is blocked separately, see lockPageZoom.ts). */
   touch-action: manipulation;
   -webkit-tap-highlight-color: transparent;
+  /* A long-press must never select text or raise iOS's Copy / Look Up callout — this is a game, not a page. */
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
   -webkit-text-size-adjust: 100%;
 }
 
@@ -29,4 +33,20 @@ body {
 /* The HUD wrapper (App.tsx) is click-through so it never blocks the canvas; each HUD piece takes clicks again unless it says otherwise inline. */
 #hud > * {
   pointer-events: auto;
+}
+
+/* ...except where typing is the point. */
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* iOS zooms the page in when a text field under 16px is focused. */
+@media (pointer: coarse) {
+  input[type="text"],
+  input:not([type]),
+  textarea {
+    font-size: 16px !important;
+  }
 }

@@ -1,7 +1,8 @@
 import { useIsTouchDevice } from "../hooks/useIsTouchDevice";
 import { getActiveGameLoop } from "../engine/activeGameLoop";
 import { useHudStore } from "../state/hudStore";
-import { useHotbarStore, type BuildMode } from "../state/hotbarStore";
+import { useHotbarStore } from "../state/hotbarStore";
+import { ModeGlyph } from "./ModeGlyph";
 import { useCompactViewport } from "../hooks/useCompactViewport";
 
 // All touch targets are >=44px per the platform accessibility minimum
@@ -20,8 +21,6 @@ const BUTTON_STYLE_BASE: React.CSSProperties = {
   zIndex: 10,
 };
 
-const MODE_LABELS: Record<BuildMode, string> = { break: "⛏", place: "▦", torch: "🔥", flag: "🚩" };
-
 // Button placement (px from the bottom-right corner, before the safe-area
 // inset). Portrait stacks a column up the right edge, above which the
 // hotbar row sits (see Hotbar.tsx); landscape is too short for that, so it
@@ -37,8 +36,6 @@ interface Layout {
   cycle: Spot;
   fly: Spot;
   view: Spot;
-  flyUp: Spot;
-  flyDown: Spot;
 }
 const PORTRAIT: Layout = {
   primary: { bottom: 0, right: 0 },
@@ -46,8 +43,6 @@ const PORTRAIT: Layout = {
   cycle: { bottom: 0, right: 90 },
   fly: { bottom: 160, right: 0 },
   view: { bottom: 0, right: 144 },
-  flyUp: { bottom: 320, right: 32 },
-  flyDown: { bottom: 370, right: 32 },
 };
 const LANDSCAPE: Layout = {
   primary: { bottom: 0, right: 0 },
@@ -55,8 +50,6 @@ const LANDSCAPE: Layout = {
   cycle: { bottom: 76, right: 4 },
   fly: { bottom: 76, right: 60 },
   view: { bottom: 80, right: 116 },
-  flyUp: { bottom: 4, right: 144 },
-  flyDown: { bottom: 56, right: 144 },
 };
 
 /**
@@ -105,7 +98,7 @@ export function TouchActionButtons() {
         style={{ ...BUTTON_STYLE_BASE, ...at(layout.primary), width: 64, height: 64, fontSize: 26 }}
         title={`${mode} (hold to repeat)`}
       >
-        {MODE_LABELS[mode]}
+        <ModeGlyph mode={mode} size={32} />
       </button>
 
       {/* Jump — held, matching Space's hold-to-jump behavior (climbs while riding the dragon). */}
@@ -147,7 +140,7 @@ export function TouchActionButtons() {
         👁
       </button>
 
-      {/* Fly / turbo — a single tap, no need to replicate desktop's double-tap-Space gesture on touch: starts flying; while flying it toggles turbo (land by flying down, as on desktop). In a car or on the dragon it's nitro/turbo. */}
+      {/* Fly / turbo — there are no separate up/down buttons: while flying the joystick climbs and dives along where you look, and the jump button climbs. A single tap, no need to replicate desktop's double-tap-Space gesture on touch: starts flying; while flying it toggles turbo (land by flying down, as on desktop). In a car or on the dragon it's nitro/turbo. */}
       <button
         onPointerDown={(e) => {
           e.preventDefault();
@@ -166,37 +159,6 @@ export function TouchActionButtons() {
       >
         {inVehicle || flying ? "⚡" : "✈"}
       </button>
-
-      {flying && !inVehicle && (
-        <>
-          <button
-            onPointerDown={(e) => {
-              e.preventDefault();
-              getActiveGameLoop()?.setTouchFlyUp(true);
-            }}
-            onPointerUp={() => getActiveGameLoop()?.setTouchFlyUp(false)}
-            onPointerCancel={() => getActiveGameLoop()?.setTouchFlyUp(false)}
-            onPointerLeave={() => getActiveGameLoop()?.setTouchFlyUp(false)}
-            style={{ ...BUTTON_STYLE_BASE, ...at(layout.flyUp), width: 44, height: 44, fontSize: 16 }}
-            title="Fly up"
-          >
-            ▲
-          </button>
-          <button
-            onPointerDown={(e) => {
-              e.preventDefault();
-              getActiveGameLoop()?.setTouchFlyDown(true);
-            }}
-            onPointerUp={() => getActiveGameLoop()?.setTouchFlyDown(false)}
-            onPointerCancel={() => getActiveGameLoop()?.setTouchFlyDown(false)}
-            onPointerLeave={() => getActiveGameLoop()?.setTouchFlyDown(false)}
-            style={{ ...BUTTON_STYLE_BASE, ...at(layout.flyDown), width: 44, height: 44, fontSize: 16 }}
-            title="Fly down"
-          >
-            ▼
-          </button>
-        </>
-      )}
     </>
   );
 }
