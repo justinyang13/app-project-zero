@@ -6,6 +6,7 @@
 // just anchored to whatever block you're looking at instead of your feet.
 // Purely decorative, no light.
 import * as THREE from "three";
+import { disposeObject3D } from "../rendering/disposeObject";
 
 const CLOTH_COLOR = 0xff4fd8;
 
@@ -36,8 +37,6 @@ export class Flag {
   }
 
   dispose(): void {
-    this.group.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-    });
+    disposeObject3D(this.group);
   }
 }

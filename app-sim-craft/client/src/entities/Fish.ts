@@ -11,7 +11,10 @@ import * as THREE from "three";
 import type { World } from "../core/World";
 import { findWaterColumn } from "../core/worldQueries";
 import { DEEP_LAKE_CENTER } from "../worldgen/deepLake";
-import type { DismountSpot, Rideable, RideInput } from "./Rideable";
+import { mountDistance3D, type DismountSpot, type Rideable, type RideInput } from "./Rideable";
+import type { Vec3 } from "./Entity";
+import { disposeObject3D } from "../rendering/disposeObject";
+import { integrateRideSpeed } from "./rideKinematics";
 
 export type FishSpecies =
   | "clownfish"
@@ -137,7 +140,7 @@ function wrapAngle(a: number): number {
 export class Fish implements Rideable {
   readonly species: FishSpecies;
   readonly mesh: THREE.Group;
-  position: { x: number; y: number; z: number };
+  position: Vec3;
   ridden = false;
   private yaw = Math.random() * Math.PI * 2;
   private yawTarget = this.yaw;
@@ -167,6 +170,7 @@ export class Fish implements Rideable {
   get rideable(): boolean {
     return SPECIES[this.species].ride !== undefined;
   }
+  readonly mountKind = "animal";
   get rideName(): string {
     return SPECIES[this.species].label;
   }
@@ -181,6 +185,10 @@ export class Fish implements Rideable {
   }
   get rideYaw(): number {
     return this.yaw;
+  }
+
+  mountDistanceFrom(from: Vec3): number {
+    return mountDistance3D(this, from);
   }
 
   mount(): void {
@@ -222,13 +230,12 @@ export class Fish implements Rideable {
     const ride = spec.ride;
     if (!ride) return;
 
-    if (input.throttle !== 0) {
-      this.rideSpeed += input.throttle * ride.speed * 1.2 * dt;
-    } else if (this.rideSpeed !== 0) {
-      const decel = ride.speed * 0.6 * dt;
-      this.rideSpeed = Math.abs(this.rideSpeed) <= decel ? 0 : this.rideSpeed - Math.sign(this.rideSpeed) * decel;
-    }
-    this.rideSpeed = THREE.MathUtils.clamp(this.rideSpeed, -ride.speed * 0.3, ride.speed);
+    this.rideSpeed = integrateRideSpeed(this.rideSpeed, input.throttle, dt, {
+      accel: ride.speed * 1.2,
+      friction: ride.speed * 0.6,
+      maxForward: ride.speed,
+      maxReverse: ride.speed * 0.3,
+    });
 
     this.yaw -= input.steer * Math.max(1.4, spec.turnRate * 2) * dt;
     this.yawTarget = this.yaw;
@@ -263,7 +270,7 @@ export class Fish implements Rideable {
     this.animate(dt, Math.max(Math.abs(this.rideSpeed), spec.speed * 0.5));
   }
 
-  tick(dt: number, world: World): void {
+  update(dt: number, world: World): void {
     if (this.ridden) return; // tickRide owns it while the player is on it
 
     const spec = SPECIES[this.species];
@@ -323,9 +330,7 @@ export class Fish implements Rideable {
   }
 
   dispose(): void {
-    this.mesh.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-    });
+    disposeObject3D(this.mesh);
   }
 }
 

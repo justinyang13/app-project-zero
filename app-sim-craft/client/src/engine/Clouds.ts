@@ -10,6 +10,7 @@
 // every frame, so clouds read as anchored to the world and drifting on
 // their own wind rather than rigidly tracking the camera.
 import * as THREE from "three";
+import { disposeObject3D } from "../rendering/disposeObject";
 import { dayFactorAt } from "./Sky";
 
 const CLOUD_COUNT = 160;
@@ -141,10 +142,7 @@ export class Clouds {
   }
 
   dispose(): void {
-    for (const cloud of this.clouds) cloud.material.dispose();
-    this.group.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-    });
+    disposeObject3D(this.group); // covers each cloud's own material too
   }
 }
 

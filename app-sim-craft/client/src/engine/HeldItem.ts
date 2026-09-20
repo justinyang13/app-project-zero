@@ -6,6 +6,7 @@
 // person hides this entirely (see GameLoop.ts) since PlayerModel's own
 // arms stand in for it there.
 import * as THREE from "three";
+import { disposeObject3D } from "../rendering/disposeObject";
 import type { BuildMode } from "../state/hotbarStore";
 import type { BlockDef } from "../data/blocks";
 
@@ -58,12 +59,8 @@ export class HeldItem {
   }
 
   dispose(): void {
-    this.blockMesh.geometry.dispose();
-    for (const group of [this.pickaxeGroup, this.torchGroup, this.flagGroup]) {
-      group.traverse((obj) => {
-        if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-      });
-    }
+    disposeObject3D(this.blockMesh);
+    for (const group of [this.pickaxeGroup, this.torchGroup, this.flagGroup]) disposeObject3D(group);
   }
 }
 

@@ -10,7 +10,10 @@
 import * as THREE from "three";
 import type { World } from "../core/World";
 import { findSurfaceY } from "../core/worldQueries";
-import type { DismountSpot, Rideable, RideInput } from "./Rideable";
+import { mountDistance3D, type DismountSpot, type Rideable, type RideInput } from "./Rideable";
+import type { Vec3 } from "./Entity";
+import { disposeObject3D } from "../rendering/disposeObject";
+import { integrateRideSpeed } from "./rideKinematics";
 
 export type CreatureSpecies =
   | "llama"
@@ -227,7 +230,7 @@ interface AnimatedLeg {
 export class Creature implements Rideable {
   readonly species: CreatureSpecies;
   readonly mesh: THREE.Group;
-  position: { x: number; y: number; z: number };
+  position: Vec3;
   ridden = false;
   private yaw = Math.random() * Math.PI * 2;
   private wanderTimer = Math.random() * 3;
@@ -248,6 +251,7 @@ export class Creature implements Rideable {
   get rideable(): boolean {
     return SPECIES[this.species].bodySize[2] >= MIN_RIDEABLE_BODY_LENGTH;
   }
+  readonly mountKind = "animal";
   get rideName(): string {
     return this.species;
   }
@@ -261,6 +265,10 @@ export class Creature implements Rideable {
   }
   get rideYaw(): number {
     return this.yaw;
+  }
+
+  mountDistanceFrom(from: Vec3): number {
+    return mountDistance3D(this, from);
   }
 
   mount(): void {
@@ -281,13 +289,12 @@ export class Creature implements Rideable {
   /** Player-steered ground movement: same throttle/steer feel as Car's driven mode, with the same "can't walk onto water or up a cliff" rules the wander AI follows. */
   tickRide(dt: number, world: World, input: RideInput): void {
     const maxSpeed = Math.max(RIDE_MIN_SPEED, SPECIES[this.species].speed * RIDE_SPEED_FACTOR);
-    if (input.throttle !== 0) {
-      this.rideSpeed += input.throttle * RIDE_ACCEL * dt;
-    } else if (this.rideSpeed !== 0) {
-      const decel = RIDE_FRICTION * dt;
-      this.rideSpeed = Math.abs(this.rideSpeed) <= decel ? 0 : this.rideSpeed - Math.sign(this.rideSpeed) * decel;
-    }
-    this.rideSpeed = THREE.MathUtils.clamp(this.rideSpeed, -maxSpeed * 0.4, maxSpeed);
+    this.rideSpeed = integrateRideSpeed(this.rideSpeed, input.throttle, dt, {
+      accel: RIDE_ACCEL,
+      friction: RIDE_FRICTION,
+      maxForward: maxSpeed,
+      maxReverse: maxSpeed * 0.4,
+    });
 
     // Can pivot slowly even from a standstill, unlike a car.
     const turnScale = Math.max(0.35, Math.min(Math.abs(this.rideSpeed) / 3, 1)) * (this.rideSpeed < 0 ? -1 : 1);
@@ -317,7 +324,7 @@ export class Creature implements Rideable {
     this.mesh.rotation.y = this.yaw;
   }
 
-  tick(dt: number, world: World): void {
+  update(dt: number, world: World): void {
     if (this.ridden) return; // tickRide owns it while the player is on it
 
     this.wanderTimer -= dt;
@@ -364,11 +371,7 @@ export class Creature implements Rideable {
   }
 
   dispose(): void {
-    this.mesh.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) {
-        obj.geometry.dispose();
-      }
-    });
+    disposeObject3D(this.mesh);
   }
 }
 

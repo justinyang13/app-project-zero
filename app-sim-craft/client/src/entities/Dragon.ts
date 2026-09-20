@@ -11,9 +11,13 @@
 // flight loop.
 import * as THREE from "three";
 import type { World } from "../core/World";
+import { AIR_ID } from "../data/blocks";
 import { findSurfaceY } from "../core/worldQueries";
-import { poolLight, releaseLight } from "./LightPool";
-import type { DismountSpot, Rideable, RideInput } from "./Rideable";
+import { poolLight, releaseLight } from "../rendering/LightPool";
+import { mountDistance3D, type DismountSpot, type Rideable, type RideInput } from "./Rideable";
+import type { Vec3 } from "./Entity";
+import { disposeObject3D } from "../rendering/disposeObject";
+import { integrateRideSpeed } from "./rideKinematics";
 import {
   GREEN_DRAGON_ALTITUDE_ABOVE_PEAK,
   GREEN_DRAGON_FLIGHT_RADIUS,
@@ -144,12 +148,6 @@ const TURBO_MULTIPLIER = 400;
 // the spread wings sit below the line of sight instead of filling it.
 const RIDE_EYE_HEIGHT = 16;
 const RIDE_CAMERA_DISTANCE = 26;
-
-interface Vec3 {
-  x: number;
-  y: number;
-  z: number;
-}
 
 function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
@@ -455,6 +453,7 @@ export class Dragon implements Rideable {
   private firstPerson = false;
 
   readonly rideable = true;
+  readonly mountKind = "animal";
   readonly rideName: string;
   readonly mountRange = 14; // generous — it's huge and often airborne, unlike a parked car
   readonly rideEyeHeight = RIDE_EYE_HEIGHT;
@@ -496,6 +495,10 @@ export class Dragon implements Rideable {
     return { x: eye.x, y: eye.y, z: eye.z };
   }
 
+  mountDistanceFrom(from: Vec3): number {
+    return mountDistance3D(this, from);
+  }
+
   /** Player mounts up — called by GameLoop once it's confirmed the player is within range. */
   mount(): void {
     this.ridden = true;
@@ -521,7 +524,7 @@ export class Dragon implements Rideable {
   }
 
   /** Double-tap Space while riding (see GameLoop's Space handler). */
-  toggleTurbo(): void {
+  boost(): void {
     if (this.ridden) this.turbo = !this.turbo;
   }
 
@@ -545,18 +548,17 @@ export class Dragon implements Rideable {
   }
 
   tickRide(dt: number, world: World, input: RideInput): void {
-    this.update(dt, input, world);
+    this.step(dt, input, world);
   }
 
   private tickRidden(dt: number, input: RideInput, world: World | undefined): void {
     const boost = this.turbo ? TURBO_MULTIPLIER : 1;
-    if (input.throttle !== 0) {
-      this.rideSpeed += input.throttle * RIDE_ACCEL * boost * dt;
-    } else if (this.rideSpeed !== 0) {
-      const decel = RIDE_FRICTION * boost * dt;
-      this.rideSpeed = Math.abs(this.rideSpeed) <= decel ? 0 : this.rideSpeed - Math.sign(this.rideSpeed) * decel;
-    }
-    this.rideSpeed = THREE.MathUtils.clamp(this.rideSpeed, -RIDE_REVERSE_MAX_SPEED, RIDE_MAX_SPEED * boost);
+    this.rideSpeed = integrateRideSpeed(this.rideSpeed, input.throttle, dt, {
+      accel: RIDE_ACCEL * boost,
+      friction: RIDE_FRICTION * boost,
+      maxForward: RIDE_MAX_SPEED * boost,
+      maxReverse: RIDE_REVERSE_MAX_SPEED,
+    });
 
     this.yaw -= input.steer * RIDE_TURN_RATE * dt;
     this.bank = THREE.MathUtils.clamp(-input.steer * RIDE_BANK_ANGLE, -RIDE_BANK_ANGLE, RIDE_BANK_ANGLE);
@@ -571,7 +573,7 @@ export class Dragon implements Rideable {
       const x = Math.floor(this.position.x);
       const z = Math.floor(this.position.z);
       for (let y = Math.floor(this.position.y); y >= this.position.y - RIDE_GROUND_SEARCH_DEPTH; y--) {
-        if (world.getBlock(x, y, z) !== 0) {
+        if (world.getBlock(x, y, z) !== AIR_ID) {
           if (this.position.y < y + 1) this.position.y = y + 1;
           break;
         }
@@ -594,7 +596,13 @@ export class Dragon implements Rideable {
     this.yaw = Math.atan2(dx, dz);
   }
 
-  update(dt: number, rideInput?: RideInput, world?: World): void {
+  /** The autonomous circuit; while the player is riding, tickRide drives it instead. */
+  update(dt: number, world: World): void {
+    if (this.ridden) return;
+    this.step(dt, undefined, world);
+  }
+
+  private step(dt: number, rideInput?: RideInput, world?: World): void {
     this.idlePhase += dt;
     let wingOpenness = 0;
 
@@ -744,8 +752,6 @@ export class Dragon implements Rideable {
 
   dispose(): void {
     releaseLight(this.parts.fireBreath.light);
-    this.mesh.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-    });
+    disposeObject3D(this.mesh);
   }
 }

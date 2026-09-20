@@ -4,7 +4,8 @@
 // A simple flicker (scale + light-intensity jitter), not a particle
 // system — that's spec/10-lighting-rendering.md §6's later-phase work.
 import * as THREE from "three";
-import { poolLight, releaseLight } from "./LightPool";
+import { poolLight, releaseLight } from "../rendering/LightPool";
+import { disposeObject3D } from "../rendering/disposeObject";
 
 export class CampfireVisual {
   readonly group: THREE.Group;
@@ -39,6 +40,6 @@ export class CampfireVisual {
 
   dispose(): void {
     releaseLight(this.light);
-    for (const mesh of this.flameMeshes) mesh.geometry.dispose();
+    disposeObject3D(this.group);
   }
 }

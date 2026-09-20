@@ -6,7 +6,8 @@
 // persistence/db.ts's TorchRecord). Always lit, day or night — a burning
 // torch doesn't care what time it is, unlike StreetLamp's night-gated bulb.
 import * as THREE from "three";
-import { poolLight, releaseLight } from "./LightPool";
+import { poolLight, releaseLight } from "../rendering/LightPool";
+import { disposeObject3D } from "../rendering/disposeObject";
 
 export class Torch {
   readonly group: THREE.Group;
@@ -46,8 +47,6 @@ export class Torch {
 
   dispose(): void {
     releaseLight(this.light);
-    this.group.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-    });
+    disposeObject3D(this.group);
   }
 }

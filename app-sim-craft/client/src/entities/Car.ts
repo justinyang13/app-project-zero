@@ -1,20 +1,19 @@
 // Cars: a box-mesh vehicle that either drives itself around the loop
-// road (worldgen/roads.ts) or is possessed by the player (GameLoop.ts's
-// E-to-enter/exit control). Like Creature, movement is a simplified
-// ground-snap each tick rather than full AABB physics — findSurfaceY
-// (core/worldQueries.ts) is reused so a car can never fly or fall through the world,
-// it just rides whatever surface is beneath it (which, on the loop
+// road (worldgen/roads.ts) or is driven by the player, who gets in and out
+// through the same Rideable contract as any mount (E to enter/exit). Like
+// Creature, movement is a simplified ground-snap each tick rather than full
+// AABB physics — findSurfaceY (core/worldQueries.ts) is reused so a car can
+// never fly or fall through the world, it just rides whatever surface is beneath it (which, on the loop
 // itself, is always the same flat elevation).
 import * as THREE from "three";
 import type { World } from "../core/World";
 import { findSurfaceY } from "../core/worldQueries";
-import { poolLight, releaseLight } from "./LightPool";
+import { poolLight, releaseLight } from "../rendering/LightPool";
+import type { DismountSpot, Rideable, RideInput } from "./Rideable";
+import type { Vec3 } from "./Entity";
+import { disposeObject3D } from "../rendering/disposeObject";
+import { integrateRideSpeed } from "./rideKinematics";
 import { pointAtProgress } from "../worldgen/roads";
-
-export interface CarInput {
-  throttle: number; // -1..1: forward/reverse
-  steer: number; // -1..1: left/right
-}
 
 const CAR_SPEED = 6; // AI cruising speed, blocks/sec
 const CAR_LENGTH = 1.8;
@@ -27,6 +26,10 @@ const DRIVEN_REVERSE_MAX_SPEED = 4;
 const DRIVEN_ACCEL = 8;
 const DRIVEN_FRICTION = 5;
 const DRIVEN_TURN_RATE = 2.4; // radians/sec at full speed
+const ENTER_RANGE = 3; // blocks (horizontal) from which the player can hop in
+const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above the car's ground-snapped position
+const CHASE_CAMERA_DISTANCE = 4.5;
+const EXIT_SIDE_OFFSET = 1.5; // where the player steps out, to the car's side
 
 // Nitro: double-tap Space while driving (see GameLoop.ts's Space
 // handler) for a short top-speed/acceleration boost. No fuel or
@@ -40,13 +43,23 @@ const HEADLIGHT_LENS_OFF = 0x2a2a22;
 const HEADLIGHT_INTENSITY = 6;
 const HEADLIGHT_DISTANCE = 16;
 
-export class Car {
+export class Car implements Rideable {
   readonly mesh: THREE.Group;
-  position: { x: number; y: number; z: number };
+  position: Vec3;
   yaw: number;
   speed = 0; // signed, blocks/sec — only meaningful while player-driven
-  driven = false; // true while the player is possessing this car
+  ridden = false; // true while the player is driving this car
   parked = false; // true once the player has exited it — stays put instead of resuming AI wandering
+
+  readonly rideable = true;
+  readonly mountKind = "vehicle";
+  readonly rideName = "car";
+  readonly mountRange = ENTER_RANGE;
+  readonly rideEyeHeight = DRIVING_EYE_HEIGHT;
+  readonly rideCameraDistance = CHASE_CAMERA_DISTANCE;
+  get rideYaw(): number {
+    return this.yaw;
+  }
 
   private progress: number; // arc-length position along the loop (worldgen/roads.ts)
   private readonly headlightLenses: THREE.MeshBasicMaterial;
@@ -75,12 +88,34 @@ export class Car {
   }
 
   /** Triggers (or refreshes) a nitro boost — always available, never runs dry. */
-  activateNitro(): void {
+  boost(): void {
     this.nitroTimer = NITRO_DURATION;
   }
 
-  /** Autonomous driving: follows the loop road's centerline at a constant pace. */
-  tickAI(dt: number, world: World): void {
+  /** Cars are hopped into from anywhere beside them, so only the ground distance counts. */
+  mountDistanceFrom(from: Vec3): number {
+    if (this.ridden) return Infinity;
+    const distance = Math.hypot(this.position.x - from.x, this.position.z - from.z);
+    return distance < this.mountRange ? distance : Infinity;
+  }
+
+  mount(): void {
+    this.ridden = true;
+    this.parked = false;
+  }
+
+  /** Steps the player out to the car's side, re-grounded independently in case the car itself is resting on something a standing player wouldn't (e.g. it nosed a little onto a ledge). The car stays put rather than resuming AI wandering from wherever it was left. */
+  dismount(world: World): DismountSpot {
+    this.ridden = false;
+    this.parked = true;
+    const x = this.position.x + Math.sin(this.yaw + Math.PI / 2) * EXIT_SIDE_OFFSET;
+    const z = this.position.z + Math.cos(this.yaw + Math.PI / 2) * EXIT_SIDE_OFFSET;
+    return { x, y: findSurfaceY(world, x, z) ?? this.position.y, z, flying: false };
+  }
+
+  /** Autonomous driving unless the player is in it or has parked it. */
+  update(dt: number, world: World): void {
+    if (this.ridden || this.parked) return;
     this.progress += CAR_SPEED * dt;
     const { x, z, yaw } = pointAtProgress(this.progress);
     this.position.x = x;
@@ -96,19 +131,18 @@ export class Car {
    * mode so the car "should only stay on the ground" — it never gets a
    * gravity/jump state of its own to fall or launch out of.
    */
-  tickDriven(dt: number, world: World, input: CarInput): void {
+  tickRide(dt: number, world: World, input: RideInput): void {
     this.nitroTimer = Math.max(0, this.nitroTimer - dt);
     const boosting = this.nitroTimer > 0;
     const maxSpeed = boosting ? DRIVEN_MAX_SPEED * NITRO_MULTIPLIER : DRIVEN_MAX_SPEED;
     const accel = boosting ? DRIVEN_ACCEL * NITRO_MULTIPLIER : DRIVEN_ACCEL;
 
-    if (input.throttle !== 0) {
-      this.speed += input.throttle * accel * dt;
-    } else if (this.speed !== 0) {
-      const decel = DRIVEN_FRICTION * dt;
-      this.speed = Math.abs(this.speed) <= decel ? 0 : this.speed - Math.sign(this.speed) * decel;
-    }
-    this.speed = THREE.MathUtils.clamp(this.speed, -DRIVEN_REVERSE_MAX_SPEED, maxSpeed);
+    this.speed = integrateRideSpeed(this.speed, input.throttle, dt, {
+      accel,
+      friction: DRIVEN_FRICTION,
+      maxForward: maxSpeed,
+      maxReverse: DRIVEN_REVERSE_MAX_SPEED,
+    });
 
     if (Math.abs(this.speed) > 0.05) {
       // Scale turn rate by speed (can't pivot in place) and flip it in
@@ -141,9 +175,7 @@ export class Car {
 
   dispose(): void {
     releaseLight(this.headlight);
-    this.mesh.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-    });
+    disposeObject3D(this.mesh);
   }
 }
 

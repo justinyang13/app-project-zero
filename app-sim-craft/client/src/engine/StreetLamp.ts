@@ -6,7 +6,8 @@
 // unlit material for the always-visible lens, plus one real light that
 // only costs anything while it's actually on.
 import * as THREE from "three";
-import { poolLight, releaseLight } from "./LightPool";
+import { poolLight, releaseLight } from "../rendering/LightPool";
+import { disposeObject3D } from "../rendering/disposeObject";
 
 const BULB_ON = 0xfff2b0;
 const BULB_OFF = 0x3a3a30;
@@ -42,6 +43,6 @@ export class StreetLamp {
 
   dispose(): void {
     releaseLight(this.light);
-    this.bulbMesh.geometry.dispose();
+    disposeObject3D(this.group);
   }
 }

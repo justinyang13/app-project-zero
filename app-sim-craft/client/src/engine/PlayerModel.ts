@@ -6,6 +6,7 @@
 // (see GameLoop.ts's view-mode toggle) — first-person hides it entirely
 // to avoid seeing the inside of your own head.
 import * as THREE from "three";
+import { disposeObject3D } from "../rendering/disposeObject";
 import { PLAYER_HEIGHT } from "./Player";
 
 const HEAD_SIZE = 0.42;
@@ -125,8 +126,6 @@ export class PlayerModel {
   }
 
   dispose(): void {
-    this.group.traverse((obj) => {
-      if (obj instanceof THREE.Mesh) obj.geometry.dispose();
-    });
+    disposeObject3D(this.group);
   }
 }

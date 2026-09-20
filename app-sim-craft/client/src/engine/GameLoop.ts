@@ -9,23 +9,17 @@ import { MouseLook } from "./Camera";
 import { Player, EYE_HEIGHT, type PlayerInput } from "./Player";
 import { ChunkManager, RENDER_DISTANCE_COLUMNS } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
-import { Creature, ALL_SPECIES } from "./Creature";
-import { findSurfaceY, findNearbyWaterSpots } from "../core/worldQueries";
-import { sampleRandom } from "../core/random";
-import {
-  Fish,
-  pickSwimY,
-  spawnDepthFor,
-  ALL_FISH_SPECIES,
-  BIG_AQUATIC_SPECIES,
-} from "./Fish";
-import { Dragon, createDragons } from "./Dragon";
-import { LightPool } from "./LightPool";
+import { findSurfaceY } from "../core/worldQueries";
+import type { Creature } from "../entities/Creature";
+import type { Fish } from "../entities/Fish";
+import { createDragons, type Dragon } from "../entities/Dragon";
+import type { Car } from "../entities/Car";
+import { EntityGroup } from "../entities/EntityGroup";
+import { Population, type SpawnContext } from "../entities/Population";
+import { carRules, creatureRules, fishRules } from "../entities/populations";
+import { LightPool } from "../rendering/LightPool";
 import { useGraphicsStore, type GraphicsSettings } from "../state/graphicsStore";
-import type { Rideable, RideInput } from "./Rideable";
-import { DEEP_LAKE_CENTER, DEEP_LAKE_RADIUS } from "../worldgen/deepLake";
-import { Car, type CarInput } from "./Car";
-import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER } from "../worldgen/roads";
+import type { Rideable, RideInput } from "../entities/Rideable";
 import { PlayerModel } from "./PlayerModel";
 import { HeldItem } from "./HeldItem";
 import { Clouds } from "./Clouds";
@@ -53,17 +47,12 @@ const MAX_SIM_STEPS_PER_FRAME = 5;
 const ARROW_PAN_SPEED = 2.2; // radians/sec
 const THIRD_PERSON_DISTANCE = 4.5;
 const THIRD_PERSON_UP_OFFSET = 1.0;
-const BIG_AQUATIC_SPAWN_SCAN_RADIUS = 110; // blocks around the player to look for deep water to spawn a shark/whale in
 const MIN_RIDE_ZOOM = 0.5; // multiplier on a mount's own chase-cam distance, adjusted with the mouse wheel
 const MAX_RIDE_ZOOM = 6;
-const DRIVING_EYE_HEIGHT = 0.9; // camera anchor above a car's ground-snapped position
-const ENTER_VEHICLE_RANGE = 3;
 // Real (shader-evaluated) dynamic lights at once — see LightPool.ts: every extra one costs every lit fragment on screen, so lamps, camps, torches and headlights share this handful, re-aimed at whichever are nearest the camera.
 const MIN_PIXEL_RATIO = 0.75;
 const ADAPT_LOW_FPS = 38; // below this for 1.5s, drop the render resolution a step
 const ADAPT_HIGH_FPS = 57; // at/above this for 15s, take a step back up
-const CAR_COUNT = 6;
-const CAR_COLORS = [0xc0392b, 0x2980b9, 0xf1c40f, 0x27ae60, 0xecf0f1, 0xe67e22];
 const HOLD_REPEAT_INTERVAL = 0.15; // seconds between repeats while the primary action is held down
 
 type ViewMode = "first" | "third";
@@ -86,23 +75,23 @@ export class GameLoop {
   private readonly chunkManager: ChunkManager;
   private readonly saveManager: SaveManager;
   private readonly highlightMesh: THREE.LineSegments;
-  private readonly creatures: Creature[] = [];
-  private creaturesSpawned = false;
-  private readonly fish: Fish[] = [];
-  private fishSpawned = false;
-  private readonly dragons: Dragon[];
-  // Whatever the player is currently riding (an animal, a shark/whale, the
-  // dragon) — cars are separate (drivingCar) since they're on rails and
-  // have their own AI/parking rules.
+  // Every simulated creature lives in a group (owns its scene membership and
+  // disposal); a Population decides how many exist and where they appear.
+  private readonly creatures: EntityGroup<Creature>;
+  private readonly fish: EntityGroup<Fish>;
+  private readonly dragons: EntityGroup<Dragon>;
+  private readonly cars: EntityGroup<Car>;
+  private readonly creaturePopulation: Population<Creature>;
+  private readonly fishPopulation: Population<Fish>;
+  private readonly carPopulation: Population<Car>;
+  // Whatever the player is currently riding or driving (an animal, a
+  // shark/whale, the dragon, a car) — one path for all of them.
   private mounted: Rideable | null = null;
   private rideCameraZoom = 1;
   private viewModeBeforeMount: ViewMode | null = null;
   // Set by teleportToCastle: the player is held in place (no gravity) until the destination's terrain has streamed in, then snapped onto the ground.
   private teleportPending: { x: number; z: number } | null = null;
   private lastMapYaw = 0;
-  private readonly cars: Car[] = [];
-  private carsSpawned = false;
-  private drivingCar: Car | null = null;
   private readonly playerModel: PlayerModel;
   private readonly heldItem: HeldItem;
   private readonly clouds: Clouds;
@@ -185,6 +174,13 @@ export class GameLoop {
     this.renderer.setSize(viewW, viewH, false);
 
     this.scene = new THREE.Scene();
+    this.creatures = new EntityGroup<Creature>(this.scene);
+    this.fish = new EntityGroup<Fish>(this.scene);
+    this.dragons = new EntityGroup<Dragon>(this.scene);
+    this.cars = new EntityGroup<Car>(this.scene);
+    this.creaturePopulation = new Population(this.creatures, creatureRules);
+    this.fishPopulation = new Population(this.fish, fishRules);
+    this.carPopulation = new Population(this.cars, carRules);
 
     this.camera = new THREE.PerspectiveCamera(BASE_FOV, viewW / viewH, 0.1, 1000);
     // The camera itself needs to be part of the scene graph for its
@@ -241,8 +237,7 @@ export class GameLoop {
     this.castleBanners = new CastleBanners();
     this.scene.add(this.castleBanners.group);
 
-    this.dragons = createDragons(peakY);
-    for (const dragon of this.dragons) this.scene.add(dragon.mesh);
+    for (const dragon of createDragons(peakY)) this.dragons.add(dragon);
 
     this.syncFlagVisuals();
     this.syncTorchVisuals();
@@ -385,17 +380,7 @@ export class GameLoop {
       // real tap.
       const now = performance.now();
       if (now - this.lastSpaceTapTime < 300) {
-        // While driving, double-tap Space is nitro instead of the fly
-        // toggle — flying isn't meaningful for a car, so the same
-        // gesture is free to mean something else in that context. While
-        // riding the dragon it's turbo; on any other mount Space is already
-        // climb (buildRideInput) and the player's own flying state is
-        // inert (position is glued to the mount), so the tap is ignored.
-        if (this.drivingCar) this.drivingCar.activateNitro();
-        else if (this.mounted) {
-          if (this.mounted instanceof Dragon) this.mounted.toggleTurbo();
-        } else if (this.player.flying) this.player.turbo = !this.player.turbo;
-        else this.player.flying = true;
+        this.toggleFlying();
       }
       this.lastSpaceTapTime = now;
     }
@@ -502,12 +487,15 @@ export class GameLoop {
     this.holdCooldown = HOLD_REPEAT_INTERVAL;
   }
 
-  /** Mirrors the desktop double-tap-Space gesture — a single tap is enough on touch, see ui/TouchActionButtons.tsx: nitro in a car, turbo on the dragon, and on foot it starts flying, then toggles turbo flight (landing is flying down into the ground, like on desktop). */
+  /** The double-tap-Space gesture — a single tap is enough on touch, see ui/TouchActionButtons.tsx: nitro in a car, turbo on the dragon, and on foot it starts flying, then toggles turbo flight (landing is flying down into the ground, like on desktop). */
   toggleFlying(): void {
-    if (this.drivingCar) this.drivingCar.activateNitro();
-    else if (this.mounted) {
-      if (this.mounted instanceof Dragon) this.mounted.toggleTurbo();
-    } else if (this.player.flying) this.player.turbo = !this.player.turbo;
+    // While riding, the tap is the mount's own boost (nitro for a car, turbo
+    // for the dragon): flying isn't meaningful for a mount, so the gesture is
+    // free to mean something else. A mount with nothing to boost ignores it —
+    // Space is already climb (buildRideInput), and the player's own flying
+    // state is inert while their position is glued to the mount.
+    if (this.mounted) this.mounted.boost?.();
+    else if (this.player.flying) this.player.turbo = !this.player.turbo;
     else this.player.flying = true;
   }
 
@@ -553,160 +541,6 @@ export class GameLoop {
     return raycastVoxels(this.world, eye, direction);
   }
 
-  // Waits until the initial chunk load settles (so ground actually
-  // exists to snap to) before scattering ambient passive creatures near
-  // spawn — two of every species, wide enough to feel like a populated
-  // world rather than a small huddle. Positions are randomized, not
-  // seed-derived — creature placement isn't part of world generation's
-  // determinism contract (spec/01-tech-stack-architecture.md §9 scopes
-  // that to terrain only). updateAmbientCreatures keeps them "everywhere"
-  // as the player roams: it despawns stragglers left far behind and
-  // spawns fresh ones out ahead, capped so the population never grows
-  // unbounded over a long session.
-  private trySpawnCreatures(): void {
-    if (this.creaturesSpawned || this.chunkManager.pendingCount > 0 || this.chunkManager.loadedChunkCount === 0) {
-      return;
-    }
-    this.creaturesSpawned = true;
-
-    const origin = this.player.position;
-    for (const species of ALL_SPECIES) {
-      for (let i = 0; i < 2; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const radius = 8 + Math.random() * 40;
-        const x = origin.x + Math.cos(angle) * radius;
-        const z = origin.z + Math.sin(angle) * radius;
-        const y = findSurfaceY(this.world, x, z);
-        if (y === null) continue;
-
-        const creature = new Creature(species, x, y, z);
-        this.creatures.push(creature);
-        this.scene.add(creature.mesh);
-      }
-    }
-  }
-
-  private static readonly MAX_CREATURES = 60;
-  private static readonly CREATURE_SPAWN_INTERVAL = 5; // seconds
-  private static readonly CREATURE_DESPAWN_RADIUS = 110;
-  private creatureSpawnTimer = 0;
-
-  private updateAmbientCreatures(dt: number): void {
-    for (let i = this.creatures.length - 1; i >= 0; i--) {
-      const creature = this.creatures[i];
-      const dist = Math.hypot(creature.position.x - this.player.position.x, creature.position.z - this.player.position.z);
-      if (dist <= GameLoop.CREATURE_DESPAWN_RADIUS) continue;
-      this.scene.remove(creature.mesh);
-      creature.dispose();
-      this.creatures.splice(i, 1);
-    }
-
-    if (!this.creaturesSpawned) return; // wait for the initial batch first
-    this.creatureSpawnTimer -= dt;
-    if (this.creatureSpawnTimer > 0) return;
-    this.creatureSpawnTimer = GameLoop.CREATURE_SPAWN_INTERVAL;
-
-    const spawnCount = 1 + Math.floor(Math.random() * 3);
-    for (let i = 0; i < spawnCount && this.creatures.length < GameLoop.MAX_CREATURES; i++) {
-      const species = ALL_SPECIES[Math.floor(Math.random() * ALL_SPECIES.length)];
-      const angle = Math.random() * Math.PI * 2;
-      const radius = 20 + Math.random() * 55;
-      const x = this.player.position.x + Math.cos(angle) * radius;
-      const z = this.player.position.z + Math.sin(angle) * radius;
-      const y = findSurfaceY(this.world, x, z);
-      if (y === null) continue;
-
-      const creature = new Creature(species, x, y, z);
-      this.creatures.push(creature);
-      this.scene.add(creature.mesh);
-    }
-  }
-
-  // Same "wait for the world to exist" gating as trySpawnCreatures. Scans
-  // for actual nearby water (findNearbyWaterSpots) rather than throwing
-  // random darts at the map — swimmable water is a small fraction of the
-  // surface, so a handful of random points almost always misses even a
-  // real, nearby lake entirely (verified empirically: under 1% hit rate
-  // at this search radius). A handful of fish per lake found reads as a
-  // small school rather than one lone fish per body of water.
-  private trySpawnFish(): void {
-    if (this.fishSpawned || this.chunkManager.pendingCount > 0 || this.chunkManager.loadedChunkCount === 0) {
-      return;
-    }
-    this.fishSpawned = true;
-
-    const origin = this.player.position;
-    const spots = findNearbyWaterSpots(this.world, origin.x, origin.z, 55, 150);
-    for (const spot of sampleRandom(spots, 18)) {
-      if (this.fish.length >= GameLoop.MAX_FISH) break;
-      this.spawnFishAt(spot);
-    }
-  }
-
-  private spawnFishAt(spot: { x: number; z: number; top: number; bottom: number }): void {
-    const species = ALL_FISH_SPECIES[Math.floor(Math.random() * ALL_FISH_SPECIES.length)];
-    this.addFish(new Fish(species, spot.x + Math.random(), pickSwimY(species, spot), spot.z + Math.random()));
-  }
-
-  private addFish(fish: Fish): void {
-    this.fish.push(fish);
-    this.scene.add(fish.mesh);
-  }
-
-  // Sharks and whales only live in the deep lake (worldgen/deepLake.ts) —
-  // nowhere else is deep enough — so instead of the ambient near-the-player
-  // scan they're topped back up to a fixed headcount by scanning the lake
-  // itself, whenever the player is anywhere near it. Exempt from MAX_FISH
-  // (that cap is about the swarm of tiny ones) and from the tighter
-  // despawn radius below, so one doesn't vanish the moment the player
-  // paddles across a lake that's wider than the reef fish's 90 blocks.
-  private static readonly BIG_AQUATIC_TARGETS = { shark: 5, whale: 2 } as const;
-  private static readonly BIG_AQUATIC_DESPAWN_RADIUS = 320;
-
-  private topUpBigAquatics(): void {
-    const p = this.player.position;
-    if (Math.hypot(p.x - DEEP_LAKE_CENTER.x, p.z - DEEP_LAKE_CENTER.z) > DEEP_LAKE_RADIUS + 40) return;
-    for (const species of BIG_AQUATIC_SPECIES) {
-      const have = this.fish.filter((f) => f.species === species).length;
-      if (have >= GameLoop.BIG_AQUATIC_TARGETS[species]) continue;
-      // Scan around the player (where chunks are actually loaded), not the
-      // lake's center, which can be far outside the loaded area now that the lake is so wide.
-      const spots = findNearbyWaterSpots(this.world, p.x, p.z, BIG_AQUATIC_SPAWN_SCAN_RADIUS, 200, spawnDepthFor(species));
-      const [spot] = sampleRandom(spots, 1);
-      if (spot) this.addFish(new Fish(species, spot.x + Math.random(), pickSwimY(species, spot), spot.z + Math.random()));
-    }
-  }
-
-  private static readonly MAX_FISH = 40;
-  private static readonly FISH_SPAWN_INTERVAL = 6; // seconds
-  private static readonly FISH_DESPAWN_RADIUS = 90;
-  private fishSpawnTimer = 0;
-
-  private updateAmbientFish(dt: number): void {
-    for (let i = this.fish.length - 1; i >= 0; i--) {
-      const f = this.fish[i];
-      const dist = Math.hypot(f.position.x - this.player.position.x, f.position.z - this.player.position.z);
-      if (dist <= (f.isBig ? GameLoop.BIG_AQUATIC_DESPAWN_RADIUS : GameLoop.FISH_DESPAWN_RADIUS)) continue;
-      this.scene.remove(f.mesh);
-      f.dispose();
-      this.fish.splice(i, 1);
-    }
-
-    if (!this.fishSpawned) return; // wait for the initial batch first
-    this.fishSpawnTimer -= dt;
-    if (this.fishSpawnTimer > 0) return;
-    this.fishSpawnTimer = GameLoop.FISH_SPAWN_INTERVAL;
-    this.topUpBigAquatics();
-    if (this.fish.length >= GameLoop.MAX_FISH) return;
-
-    const spots = findNearbyWaterSpots(this.world, this.player.position.x, this.player.position.z, 40, 60);
-    const spawnCount = 1 + Math.floor(Math.random() * 3);
-    for (const spot of sampleRandom(spots, spawnCount)) {
-      if (this.fish.length >= GameLoop.MAX_FISH) break;
-      this.spawnFishAt(spot);
-    }
-  }
-
   /** What the full-screen map (ui/FullMap.tsx) needs each frame it's open: the seed to sample terrain from, where the player is and which way they face, and the live landmark markers (not the swarm of creatures/fish). */
   getMapSnapshot(): { seed: number; playerX: number; playerZ: number; playerYaw: number; markers: MiniMapMarker[] } {
     return {
@@ -730,84 +564,29 @@ export class GameLoop {
     return markers;
   }
 
-  // Same "wait for ground to exist" gating as trySpawnCreatures. Cars are
-  // spaced evenly around the loop road (worldgen/roads.ts) so they start
-  // out already spread around the track their AI drives.
-  private trySpawnCars(): void {
-    if (this.carsSpawned || this.chunkManager.pendingCount > 0 || this.chunkManager.loadedChunkCount === 0) {
-      return;
-    }
-    this.carsSpawned = true;
-
-    for (let i = 0; i < CAR_COUNT; i++) {
-      const progress = (LOOP_PERIMETER / CAR_COUNT) * i;
-      const { x, z } = pointAtProgress(progress);
-      const y = findSurfaceY(this.world, x, z) ?? roadDeckYAtProgress(progress);
-
-      const car = new Car(CAR_COLORS[i % CAR_COLORS.length], y, progress);
-      this.cars.push(car);
-      this.scene.add(car.mesh);
-    }
-  }
-
-  /** Nearest car the player is close enough to hop into, or null. */
-  private findNearbyEnterableCar(): Car | null {
-    let nearest: Car | null = null;
-    let nearestDist = ENTER_VEHICLE_RANGE;
-    for (const car of this.cars) {
-      if (car.driven) continue;
-      const d = Math.hypot(car.position.x - this.player.position.x, car.position.z - this.player.position.z);
-      if (d < nearestDist) {
-        nearest = car;
-        nearestDist = d;
-      }
-    }
-    return nearest;
-  }
-
-  private toggleDriving(): void {
-    if (this.drivingCar) {
-      const car = this.drivingCar;
-      car.driven = false;
-      car.parked = true; // stays put rather than resuming AI wandering from wherever it was left
-      this.drivingCar = null;
-
-      // Step out to the car's side, re-grounded independently in case the
-      // car itself is resting on something a standing player wouldn't
-      // (e.g. it nosed a little onto a ledge).
-      const exitX = car.position.x + Math.sin(car.yaw + Math.PI / 2) * 1.5;
-      const exitZ = car.position.z + Math.cos(car.yaw + Math.PI / 2) * 1.5;
-      const groundY = findSurfaceY(this.world, exitX, exitZ) ?? car.position.y;
-      this.player.position = { x: exitX, y: groundY, z: exitZ };
-      this.player.velocity = { x: 0, y: 0, z: 0 };
-      return;
-    }
-
-    const nearest = this.findNearbyEnterableCar();
-    if (nearest) {
-      nearest.driven = true;
-      nearest.parked = false;
-      this.drivingCar = nearest;
-    }
-  }
-
-  /** Nearest rideable animal/creature/dragon within its own mount range (3D — the dragon and the sea life aren't on the ground), or null. */
-  private findNearbyRideable(): Rideable | null {
-    let nearest: Rideable | null = null;
-    let nearestDist = Infinity;
+  /** The mount the player could climb on right now: the nearest vehicle if any is in reach (a car wins over an animal beside it), else the nearest animal or dragon. */
+  private findNearbyMount(): Rideable | null {
     const p = this.player.position;
-    const consider = (r: Rideable): void => {
-      if (!r.rideable || r.ridden) return;
-      const d = Math.hypot(r.position.x - p.x, r.position.y - p.y, r.position.z - p.z);
-      if (d < r.mountRange && d < nearestDist) {
-        nearest = r;
-        nearestDist = d;
+    const groups: Iterable<Rideable>[] = [this.dragons, this.creatures, this.fish, this.cars];
+    let nearestVehicle: Rideable | null = null;
+    let nearestAnimal: Rideable | null = null;
+    let vehicleDist = Infinity;
+    let animalDist = Infinity;
+    for (const group of groups) {
+      for (const mount of group) {
+        const d = mount.mountDistanceFrom(p);
+        if (mount.mountKind === "vehicle") {
+          if (d < vehicleDist) {
+            nearestVehicle = mount;
+            vehicleDist = d;
+          }
+        } else if (d < animalDist) {
+          nearestAnimal = mount;
+          animalDist = d;
+        }
       }
-    };
-    for (const dragon of this.dragons) consider(dragon);
-    for (const creature of this.creatures) consider(creature);
-    for (const f of this.fish) consider(f);
-    return nearest;
+    }
+    return nearestVehicle ?? nearestAnimal;
   }
 
   private mountRideable(target: Rideable): void {
@@ -824,7 +603,6 @@ export class GameLoop {
 
   /** Sends the player to just outside the castle gate, dropping whatever they were driving or riding. */
   teleportToCastle(): void {
-    if (this.drivingCar) this.toggleDriving();
     if (this.mounted) this.dismountRideable();
     const { x, z } = CASTLE_GATE_SPAWN;
     const { castleBaseY } = getStructureAnchors(this.world.seed);
@@ -849,22 +627,23 @@ export class GameLoop {
     this.player.velocity = { x: 0, y: 0, z: 0 };
   }
 
-  /** Routes E: get off whatever the player is on; otherwise hop in a nearby car (the original behavior), else climb onto the nearest rideable animal/dragon. */
+  /** Routes E: get off whatever the player is on; otherwise climb onto (or into) the nearest mount in reach. */
   private handleInteractKey(): void {
-    if (this.drivingCar) {
-      this.toggleDriving();
-      return;
-    }
     if (this.mounted) {
       this.dismountRideable();
       return;
     }
-    if (this.findNearbyEnterableCar()) {
-      this.toggleDriving();
-      return;
-    }
-    const target = this.findNearbyRideable();
+    const target = this.findNearbyMount();
     if (target) this.mountRideable(target);
+  }
+
+  /** The E-key hint shown on screen (and as the touch button's label): how to get off, or what's in reach. */
+  private mountPrompt(): string | null {
+    const mount = this.mounted;
+    if (mount) return mount.mountKind === "vehicle" ? "Press E to exit vehicle" : "Press E to dismount";
+    const nearby = this.findNearbyMount();
+    if (!nearby) return null;
+    return nearby.mountKind === "vehicle" ? "Press E to drive" : `Press E to ride the ${nearby.rideName}`;
   }
 
   private static readonly MARKER_TOGGLE_RANGE = 3;
@@ -959,13 +738,6 @@ export class GameLoop {
     });
   }
 
-  private buildCarInput(): CarInput {
-    return {
-      throttle: clamp1((this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0) + this.touchMoveVector.y),
-      steer: clamp1((this.pressed.has("KeyD") ? 1 : 0) - (this.pressed.has("KeyA") ? 1 : 0) + this.touchMoveVector.x),
-    };
-  }
-
   private buildRideInput(): RideInput {
     return {
       throttle: clamp1((this.pressed.has("KeyW") ? 1 : 0) - (this.pressed.has("KeyS") ? 1 : 0) + this.touchMoveVector.y),
@@ -1037,13 +809,7 @@ export class GameLoop {
         this.camera.getWorldDirection(lookDir);
         forward3D = lookDir;
       }
-      if (this.drivingCar) {
-        this.drivingCar.tickDriven(SIM_DT, this.world, this.buildCarInput());
-        // Keep the player's own position (used for chunk streaming, HUD,
-        // and save-on-exit) glued to the car while it's being driven.
-        this.player.position = { ...this.drivingCar.position };
-        this.player.velocity = { x: 0, y: 0, z: 0 };
-      } else if (this.teleportPending) {
+      if (this.teleportPending) {
         // Hold still (no gravity) until the destination's ground exists, so
         // a long jump doesn't drop the player through unloaded terrain.
         const { x, z } = this.teleportPending;
@@ -1061,43 +827,39 @@ export class GameLoop {
       } else {
         this.player.tick(SIM_DT, this.world, this.buildPlayerInput(), forward3D, axes.right);
       }
-      for (const creature of this.creatures) creature.tick(SIM_DT, this.world);
-      for (const f of this.fish) f.tick(SIM_DT, this.world);
-      for (const car of this.cars) {
-        if (car === this.drivingCar || car.parked) continue;
-        car.tickAI(SIM_DT, this.world);
-      }
+      this.creatures.updateAll(SIM_DT, this.world);
+      this.fish.updateAll(SIM_DT, this.world);
+      this.cars.updateAll(SIM_DT, this.world);
       this.simTick++;
       this.accumulator -= SIM_DT;
       steps++;
     }
 
     // Ridden movement happens here — once per rendered frame, the same
-    // cadence the dragon's autonomous flight already used — rather than
-    // inside the fixed SIM_DT loop above. Runs before the camera/eye math
-    // below so a ridden frame's camera follows where the mount actually
-    // ends up this frame, not last frame's position. (The dragon's own
-    // update() doubles as its tickRide, so it's only ticked separately
-    // when it isn't the one being ridden.)
+    // cadence the dragon's autonomous flight uses — rather than inside the
+    // fixed SIM_DT loop above. Runs before the camera/eye math below so a
+    // ridden frame's camera follows where the mount actually ends up this
+    // frame, not last frame's position. (A ridden entity's own update() is a
+    // no-op; tickRide moves it. The player's position — used for chunk
+    // streaming, HUD and save-on-exit — stays glued to the mount.)
     if (this.mounted) {
       this.mounted.tickRide(dt, this.world, this.buildRideInput());
       this.player.position = { ...this.mounted.position };
       this.player.velocity = { x: 0, y: 0, z: 0 };
     }
-    for (const dragon of this.dragons) if (dragon !== this.mounted) dragon.update(dt);
+    this.dragons.updateAll(dt, this.world);
 
-    const driving = this.drivingCar !== null;
     const mount = this.mounted;
     const riding = mount !== null;
-    // Driving and riding use the third-person chase cam (mouse-look still
+    // Riding and driving use the third-person chase cam (mouse-look still
     // free-rotates the camera around its anchor, same as on foot) — except
     // mounts that can be seen out of (the dragon), which honor the F5 view
     // toggle so the rider can look from its head instead.
     const firstPersonRide = riding && mount.supportsFirstPerson === true && this.viewMode === "first";
-    const activeViewMode: ViewMode = driving || (riding && !firstPersonRide) ? "third" : this.viewMode;
+    const activeViewMode: ViewMode = riding && !firstPersonRide ? "third" : this.viewMode;
     if (riding) mount.setFirstPersonView?.(firstPersonRide);
     const eyeX = this.player.position.x;
-    const eyeY = this.player.position.y + (mount ? mount.rideEyeHeight : driving ? DRIVING_EYE_HEIGHT : EYE_HEIGHT);
+    const eyeY = this.player.position.y + (mount ? mount.rideEyeHeight : EYE_HEIGHT);
     const eyeZ = this.player.position.z;
     if (firstPersonRide && mount.firstPersonEye) {
       const eye = mount.firstPersonEye();
@@ -1117,17 +879,17 @@ export class GameLoop {
     const bodyYaw = new THREE.Euler().setFromQuaternion(this.camera.quaternion, "YXZ").y;
     const horizontalSpeed = Math.hypot(this.player.velocity.x, this.player.velocity.z);
     this.playerModel.update(this.player.position, bodyYaw, horizontalSpeed, dt, this.player.flying);
-    this.playerModel.visible = activeViewMode === "third" && !driving && !riding;
+    this.playerModel.visible = activeViewMode === "third" && !riding;
 
     const hotbarState = useHotbarStore.getState();
     this.heldItem.update(dt, hotbarState.mode, HOTBAR_SLOTS[hotbarState.selectedIndex], horizontalSpeed);
-    this.heldItem.group.visible = activeViewMode === "first" && !driving && !riding;
+    this.heldItem.group.visible = activeViewMode === "first" && !riding;
 
     const timeState = useTimeStore.getState();
     const timeOfDay = timeState.mode === "manual" ? timeState.manualTimeOfDay : getSystemTimeOfDay();
     this.clouds.update(dt, this.player.position.x, this.player.position.z, timeOfDay);
     // Turbo flight widens the view a little for a sense of speed.
-    const targetFov = this.player.flying && this.player.turbo && !driving && !riding ? TURBO_FOV : BASE_FOV;
+    const targetFov = this.player.flying && this.player.turbo && !riding ? TURBO_FOV : BASE_FOV;
     if (Math.abs(this.camera.fov - targetFov) > 0.05) {
       this.camera.fov += (targetFov - this.camera.fov) * Math.min(1, dt * 6);
       this.camera.updateProjectionMatrix();
@@ -1149,7 +911,7 @@ export class GameLoop {
     // Vehicles/mounts keep their heading in the movement convention
     // (forward = (sin, cos)), the opposite of the camera's (forward =
     // (-sin, -cos)) that the minimap arrow expects — hence the half turn.
-    const miniMapYaw = this.drivingCar ? this.drivingCar.yaw + Math.PI : mount ? mount.rideYaw + Math.PI : bodyYaw;
+    const miniMapYaw = mount ? mount.rideYaw + Math.PI : bodyYaw;
     this.lastMapYaw = miniMapYaw;
     this.miniMap.update(
       this.player.position.x,
@@ -1160,26 +922,18 @@ export class GameLoop {
     );
 
     this.chunkManager.update(this.player.position.x, this.player.position.z);
-    this.trySpawnCreatures();
-    this.updateAmbientCreatures(dt);
-    this.trySpawnFish();
-    this.updateAmbientFish(dt);
-    this.trySpawnCars();
+    const spawnContext: SpawnContext = {
+      world: this.world,
+      playerX: this.player.position.x,
+      playerZ: this.player.position.z,
+      // Ground exists to snap spawns to once the initial chunk load settles.
+      worldReady: this.chunkManager.pendingCount === 0 && this.chunkManager.loadedChunkCount > 0,
+    };
+    this.creaturePopulation.update(spawnContext, dt);
+    this.fishPopulation.update(spawnContext, dt);
+    this.carPopulation.update(spawnContext, dt);
 
-    const rideTarget = driving || mount ? null : this.findNearbyEnterableCar() ? null : this.findNearbyRideable();
-    useHudStore
-      .getState()
-      .setVehiclePrompt(
-        driving
-          ? "Press E to exit vehicle"
-          : mount
-            ? "Press E to dismount"
-            : this.findNearbyEnterableCar()
-              ? "Press E to drive"
-              : rideTarget
-                ? `Press E to ride the ${rideTarget.rideName}`
-                : null,
-      );
+    useHudStore.getState().setVehiclePrompt(this.mountPrompt());
 
     this.currentTarget = this.computeTargetHit();
     if (this.currentTarget) {
@@ -1232,7 +986,7 @@ export class GameLoop {
       biome: biomeKey,
       targetBlock: this.currentTarget ? getBlockById(this.currentTarget.blockId).name : null,
       pendingChunkOps: this.chunkManager.pendingCount,
-      carCount: this.cars.length,
+      carCount: this.cars.size,
       flying: this.player.flying,
       turbo: this.player.turbo,
       swimming: this.player.swimming,
@@ -1295,18 +1049,9 @@ export class GameLoop {
     this.canvas.removeEventListener("wheel", this.handleWheel);
     this.mouseLook.dispose();
     this.chunkManager.dispose();
-    for (const creature of this.creatures) {
-      this.scene.remove(creature.mesh);
-      creature.dispose();
-    }
-    for (const f of this.fish) {
-      this.scene.remove(f.mesh);
-      f.dispose();
-    }
-    for (const car of this.cars) {
-      this.scene.remove(car.mesh);
-      car.dispose();
-    }
+    this.creatures.dispose();
+    this.fish.dispose();
+    this.cars.dispose();
     this.scene.remove(this.playerModel.group);
     this.playerModel.dispose();
     this.camera.remove(this.heldItem.group);
@@ -1324,10 +1069,7 @@ export class GameLoop {
     }
     this.scene.remove(this.castleBanners.group);
     this.castleBanners.dispose();
-    for (const dragon of this.dragons) {
-      this.scene.remove(dragon.mesh);
-      dragon.dispose();
-    }
+    this.dragons.dispose();
     for (const flag of this.flagVisuals) {
       this.scene.remove(flag.group);
       flag.dispose();
