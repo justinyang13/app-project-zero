@@ -133,5 +133,5 @@ void main() {`,
 export function updateTexturedMaterial(timeSeconds: number, night: number): void {
   uniforms.uTime.value = timeSeconds;
   uniforms.uEmissiveGain.value = 0.8 + 0.45 * night;
-  uniforms.uGlowGain.value = 0.2 + 1.5 * night;
+  uniforms.uGlowGain.value = 0.45 + 1.25 * night;
 }

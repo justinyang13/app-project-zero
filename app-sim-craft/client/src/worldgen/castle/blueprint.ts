@@ -223,6 +223,7 @@ function buildCastle(): CastlePlan {
   buildKeep(b);
   buildCourtyardFeatures(b);
   buildInterior(b);
+  buildInteriorLights(b);
   buildLavaFalls(b);
   buildRampLamps(b);
   return plan;
@@ -579,6 +580,66 @@ function buildInterior(b: Builder): void {
   b.stairRun(-9, -26, 0, 1, 1, 43, 8);
 }
 
+// -- lamps through the interior ------------------------------------------------
+// Block light (castle/lightMap.ts) loses one level per block, so a lamp hung
+// under a high ceiling leaves the floor dark: these lamps sit low — set flush
+// into pillars and walls, or atop short posts — and are spaced a few blocks
+// apart so no walkable floor is left in the dark.
+function buildInteriorLights(b: Builder): void {
+  const p = b.p;
+  const lamp = (x: number, y: number, z: number): void => p.set(x, y, z, LAMP);
+
+  // The great hall (floor y = 1): a lamp in every pillar, a row of lamp posts
+  // flanking the runner, and lamps in the side, end and gate walls.
+  for (const x of [-8, 8]) {
+    for (const z of [-8, -14, -20]) lamp(x, 3, z);
+  }
+  for (const x of [-3, 3]) {
+    for (const z of [-5, -11, -17, -23]) b.lampPost(x, 1, z, 3);
+  }
+  for (const x of [-14, 14]) {
+    for (const z of [-5, -11, -17, -23]) lamp(x, 4, z);
+  }
+  for (const x of [-10, 10]) {
+    lamp(x, 3, -27);
+    lamp(x, 3, -2);
+  }
+
+  // The stair corridors from the hall up to the terrace: a lamp set in the
+  // wall every third step, alternating sides, all the way to the top.
+  for (const s of [-1, 1]) {
+    for (const i of [1, 4, 7, 10]) lamp(s * (15 + i), 1 + i + 2, i % 2 === 1 ? -9 : -5);
+  }
+
+  // The gate tunnels, outer and inner.
+  for (const x of [-4, 4]) {
+    for (const z of [-1, 2, 27, 29]) lamp(x, 3, z);
+  }
+
+  // Tier 1's gallery (floor y = 14) and upper hall (floor y = 20).
+  for (const floorY of [14, 20]) {
+    for (const [x, z] of [[-9, -16], [9, -16], [-9, -24], [9, -24]] as const) lamp(x, floorY + 2, z);
+    for (const z of [-13, -19, -26]) b.lampPost(0, floorY, z, 3);
+    for (const x of [-5, 5]) {
+      b.lampPost(x, floorY, -12, 3);
+      b.lampPost(x + Math.sign(x), floorY, -27, 3);
+    }
+    for (const x of [-17, 17]) {
+      for (const z of [-13, -19, -25, -28]) lamp(x, floorY + 2, z);
+    }
+  }
+  // Either side of the gallery's front door, and of the upper hall's.
+  for (const x of [-10, -6]) lamp(x, 16, -9);
+  for (const x of [-3, 3]) lamp(x, 22, -9);
+
+  // Tier 2's three floors: lamps in the pillars, the side walls and the middle of the room.
+  for (const floorY of [28, 35, 42]) {
+    for (const [x, z] of [[-7, -17], [7, -17], [-7, -23], [7, -23]] as const) lamp(x, floorY + 2, z);
+    for (const x of [-11, 11]) lamp(x, floorY + 2, -20);
+    for (const z of [-16, -24]) b.lampPost(0, floorY, z, 3);
+  }
+}
+
 // -- lava cascading down the cliff, following the crag's own terraces --------
 function buildLavaFalls(b: Builder): void {
   const p = b.p;
@@ -615,10 +676,16 @@ function buildLavaFalls(b: Builder): void {
 }
 
 // -- lamp posts along the approach ramp --------------------------------------
+// A pair every sixth block, from the gate down to the meadow at the ramp's
+// foot (the plan box is deep enough to hold them all), so no stretch of the
+// long stair is dark — the lamps' baked light falls on the steps between.
+const RAMP_LAMP_SPACING = 6;
+const RAMP_LAMP_MIN_Y = 66; // the meadow around the ramp's foot is never lower than this (crag.ts LAND_FLOOR_Y)
+
 function buildRampLamps(b: Builder): void {
-  for (let lz = RAMP_START_Z + 4; lz <= RAMP_START_Z + 28; lz += 8) {
+  for (let lz = RAMP_START_Z + 4; ; lz += RAMP_LAMP_SPACING) {
     const y = rampHeight(CASTLE_CENTER.x, CASTLE_CENTER.z + lz);
-    if (y === null) continue;
+    if (y === null || y < RAMP_LAMP_MIN_Y) break;
     for (const s of [-1, 1]) b.lampPost(s * 3, y + 1 - CASTLE_FLOOR_Y, lz, 2);
   }
 }

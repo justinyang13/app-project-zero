@@ -338,7 +338,8 @@ function emitTexturedQuad(
   const face = def.id * 6 + faceIndex(axis, dir);
   const layer = FACE_TILE[face];
   const frames = FACE_FRAMES[face];
-  const brightness = lightToBrightness(light);
+  // Sky light and block light are alternatives, not a sum: a face is as bright as the brighter of the two, so a lamp-lit room reads as lit by day too (the glow below only adds warm colour, and fades with daylight).
+  const brightness = lightToBrightness(Math.max(light, glowLevel));
   const [gr, gg, gb] = glowColor(glowLevel);
 
   const baseIndex = out.positions.length / 3;

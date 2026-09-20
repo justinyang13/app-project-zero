@@ -50,6 +50,60 @@ describe("castle plan", () => {
   });
 });
 
+describe("castle interior lighting", () => {
+  const plan = getCastlePlan();
+  const solid = (id: number): boolean => id !== UNSET && id !== 0;
+
+  /** Every cell a player can stand in (air, headroom, solid floor) that has a roof over it. */
+  function indoorStandingCells(): { lx: number; ly: number; lz: number; light: number }[] {
+    const cells: { lx: number; ly: number; lz: number; light: number }[] = [];
+    for (let ly = 1; ly <= 60; ly++) {
+      for (let lz = -36; lz <= 30; lz++) {
+        for (let lx = -40; lx <= 40; lx++) {
+          if (plan.get(lx, ly, lz) !== 0 || plan.get(lx, ly + 1, lz) !== 0 || !solid(plan.get(lx, ly - 1, lz))) continue;
+          let roofed = false;
+          for (let k = 2; k <= 20 && !roofed; k++) roofed = solid(plan.get(lx, ly + k, lz));
+          if (roofed) cells.push({ lx, ly, lz, light: castleBlockLightAt(CASTLE_CENTER.x + lx, CASTLE_FLOOR_Y + ly, CASTLE_CENTER.z + lz) });
+        }
+      }
+    }
+    return cells;
+  }
+
+  it("leaves no roofed floor in the dark", () => {
+    const cells = indoorStandingCells();
+    expect(cells.length).toBeGreaterThan(2000); // the scan really found the castle's rooms
+    const dark = cells.filter((c) => c.light < 6).map((c) => `(${c.lx}, ${c.ly}, ${c.lz}) = ${c.light}`);
+    expect(dark).toEqual([]);
+  });
+
+  it("lights the whole length of both stair corridors", () => {
+    for (const s of [-1, 1]) {
+      for (let i = 0; i <= 12; i++) {
+        const x = CASTLE_CENTER.x + s * (15 + i);
+        for (const lz of [-8, -7, -6]) {
+          expect(castleBlockLightAt(x, CASTLE_FLOOR_Y + 1 + i + 1, CASTLE_CENTER.z + lz)).toBeGreaterThanOrEqual(6);
+        }
+      }
+    }
+  });
+});
+
+describe("castle approach ramp lighting", () => {
+  it("lights every step of the long stair, from the gate down to the meadow", () => {
+    const dark: string[] = [];
+    for (let lz = RAMP_START_Z; ; lz++) {
+      const surface = rampHeight(CASTLE_CENTER.x, CASTLE_CENTER.z + lz)!;
+      if (surface < 67) break; // the meadow at the ramp's foot is never lower than this
+      for (const lx of [-2, -1, 0, 1, 2]) {
+        const light = castleBlockLightAt(CASTLE_CENTER.x + lx, surface + 1, CASTLE_CENTER.z + lz);
+        if (light < 5) dark.push(`(${lx}, z ${lz}) = ${light}`);
+      }
+    }
+    expect(dark).toEqual([]);
+  });
+});
+
 describe("castle crag", () => {
   it("holds the plateau at the courtyard floor height under the castle", () => {
     expect(cragHeight(CASTLE_CENTER.x, CASTLE_CENTER.z)).toBe(CASTLE_FLOOR_Y);

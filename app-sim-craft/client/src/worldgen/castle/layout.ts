@@ -21,12 +21,14 @@ export const CASTLE_MIN_Z = -36;
 export const CASTLE_MAX_Z = 30;
 
 // The dense plan box (blocks + baked block-light) — a margin beyond the
-// footprint so firelight has room to spread past the walls.
+// footprint so firelight has room to spread past the walls, and deep and long
+// enough to hold the whole approach ramp (it runs from the outer gate down to
+// the meadow at about y = 67) with its lamps.
 export const PLAN_MIN_X = -58;
 export const PLAN_MAX_X = 58;
 export const PLAN_MIN_Z = -50;
-export const PLAN_MAX_Z = 62;
-export const PLAN_MIN_Y = -14;
+export const PLAN_MAX_Z = 82;
+export const PLAN_MIN_Y = -36;
 export const PLAN_MAX_Y = 74;
 
 // The approach: a carved causeway from the meadow up to the outer gate.

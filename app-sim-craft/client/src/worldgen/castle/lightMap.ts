@@ -9,7 +9,7 @@
 // real point lights would make every material in the scene slower).
 import { BLOCKS } from "../../data/blocks";
 import { CHUNK_SIZE } from "../../core/Chunk";
-import { cragHeight } from "./crag";
+import { cragHeight, rampHeight } from "./crag";
 import { getCastlePlan } from "./blueprint";
 import { UNSET } from "./plan";
 import { CASTLE_CENTER, CASTLE_FLOOR_Y, PLAN_MAX_X, PLAN_MAX_Y, PLAN_MAX_Z, PLAN_MIN_X, PLAN_MIN_Y, PLAN_MIN_Z } from "./layout";
@@ -45,7 +45,9 @@ function buildLightMap(): Uint8Array {
     let g = groundCache.get(key);
     if (g === undefined) {
       const crag = cragHeight(CASTLE_CENTER.x + lx, CASTLE_CENTER.z + lz);
-      g = crag === -Infinity ? 68 : crag;
+      const ramp = rampHeight(CASTLE_CENTER.x + lx, CASTLE_CENTER.z + lz);
+      // The approach ramp is cut through the crag (worldgen/castle/crag.ts applyCrag), so on its columns the ramp, not the crag, is the ground.
+      g = ramp ?? (crag === -Infinity ? 68 : crag);
       groundCache.set(key, g);
     }
     return g;
