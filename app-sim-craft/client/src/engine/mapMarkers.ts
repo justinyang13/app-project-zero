@@ -2,7 +2,7 @@
 // the world. Cheap to rebuild every frame — a handful of fixed points and one
 // per creature/fish.
 import type { Entity } from "../entities/Entity";
-import type { MapMarkerRecord, TorchRecord } from "../persistence/db";
+import type { MapMarker, PlacedTorch } from "../core/playerState";
 import { CAMPFIRE_SITES, CASTLE_CENTER } from "../worldgen/structures";
 import type { MiniMapMarker, MiniMapMarkerKind } from "./MiniMap";
 
@@ -10,8 +10,8 @@ export interface MarkerSources {
   dragons: Iterable<Entity>;
   creatures: Iterable<Entity>;
   fish: Iterable<Entity>;
-  customMarkers: readonly MapMarkerRecord[];
-  torches: readonly TorchRecord[];
+  customMarkers: readonly MapMarker[];
+  torches: readonly PlacedTorch[];
 }
 
 export function collectMapMarkers(sources: MarkerSources): MiniMapMarker[] {

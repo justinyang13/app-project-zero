@@ -47,7 +47,7 @@ import { MiniMap, type MiniMapMarker } from "./MiniMap";
 import { CASTLE_GATE_SPAWN, getStructureAnchors } from "../worldgen/structures";
 import { sampleColumn } from "../worldgen/terrain";
 import { SaveManager } from "../persistence/SaveManager";
-import type { MapMarkerRecord, TorchRecord } from "../persistence/db";
+import type { MapMarker, PlacedTorch, PlayerSnapshot } from "../core/playerState";
 
 const SIM_HZ = 20;
 const SIM_DT = 1 / SIM_HZ;
@@ -58,8 +58,6 @@ const CAMERA_FAR = 1000;
 const BASE_FOV = 70;
 const MARKER_TOGGLE_RANGE = 3;
 const TORCH_TOGGLE_RANGE = 1.5;
-
-type LoadedPlayerState = Awaited<ReturnType<SaveManager["load"]>>["playerState"];
 
 const scratchLook = new THREE.Vector3();
 
@@ -75,8 +73,8 @@ export class GameLoop implements GameActions {
   private readonly controller: PlayerController;
   private readonly input: InputManager;
   private readonly build: BuildTools;
-  private readonly markers: PlacedSet<MapMarkerRecord, Flag>;
-  private readonly torches: PlacedSet<TorchRecord, Torch>;
+  private readonly markers: PlacedSet<MapMarker, Flag>;
+  private readonly torches: PlacedSet<PlacedTorch, Torch>;
   // Every simulated creature lives in a group (owns its scene membership and
   // disposal); a Population decides how many exist and where they appear.
   private readonly creatures: EntityGroup<Creature>;
@@ -119,7 +117,7 @@ export class GameLoop implements GameActions {
     minimapCanvas: HTMLCanvasElement,
     seed: number,
     saveManager: SaveManager,
-    playerState: LoadedPlayerState,
+    playerState: PlayerSnapshot | null,
     renderDistanceColumns: number,
   ) {
     this.saveManager = saveManager;
@@ -170,8 +168,8 @@ export class GameLoop implements GameActions {
 
     // Flags (which double as minimap markers) and torches are saved the moment they change, so a
     // remembered spot survives a crash or hard-close.
-    const saveNow = (): void => this.savePlayerStateNow();
-    this.markers = new PlacedSet<MapMarkerRecord, Flag>(
+    const saveNow = (): void => void saveManager.savePlayerState();
+    this.markers = new PlacedSet<MapMarker, Flag>(
       this.scene,
       {
         toggleRange: MARKER_TOGGLE_RANGE,
@@ -184,7 +182,7 @@ export class GameLoop implements GameActions {
       playerState?.markers ?? [],
       saveNow,
     );
-    this.torches = new PlacedSet<TorchRecord, Torch>(
+    this.torches = new PlacedSet<PlacedTorch, Torch>(
       this.scene,
       {
         toggleRange: TORCH_TOGGLE_RANGE,
@@ -235,8 +233,8 @@ export class GameLoop implements GameActions {
     });
 
     this.input = new InputManager(canvas, this);
-    window.addEventListener("beforeunload", this.handleBeforeUnload);
-    document.addEventListener("visibilitychange", this.handleBeforeUnload);
+    // The save manager decides when to persist (autosave, page hide/unload); it just needs to know where to read the live state.
+    saveManager.trackPlayerState(() => this.buildPlayerStateSnapshot());
   }
 
   /** Applies the player's graphics settings (see state/graphicsStore.ts) to the running game — at startup and whenever they change. */
@@ -465,13 +463,12 @@ export class GameLoop implements GameActions {
   // Persistence hooks and teardown
   // ---------------------------------------------------------------------------
 
-  // Captures live position/look/mode into a save-ready snapshot. Called both from a real page-unload
-  // (the only path guaranteed to fire on a hard reload/tab close — React's unmount cleanup does not)
-  // and from dispose() (dev HMR, or a future in-game "back to menu").
-  private buildPlayerStateSnapshot() {
+  // Captures live position/look/mode into a save-ready snapshot; SaveManager reads it whenever it saves
+  // (autosave, page hide/unload, a placed flag or torch, dispose).
+  private buildPlayerStateSnapshot(): PlayerSnapshot {
     const player = this.controller.player;
     return {
-      position: player.position,
+      position: { ...player.position },
       yaw: cameraYaw(this.camera),
       pitch: cameraPitch(this.camera),
       flying: player.flying,
@@ -481,31 +478,14 @@ export class GameLoop implements GameActions {
     };
   }
 
-  private savePlayerStateNow(): void {
-    void this.saveManager.savePlayerState(this.buildPlayerStateSnapshot());
-  }
-
-  private handleBeforeUnload = (): void => {
-    this.savePlayerStateNow();
-  };
-
-  /**
-   * Awaits a full flush of player state + dirty chunk diffs to IndexedDB.
-   * Unlike beforeunload/dispose's fire-and-forget saves (the page may be
-   * gone before those land), this is used before operations that touch
-   * this world's IndexedDB rows right afterward — switching/renaming/
-   * pushing a world — where a write racing in after would be a real bug.
-   */
-  async flushAll(): Promise<void> {
-    await this.saveManager.savePlayerState(this.buildPlayerStateSnapshot());
-    await this.saveManager.flushDirtyChunks();
+  /** Awaits a full flush of player state + dirty chunk diffs — for operations that touch this world's stored rows right afterward (switching, renaming, pushing a world). */
+  flushAll(): Promise<void> {
+    return this.saveManager.flushAll();
   }
 
   dispose(): void {
     this.disposed = true;
     cancelAnimationFrame(this.rafHandle);
-    window.removeEventListener("beforeunload", this.handleBeforeUnload);
-    document.removeEventListener("visibilitychange", this.handleBeforeUnload);
     this.input.dispose();
     this.mouseLook.dispose();
     this.chunkManager.dispose();
@@ -528,8 +508,6 @@ export class GameLoop implements GameActions {
     this.lightPool.dispose(this.scene);
     this.view.dispose();
 
-    this.savePlayerStateNow();
-    void this.saveManager.flushDirtyChunks();
-    this.saveManager.dispose();
+    this.saveManager.dispose(); // final save
   }
 }

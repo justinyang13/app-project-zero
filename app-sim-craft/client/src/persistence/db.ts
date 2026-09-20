@@ -1,12 +1,13 @@
 // IndexedDB schema per spec/14-persistence-saves.md §4 and
 // spec/23-data-schema-reference.md §8. Supports multiple named local
-// worlds (see persistence/migration.ts for how the previous single
+// worlds (see persistence/worldSelection.ts for how the previous single
 // always-on "default" world upgrades into this) — chunk diffs stored as
 // sparse (localIndex, blockId) pairs only (no automatic full-array
 // fallback past the spec's ~40%-modified threshold — a documented
 // simplification, fine at this scale since heavily-sculpted single
 // chunks are rare early on).
 import { openDB, type DBSchema, type IDBPDatabase } from "idb";
+import type { MapMarker, PlacedTorch } from "../core/playerState";
 
 export interface WorldRecord {
   id: string;
@@ -18,22 +19,6 @@ export interface WorldRecord {
   schemaVersion: number;
 }
 
-export interface MapMarkerRecord {
-  x: number;
-  z: number;
-  // Optional so markers saved before this field existed still load — the
-  // in-world flag visual falls back to ground height at that (x, z) when
-  // it's missing (see GameLoop.ts's syncFlagVisuals).
-  y?: number;
-  label: string;
-}
-
-export interface TorchRecord {
-  x: number;
-  y: number;
-  z: number;
-}
-
 export interface PlayerStateRecord {
   worldId: string;
   position: { x: number; y: number; z: number };
@@ -42,9 +27,9 @@ export interface PlayerStateRecord {
   flying: boolean;
   selectedHotbarIndex: number;
   // Optional so records saved before this field existed still load —
-  // GameLoop defaults it to [] when reading.
-  markers?: MapMarkerRecord[];
-  torches?: TorchRecord[];
+  // the repository defaults them to [] when reading.
+  markers?: MapMarker[];
+  torches?: PlacedTorch[];
   schemaVersion: number;
 }
 

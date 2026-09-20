@@ -1,65 +1,60 @@
-// Autosave + explicit chunk/player persistence, per
-// spec/14-persistence-saves.md §2-3. Operates on whichever named world id
-// it's given at load() — see persistence/migration.ts for how that id is
-// resolved (first run / legacy-save rename / already-chosen) before this
-// ever starts its autosave timer.
+// Autosave + explicit chunk/player persistence for the world being played, per
+// spec/14-persistence-saves.md §2-3. Holds the live, in-memory chunk diffs and
+// decides *when* things are written — an autosave timer, page hide/unload, and
+// chunk eviction — while WorldRepository owns *how* (the on-disk layout).
+// Operates on whichever named world id it's given at load(); see
+// persistence/worldSelection.ts for how that id is resolved.
 import { hashSeedString } from "../worldgen/noise";
-import { openSimCraftDB, type PlayerStateRecord } from "./db";
-import type { Chunk } from "../core/Chunk";
+import { chunkKey, type Chunk } from "../core/Chunk";
+import type { PlayerSnapshot } from "../core/playerState";
+import {
+  loadChunkOverrides,
+  loadPlayerSnapshot,
+  openWorld,
+  saveChunkOverrides,
+  savePlayerSnapshot,
+} from "./WorldRepository";
 
-const SCHEMA_VERSION = 1;
 const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000; // spec default: every 2 real-world minutes
 
 export interface LoadedWorldInfo {
   seed: number;
   isNewWorld: boolean;
-  playerState: PlayerStateRecord | null;
+  playerState: PlayerSnapshot | null;
+}
+
+function randomSeed(): number {
+  return hashSeedString(crypto.getRandomValues(new Uint32Array(2)).join("-"));
 }
 
 export class SaveManager {
-  private db!: Awaited<ReturnType<typeof openSimCraftDB>>;
   private worldId!: string;
   private readonly chunkDiffs = new Map<string, Map<number, number>>();
   private readonly dirtyChunkKeys = new Set<string>();
+  private playerStateProvider: (() => PlayerSnapshot) | null = null;
   private autosaveHandle: ReturnType<typeof setInterval> | null = null;
 
   async load(worldId: string): Promise<LoadedWorldInfo> {
     this.worldId = worldId;
-    this.db = await openSimCraftDB();
+    const { record, isNew } = await openWorld(worldId, randomSeed);
 
-    let record = await this.db.get("worlds", worldId);
-    let isNewWorld = false;
-    if (!record) {
-      isNewWorld = true;
-      const seedString = crypto.getRandomValues(new Uint32Array(2)).join("-");
-      record = {
-        id: worldId,
-        name: worldId,
-        seed: hashSeedString(seedString),
-        worldType: "standard",
-        createdAt: Date.now(),
-        lastPlayedAt: Date.now(),
-        schemaVersion: SCHEMA_VERSION,
-      };
-      await this.db.put("worlds", record);
-    } else {
-      record.lastPlayedAt = Date.now();
-      await this.db.put("worlds", record);
+    for (const [coordKey, overrides] of await loadChunkOverrides(worldId)) {
+      this.chunkDiffs.set(coordKey, new Map(overrides));
     }
+    const playerState = await loadPlayerSnapshot(worldId);
 
-    const allChunkRecords = await this.db.getAllFromIndex("chunks", "worldId", worldId);
-    for (const rec of allChunkRecords) {
-      const coordKey = rec.key.slice(worldId.length + 1);
-      this.chunkDiffs.set(coordKey, new Map(rec.overrides));
-    }
-
-    const playerState = (await this.db.get("playerState", worldId)) ?? null;
-
-    this.startAutosave();
-    window.addEventListener("beforeunload", this.flushSync);
+    this.autosaveHandle = setInterval(() => void this.flushAll(), AUTOSAVE_INTERVAL_MS);
+    // Best-effort — IndexedDB writes are async and beforeunload can't reliably await them, but
+    // queuing the writes gives the browser a chance to finish them before the page actually unloads.
+    window.addEventListener("beforeunload", this.handlePageLeaving);
     document.addEventListener("visibilitychange", this.handleVisibilityChange);
 
-    return { seed: record.seed, isNewWorld, playerState };
+    return { seed: record.seed, isNewWorld: isNew, playerState };
+  }
+
+  /** Registers where to read the live player state from whenever it needs saving. Set once by the game after load. */
+  trackPlayerState(provider: () => PlayerSnapshot): void {
+    this.playerStateProvider = provider;
   }
 
   getChunkDiff(coordKey: string): [number, number][] | null {
@@ -79,60 +74,55 @@ export class SaveManager {
 
   /** Immediately flushes one chunk's diff (used on eviction, so unloading a chunk never loses an edit). */
   async saveChunkNow(chunk: Chunk): Promise<void> {
-    const coordKey = `${chunk.coord.cx},${chunk.coord.cy},${chunk.coord.cz}`;
+    const coordKey = chunkKey(chunk.coord);
     this.dirtyChunkKeys.delete(coordKey);
-    const diff = this.chunkDiffs.get(coordKey);
-    if (!diff) return;
-    await this.db.put("chunks", {
-      key: `${this.worldId}:${coordKey}`,
-      worldId: this.worldId,
-      overrides: [...diff.entries()],
-      schemaVersion: SCHEMA_VERSION,
-    });
+    await this.writeChunk(coordKey);
   }
 
-  async savePlayerState(state: Omit<PlayerStateRecord, "worldId" | "schemaVersion">): Promise<void> {
-    await this.db.put("playerState", { ...state, worldId: this.worldId, schemaVersion: SCHEMA_VERSION });
+  /** Saves the live player state (position, look, hotbar, markers, torches). */
+  async savePlayerState(): Promise<void> {
+    if (!this.playerStateProvider) return;
+    await savePlayerSnapshot(this.worldId, this.playerStateProvider());
   }
 
-  /** Flushes every dirty chunk diff — the autosave-timer and pause-menu "Save Now" path. */
+  /** Flushes every dirty chunk diff. */
   async flushDirtyChunks(): Promise<void> {
     const keys = [...this.dirtyChunkKeys];
     this.dirtyChunkKeys.clear();
-    await Promise.all(
-      keys.map((coordKey) => {
-        const diff = this.chunkDiffs.get(coordKey);
-        if (!diff) return Promise.resolve();
-        return this.db.put("chunks", {
-          key: `${this.worldId}:${coordKey}`,
-          worldId: this.worldId,
-          overrides: [...diff.entries()],
-          schemaVersion: SCHEMA_VERSION,
-        });
-      }),
-    );
+    await Promise.all(keys.map((coordKey) => this.writeChunk(coordKey)));
   }
 
-  private startAutosave(): void {
-    this.autosaveHandle = setInterval(() => {
-      void this.flushDirtyChunks();
-    }, AUTOSAVE_INTERVAL_MS);
+  /**
+   * Awaits a full flush of player state + dirty chunk diffs. Unlike the
+   * fire-and-forget saves on page-leave/dispose (the page may be gone before
+   * those land), this is for operations that touch this world's rows right
+   * afterward — switching/renaming/pushing a world — where a write racing in
+   * after would be a real bug.
+   */
+  async flushAll(): Promise<void> {
+    await this.savePlayerState();
+    await this.flushDirtyChunks();
   }
 
-  private handleVisibilityChange = (): void => {
-    if (document.visibilityState === "hidden") void this.flushDirtyChunks();
-  };
-
-  // Best-effort — IndexedDB writes are async and beforeunload can't
-  // reliably await them, but queuing the write gives the browser a
-  // chance to finish it before the page actually unloads.
-  private flushSync = (): void => {
-    void this.flushDirtyChunks();
-  };
-
+  /** Final save, then stop listening. The writes are fire-and-forget: teardown can't wait for them. */
   dispose(): void {
     if (this.autosaveHandle) clearInterval(this.autosaveHandle);
-    window.removeEventListener("beforeunload", this.flushSync);
+    window.removeEventListener("beforeunload", this.handlePageLeaving);
     document.removeEventListener("visibilitychange", this.handleVisibilityChange);
+    void this.flushAll();
   }
+
+  private async writeChunk(coordKey: string): Promise<void> {
+    const diff = this.chunkDiffs.get(coordKey);
+    if (!diff) return;
+    await saveChunkOverrides(this.worldId, coordKey, [...diff.entries()]);
+  }
+
+  private handlePageLeaving = (): void => {
+    void this.flushAll();
+  };
+
+  private handleVisibilityChange = (): void => {
+    if (document.visibilityState === "hidden") void this.flushAll();
+  };
 }

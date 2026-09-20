@@ -33,7 +33,7 @@ beforeEach(() => {
 describe("legacy world migration", () => {
   it("renames the pre-multi-world default save and re-keys every associated record, losing and duplicating nothing", async () => {
     const { openSimCraftDB } = await import("./db");
-    const { LEGACY_WORLD_ID, resolveActiveWorldId, finalizeWorldChoice } = await import("./migration");
+    const { LEGACY_WORLD_ID, resolveActiveWorldId, finalizeWorldChoice } = await import("./worldSelection");
 
     const db = await openSimCraftDB();
     await db.put("worlds", {
@@ -99,7 +99,7 @@ describe("legacy world migration", () => {
   });
 
   it("a true first run (no legacy save, nothing chosen yet) needs naming with legacyWorldId null", async () => {
-    const { resolveActiveWorldId } = await import("./migration");
+    const { resolveActiveWorldId } = await import("./worldSelection");
     const resolution = await resolveActiveWorldId();
     if (!resolution.needsNaming) throw new Error("expected first run to require naming");
     expect(resolution.legacyWorldId).toBeNull();
@@ -108,7 +108,7 @@ describe("legacy world migration", () => {
 
   it("an already-named world (post-migration normal case) skips the naming modal entirely", async () => {
     const { openSimCraftDB } = await import("./db");
-    const { finalizeWorldChoice, resolveActiveWorldId } = await import("./migration");
+    const { finalizeWorldChoice, resolveActiveWorldId } = await import("./worldSelection");
 
     const db = await openSimCraftDB();
     await db.put("worlds", { id: "my-castle", name: "my-castle", seed: 1, worldType: "standard", createdAt: 1, lastPlayedAt: 1, schemaVersion: 1 });
@@ -120,7 +120,7 @@ describe("legacy world migration", () => {
 
   it("rejects a duplicate name and an empty/invalid name with a clear inline error", async () => {
     const { openSimCraftDB } = await import("./db");
-    const { validateWorldName } = await import("./migration");
+    const { validateWorldName } = await import("./worldNames");
 
     const db = await openSimCraftDB();
     await db.put("worlds", { id: "taken", name: "taken", seed: 1, worldType: "standard", createdAt: 1, lastPlayedAt: 1, schemaVersion: 1 });

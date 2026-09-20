@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
 import { useWorldStore } from "../state/worldStore";
 import { getActiveGameLoop } from "../engine/activeGameLoop";
-import { listWorlds, renameWorld, setActiveWorldId, validateWorldName } from "../persistence/migration";
+import { listWorlds, renameWorld } from "../persistence/WorldRepository";
+import { setActiveWorldId } from "../persistence/worldSelection";
+import { validateWorldName } from "../persistence/worldNames";
 import { slugify } from "../persistence/slug";
 import { exportWorld, importWorld } from "../persistence/worldExport";
 import { pullMap, pushMap, SYNC_SERVER_URL } from "../sync/syncClient";

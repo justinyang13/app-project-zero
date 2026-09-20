@@ -16,7 +16,8 @@ import { WorldNameModal } from "./ui/WorldNameModal";
 import { TouchControls } from "./ui/TouchControls";
 import { TouchOverrideToggle } from "./ui/TouchOverrideToggle";
 import { GraphicsPanel } from "./ui/GraphicsPanel";
-import { finalizeWorldChoice, resolveActiveWorldId, validateWorldName, type WorldResolution } from "./persistence/migration";
+import { finalizeWorldChoice, resolveActiveWorldId, type WorldResolution } from "./persistence/worldSelection";
+import { validateWorldName } from "./persistence/worldNames";
 import { useWorldStore } from "./state/worldStore";
 
 export function App() {

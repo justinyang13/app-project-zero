@@ -6,7 +6,7 @@ import * as THREE from "three";
 import type { World } from "../core/World";
 import { AIR_ID, getBlockByKey } from "../data/blocks";
 import { HOTBAR_SLOTS, useHotbarStore } from "../state/hotbarStore";
-import type { MapMarkerRecord, TorchRecord } from "../persistence/db";
+import type { MapMarker, PlacedTorch } from "../core/playerState";
 import type { ChunkManager } from "./ChunkManager";
 import type { Flag } from "./Flag";
 import type { PlacedSet } from "./PlacedSet";
@@ -24,8 +24,8 @@ export interface BuildToolsDeps {
   scene: THREE.Scene;
   camera: THREE.Camera;
   player: Player;
-  markers: PlacedSet<MapMarkerRecord, Flag>;
-  torches: PlacedSet<TorchRecord, Torch>;
+  markers: PlacedSet<MapMarker, Flag>;
+  torches: PlacedSet<PlacedTorch, Torch>;
 }
 
 export class BuildTools {

@@ -1,9 +1,9 @@
 // A player-placed light source (Torch build mode — see hotbarStore.ts
 // and ui/Hotbar.tsx). Unlike CampfireVisual's flame/light, which sits on
 // top of a log pile baked into world generation, a torch isn't part of
-// world-gen at all — it's placed and removed at runtime (see GameLoop.ts's
-// toggleTorchAt) and persisted alongside custom markers (see
-// persistence/db.ts's TorchRecord). Always lit, day or night — a burning
+// world-gen at all — it's placed and removed at runtime (see BuildTools.ts's
+// torch mode) and persisted alongside custom markers (see
+// core/playerState.ts's PlacedTorch). Always lit, day or night — a burning
 // torch doesn't care what time it is, unlike StreetLamp's night-gated bulb.
 import * as THREE from "three";
 import { poolLight, releaseLight } from "../rendering/LightPool";
