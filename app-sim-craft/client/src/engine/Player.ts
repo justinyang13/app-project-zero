@@ -8,7 +8,7 @@
 // are still out of scope for this pass — see 07-survival-systems.md and
 // 17-game-modes-progression.md for the systems this will plug into once
 // gathered items, food, and Survival/Creative mode selection exist.
-import type { World } from "./World";
+import type { World } from "../core/World";
 import { isLiquid, isSolidBlock } from "../data/blocks";
 
 export const PLAYER_WIDTH = 0.6;

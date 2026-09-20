@@ -7,7 +7,7 @@
 // instead of a flat wash of one color. Cut out via the material's
 // alphaTest rather than alpha blending, so there's no transparency sort
 // order to get wrong against the rest of the chunk (see
-// engine/ChunkManager.ts's foliageMaterial). Main-thread only (uses the
+// rendering/meshLayers.ts's foliageMaterial). Main-thread only (uses the
 // DOM canvas API) — call this from ChunkManager, not from inside the mesh
 // worker.
 import * as THREE from "three";

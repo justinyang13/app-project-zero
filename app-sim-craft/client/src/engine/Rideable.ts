@@ -5,7 +5,7 @@
 // its own movement rules (ground-snapping, staying in water, free flight);
 // GameLoop only glues the player's position and camera to it.
 import type { Object3D } from "three";
-import type { World } from "./World";
+import type { World } from "../core/World";
 
 export interface RideInput {
   throttle: number; // -1..1

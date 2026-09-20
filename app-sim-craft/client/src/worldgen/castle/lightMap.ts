@@ -7,8 +7,8 @@
 // wall lights up where a flame can actually see it and stays dark behind a
 // corner, at zero runtime cost and with no per-light GPU work (dozens of
 // real point lights would make every material in the scene slower).
-import { BLOCKS } from "../../../data/blocks";
-import { CHUNK_SIZE } from "../../Chunk";
+import { BLOCKS } from "../../data/blocks";
+import { CHUNK_SIZE } from "../../core/Chunk";
 import { cragHeight } from "./crag";
 import { getCastlePlan } from "./blueprint";
 import { UNSET } from "./plan";

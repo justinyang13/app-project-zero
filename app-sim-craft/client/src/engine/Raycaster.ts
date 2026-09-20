@@ -1,7 +1,7 @@
 // Voxel-stepped raycasting for block targeting, per
 // spec/05-player-mechanics.md §4 (DDA algorithm, 5-block reach).
 import { AIR_ID, getBlockById } from "../data/blocks";
-import type { World } from "./World";
+import type { World } from "../core/World";
 
 export interface RaycastHit {
   block: { x: number; y: number; z: number };

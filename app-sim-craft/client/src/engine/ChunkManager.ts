@@ -3,9 +3,9 @@
 // spec/15-performance.md §3. Owns the worker pools; the Three.js meshes for
 // each loaded chunk live in rendering/ChunkRenderer.ts.
 import type * as THREE from "three";
-import { CHUNK_SIZE, Chunk, chunkKey, localIndex, type ChunkCoord } from "./Chunk";
-import { World } from "./World";
-import { relightAfterEdit } from "./Lighting";
+import { CHUNK_SIZE, Chunk, chunkKey, localIndex, localX, localY, localZ, type ChunkCoord } from "../core/Chunk";
+import { World } from "../core/World";
+import { relightAfterEdit } from "../core/Lighting";
 import { WorkerPool, defaultPoolSize } from "./WorkerPool";
 import type { TerrainGenApi, GeneratedChunkData } from "../workers/terrain-gen.worker";
 import type { MeshApi } from "../workers/mesh.worker";
@@ -142,14 +142,11 @@ export class ChunkManager {
       chunk.modifiedFromGenerated = true;
       for (const [index, blockId] of diff) chunk.blocks[index] = blockId;
       for (const [index] of diff) {
-        const x = index & 31;
-        const y = (index >> 5) & 31;
-        const z = (index >> 10) & 31;
         relightAfterEdit(
           this.world,
-          chunk.coord.cx * CHUNK_SIZE + x,
-          chunk.coord.cy * CHUNK_SIZE + y,
-          chunk.coord.cz * CHUNK_SIZE + z,
+          chunk.coord.cx * CHUNK_SIZE + localX(index),
+          chunk.coord.cy * CHUNK_SIZE + localY(index),
+          chunk.coord.cz * CHUNK_SIZE + localZ(index),
         );
       }
     }

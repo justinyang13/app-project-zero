@@ -4,7 +4,7 @@
 // Phase 5 (spec/22-roadmap-milestones.md). This is a deliberately small
 // 1D-temperature slice (3 biomes) so terrain generation is real and
 // varied without pulling in vegetation/structures/caves yet.
-import { getBlockByKey } from "../../data/blocks";
+import { getBlockByKey } from "../data/blocks";
 
 export interface BiomeDef {
   key: string;

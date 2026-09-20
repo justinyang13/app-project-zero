@@ -5,10 +5,10 @@
 // are Phase 4/5 per spec/22-roadmap-milestones.md) — this is the minimum
 // pipeline that produces real, varied, deterministic terrain to walk on
 // and mine into.
-import { CHUNK_SIZE, Chunk } from "../Chunk";
+import { CHUNK_SIZE, Chunk, localIndex } from "../core/Chunk";
 import { fbm2D, seededNoise2D } from "./noise";
 import { pickBiome, CRAG_BIOME, type BiomeDef } from "./biomes";
-import { getBlockByKey } from "../../data/blocks";
+import { WATER_ID, getBlockByKey } from "../data/blocks";
 import { placeTrees, planTrees, treesMaxY } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
 import { FLAT_ROAD_Y } from "./roads";
@@ -26,7 +26,6 @@ const TURF_ID = getBlockByKey("turf").id;
 const SNOW_TURF_ID = getBlockByKey("snow_turf").id;
 // Ground this high (or higher) is under snow whatever the biome — the summit of the dragon hill.
 const SNOW_LINE_Y = 104;
-export const WATER_ID = getBlockByKey("water").id;
 const ROAD_ID = getBlockByKey("asphalt").id;
 const PLANK_ID = getBlockByKey("plank").id;
 const LOG_ID = getBlockByKey("log").id;
@@ -86,7 +85,7 @@ export function maxChunkYFor(height: number): number {
  * Generates every vertical chunk (cy 0..maxCy) for one chunk column
  * (cx, cz), filling blocks per-column from `sampleColumn` and an initial
  * top-down sky-light flood (correct as-generated, since this pipeline
- * has no overhangs — see engine/Lighting.ts for the post-edit case,
+ * has no overhangs — see core/Lighting.ts for the post-edit case,
  * which does handle overhangs created by later block edits).
  */
 export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
@@ -149,7 +148,7 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
         for (let ly = 0; ly < CHUNK_SIZE; ly++) {
           const worldY = baseY + ly;
           if (worldY > filledTop) break; // above the road/water/surface: leave as air (id 0)
-          const idx = lx | (ly << 5) | (lz << 10);
+          const idx = localIndex(lx, ly, lz);
           chunk.skyLight[idx] = 0;
           if (isGrand && road) {
             // The lake bridge's viaduct: girder, piers and parapet from the road's spec, otherwise whatever lies beneath (terrain, water, or lit air under the deck).

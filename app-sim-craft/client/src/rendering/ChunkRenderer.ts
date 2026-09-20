@@ -3,7 +3,7 @@
 // chunk is re-meshed, and releases them when it goes away. Knows nothing about
 // streaming, edits or persistence — ChunkManager decides *when*, this decides *how*.
 import * as THREE from "three";
-import { CHUNK_SIZE, type ChunkCoord } from "../engine/Chunk";
+import { CHUNK_SIZE, type ChunkCoord } from "../core/Chunk";
 import type { MeshedChunk } from "./greedyMesh";
 import { MESH_LAYERS } from "./meshLayers";
 

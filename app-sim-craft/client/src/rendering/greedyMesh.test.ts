@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { meshChunkGreedy } from "./greedyMesh";
-import { CHUNK_SIZE, CHUNK_VOLUME } from "../engine/Chunk";
+import { CHUNK_SIZE, CHUNK_VOLUME } from "../core/Chunk";
 import { getBlockByKey } from "../data/blocks";
 
 const EMPTY_BOUNDARIES = { px: null, nx: null, py: null, ny: null, pz: null, nz: null };

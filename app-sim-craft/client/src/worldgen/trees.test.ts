@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { planTrees, treesMaxY } from "./trees";
 import { drawTree, TREE_HEIGHT, TREE_REACH, type TreeKind, type TreeSpec } from "./treeShapes";
 import { sampleColumn } from "./terrain";
-import { getBlockById } from "../../data/blocks";
-import { leafPixel } from "../../rendering/leafTexture";
+import { getBlockById } from "../data/blocks";
+import { leafPixel } from "../rendering/leafTexture";
 
 const KINDS: TreeKind[] = ["oak", "grandOak", "birch", "maple", "cherry", "willow", "pine", "spruce", "frostBirch", "shrub", "snowShrub"];
 

@@ -5,7 +5,7 @@ import { sampleColumn, SEA_LEVEL } from "../terrain";
 import { applyCrag, blightSurfaceBlock, castleBlight, cragHeight, rampHeight, CRAG_RAMP } from "./crag";
 import { castleBlockLightAt } from "./lightMap";
 import { CASTLE_CENTER, CASTLE_FLOOR_Y, RAMP_START_Z } from "./layout";
-import { getBlockById, getBlockByKey } from "../../../data/blocks";
+import { getBlockById, getBlockByKey } from "../../data/blocks";
 
 const isPassable = (id: number): boolean => id === UNSET || id === 0 || !getBlockById(id).solid;
 

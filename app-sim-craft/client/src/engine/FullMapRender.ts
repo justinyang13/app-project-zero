@@ -6,9 +6,9 @@
 // entire map" here means this whole landmark region rather than infinity.
 // Painting happens in background workers (engine/fullMapCache.ts,
 // workers/map-render.worker.ts) so the map never freezes the game.
-import { sampleColumn, SEA_LEVEL } from "./worldgen/terrain";
-import { roadKindAt } from "./worldgen/roads";
-import { DEEP_LAKE_FLOOR_Y } from "./worldgen/deepLake";
+import { sampleColumn, SEA_LEVEL } from "../worldgen/terrain";
+import { roadKindAt } from "../worldgen/roads";
+import { DEEP_LAKE_FLOOR_Y } from "../worldgen/deepLake";
 
 export const FULL_MAP_HALF_RANGE = 560; // blocks either side of the origin
 export const FULL_MAP_STEP = 2; // blocks per map pixel

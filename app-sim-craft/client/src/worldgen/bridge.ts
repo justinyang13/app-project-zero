@@ -7,7 +7,7 @@
 // with a crossbeam, with a pale concrete sidewalk and parapet along both
 // edges. Everything here is a pure function of a column's (x, z, ground
 // height), so terrain.ts can build it column by column.
-import { getBlockByKey } from "../../data/blocks";
+import { getBlockByKey } from "../data/blocks";
 import { ROAD_WIDTH, sampleRoad } from "./roads";
 import { SEA_LEVEL } from "./terrain";
 

@@ -8,8 +8,8 @@
 // tries another direction on its next timer tick, which is enough at
 // this scale to not look obviously broken.
 import * as THREE from "three";
-import type { World } from "./World";
-import { WATER_ID } from "./worldgen/terrain";
+import type { World } from "../core/World";
+import { findSurfaceY } from "../core/worldQueries";
 import type { DismountSpot, Rideable, RideInput } from "./Rideable";
 
 export type CreatureSpecies =
@@ -201,8 +201,6 @@ const SPECIES: Record<CreatureSpecies, SpeciesSpec> = {
   },
 };
 
-const GROUND_SEARCH_TOP = 110;
-const GROUND_SEARCH_BOTTOM = 0;
 // A creature can step up onto a low ledge (a curb, a single stair-like
 // block) but not climb a tree trunk, cliff, or wall — findSurfaceY's
 // straight-down scan treats a tree's canopy the same as solid ground
@@ -210,28 +208,6 @@ const GROUND_SEARCH_BOTTOM = 0;
 // creature wandering under a tree would snap straight up onto its top
 // instead of being stopped by it like any other obstacle.
 const MAX_STEP_HEIGHT = 1.1;
-
-/**
- * Scans straight down for the first solid voxel; returns its top surface
- * Y, or null if the column isn't loaded/found — or if that surface is
- * water. Water is deliberately treated the same as "no ground here": a
- * land creature landing on it would otherwise read as standing/swimming
- * on top of a lake, since water is a solid, non-air block as far as this
- * scan is concerned (see worldgen/terrain.ts's SEA_LEVEL flooding). This
- * relies on water only ever being the *topmost* block of a flooded
- * column — the moment it isn't the first non-air hit, we've already
- * found real land above it.
- */
-export function findSurfaceY(world: World, x: number, z: number): number | null {
-  const bx = Math.floor(x);
-  const bz = Math.floor(z);
-  for (let y = GROUND_SEARCH_TOP; y >= GROUND_SEARCH_BOTTOM; y--) {
-    const block = world.getBlock(bx, y, bz);
-    if (block === 0) continue;
-    return block === WATER_ID ? null : y + 1;
-  }
-  return null;
-}
 
 // Anything smaller than this (cat, rabbit, chicken, duck — about the size
 // of the tiny reef fish) is too small to sit on; everything from a fox up

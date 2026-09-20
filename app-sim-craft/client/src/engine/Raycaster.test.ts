@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { raycastVoxels } from "./Raycaster";
-import type { World } from "./World";
+import type { World } from "../core/World";
 
 function fakeWorld(solidVoxels: Set<string>): World {
   return {

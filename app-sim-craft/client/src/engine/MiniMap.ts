@@ -7,8 +7,8 @@
 // canvas from GameLoop's frame loop, the same "GameLoop drives, React
 // only mounts the element" split as the main WebGL canvas (see
 // GameLoop.ts's header comment).
-import { sampleColumn, SEA_LEVEL } from "./worldgen/terrain";
-import { isRoadColumn } from "./worldgen/roads";
+import { sampleColumn, SEA_LEVEL } from "../worldgen/terrain";
+import { isRoadColumn } from "../worldgen/roads";
 import { DRAGON_ARROW, LANDMARKS } from "./landmarks";
 
 const CANVAS_SIZE = 160; // px, square

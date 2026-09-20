@@ -4,10 +4,10 @@
 // [18-visual-art-direction.md]'s atlas are later-phase work) — faces are
 // flat-colored per block, shaded by the merged cell's sky-light level.
 // Foliage (leaves) is the one exception: it carries UVs so
-// ChunkManager.ts can texture it with an alpha-cutout pattern instead.
+// ChunkRenderer.ts can texture it with an alpha-cutout pattern instead.
 import { AIR_ID, BLOCKS, WATER_ID, getBlockById, type BlockDef } from "../data/blocks";
 import { textureFrames, textureLayer, textureVariants } from "../data/blockTextures";
-import { CHUNK_SIZE } from "../engine/Chunk";
+import { CHUNK_SIZE, localIndex, localX, localY, localZ } from "../core/Chunk";
 
 type Axis = 0 | 1 | 2; // 0 = X, 1 = Y, 2 = Z
 
@@ -20,11 +20,11 @@ const AXIS_CONFIG: { u: Axis; v: Axis }[] = [
 ];
 
 export interface BoundaryLayers {
-  px: Uint16Array | null; // neighbor chunk's x=0 layer, indexed [y*32+z]
-  nx: Uint16Array | null; // neighbor chunk's x=31 layer, indexed [y*32+z]
-  py: Uint16Array | null; // indexed [x*32+z]
+  px: Uint16Array | null; // neighbor chunk's x=0 layer, indexed [y*CHUNK_SIZE+z]
+  nx: Uint16Array | null; // neighbor chunk's x=CHUNK_SIZE-1 layer, indexed [y*CHUNK_SIZE+z]
+  py: Uint16Array | null; // indexed [x*CHUNK_SIZE+z]
   ny: Uint16Array | null;
-  pz: Uint16Array | null; // indexed [x*32+y]
+  pz: Uint16Array | null; // indexed [x*CHUNK_SIZE+y]
   nz: Uint16Array | null;
 }
 
@@ -107,7 +107,7 @@ function sampleBlock(x: number, y: number, z: number, blocks: Uint16Array, b: Bo
   if (y >= CHUNK_SIZE) return b.py ? b.py[x * CHUNK_SIZE + z] : AIR_ID;
   if (z < 0) return b.nz ? b.nz[x * CHUNK_SIZE + y] : AIR_ID;
   if (z >= CHUNK_SIZE) return b.pz ? b.pz[x * CHUNK_SIZE + y] : AIR_ID;
-  return blocks[x | (y << 5) | (z << 10)];
+  return blocks[localIndex(x, y, z)];
 }
 
 function setVoxel(out: [number, number, number], axis: Axis, a0: number, u: number, v: number): void {
@@ -206,7 +206,7 @@ export function meshChunkGreedy(
               neighborVoxel[2] >= 0 &&
               neighborVoxel[2] < CHUNK_SIZE
             ) {
-              light = skyLight[neighborVoxel[0] | (neighborVoxel[1] << 5) | (neighborVoxel[2] << 10)];
+              light = skyLight[localIndex(neighborVoxel[0], neighborVoxel[1], neighborVoxel[2])];
             }
 
             const idx = u * CHUNK_SIZE + v;
@@ -369,9 +369,9 @@ function emitCrossShapes(out: TexBuffers, blocks: Uint16Array, skyLight: Uint8Ar
     if (id === AIR_ID) continue;
     const def = getBlockById(id);
     if (def.shape !== "cross" || !def.tex) continue;
-    const x = i & 31;
-    const y = (i >> 5) & 31;
-    const z = (i >> 10) & 31;
+    const x = localX(i);
+    const y = localY(i);
+    const z = localZ(i);
     const layer = FACE_TILE[id * 6];
     const frames = FACE_FRAMES[id * 6];
     const brightness = lightToBrightness(skyLight[i]);

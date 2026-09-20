@@ -1,5 +1,5 @@
 // Copies the village plan (build.ts) over the terrain of one chunk column.
-import { CHUNK_SIZE, Chunk } from "../../Chunk";
+import { CHUNK_SIZE, Chunk, localIndex } from "../../core/Chunk";
 import { getVillagePlan } from "./build";
 import { PLAN_MAX_X, PLAN_MAX_Y, PLAN_MAX_Z, PLAN_MIN_X, PLAN_MIN_Y, PLAN_MIN_Z, UNSET } from "./plan";
 
@@ -31,7 +31,7 @@ export function stampVillage(cx: number, cz: number, chunks: Chunk[]): void {
       for (let wx = minX; wx <= maxX; wx++) {
         const block = plan.get(wx, y, wz);
         if (block === UNSET) continue;
-        const idx = (wx - baseX) | (ly << 5) | ((wz - baseZ) << 10);
+        const idx = localIndex(wx - baseX, ly, wz - baseZ);
         chunk.blocks[idx] = block;
         chunk.skyLight[idx] = block === 0 ? 15 : 0;
       }

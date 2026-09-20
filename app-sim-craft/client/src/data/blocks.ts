@@ -30,7 +30,7 @@ export interface BlockDef {
   liquid?: boolean;
   // Rendered with the procedural alpha-cutout leaf pattern (own
   // mesh/material, see rendering/leafTexture.ts and
-  // engine/ChunkManager.ts) instead of a flat-colored solid cube. Only
+  // rendering/meshLayers.ts) instead of a flat-colored solid cube. Only
   // the leaf variants today; unset/false for everything else.
   foliage?: boolean;
   // Painted with a pixel-art texture (data/blockTextures.ts) instead of a
@@ -182,7 +182,7 @@ export const BLOCKS: BlockDef[] = [
     // (`liquid: true` below) — still not a true fluid sim, no flow/
     // spread or currents (that's the full spec/11-physics-fluids.md
     // system, later-phase work). It fills lake basins at world-gen time
-    // (see engine/worldgen/terrain.ts's SEA_LEVEL) and can otherwise be
+    // (see worldgen/terrain.ts's SEA_LEVEL) and can otherwise be
     // placed/mined like any other block.
     hardness: 0,
     toolType: "none",
@@ -216,7 +216,7 @@ export const BLOCKS: BlockDef[] = [
   // Leaves are rendered as plain opaque blocks like water/log (no alpha-
   // tested transparency pass yet — that's spec/10-lighting-rendering.md
   // §5's later-phase work). Four color variants per spec's request for
-  // "trees of different colors" — see engine/worldgen/trees.ts for how a
+  // "trees of different colors" — see worldgen/trees.ts for how a
   // tree instance picks one.
   leafVariant(9, "leaves_green", "Greenwood Leaves", 0x4fae3e),
   leafVariant(10, "leaves_autumn", "Amberleaf Leaves", 0xe08a35),
@@ -259,7 +259,7 @@ export const BLOCKS: BlockDef[] = [
     key: "asphalt",
     name: "Asphalt",
     // Painted over the terrain surface by the road grid (see
-    // engine/worldgen/roads.ts) instead of being hand-placed — it never
+    // worldgen/roads.ts) instead of being hand-placed — it never
     // changes terrain height, just what's on top of it, same as the
     // biome surface swap in worldgen/biomes.ts.
     hardness: 1.0,

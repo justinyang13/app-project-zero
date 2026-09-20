@@ -10,7 +10,7 @@
 //
 // Drawing order matters: later calls overwrite earlier ones, so each
 // section carves its openings after its walls exist.
-import { getBlockByKey } from "../../../data/blocks";
+import { getBlockByKey } from "../../data/blocks";
 import { cragHeight, rampHeight } from "./crag";
 import { CASTLE_CENTER, CASTLE_FLOOR_Y, RAMP_START_Z } from "./layout";
 import { CastlePlan, type BlockSource, type Facing } from "./plan";

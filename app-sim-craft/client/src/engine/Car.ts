@@ -1,15 +1,15 @@
 // Cars: a box-mesh vehicle that either drives itself around the loop
 // road (worldgen/roads.ts) or is possessed by the player (GameLoop.ts's
 // E-to-enter/exit control). Like Creature, movement is a simplified
-// ground-snap each tick rather than full AABB physics — findSurfaceY is
-// reused from there so a car can never fly or fall through the world,
+// ground-snap each tick rather than full AABB physics — findSurfaceY
+// (core/worldQueries.ts) is reused so a car can never fly or fall through the world,
 // it just rides whatever surface is beneath it (which, on the loop
 // itself, is always the same flat elevation).
 import * as THREE from "three";
-import type { World } from "./World";
-import { findSurfaceY } from "./Creature";
+import type { World } from "../core/World";
+import { findSurfaceY } from "../core/worldQueries";
 import { poolLight, releaseLight } from "./LightPool";
-import { pointAtProgress } from "./worldgen/roads";
+import { pointAtProgress } from "../worldgen/roads";
 
 export interface CarInput {
   throttle: number; // -1..1: forward/reverse

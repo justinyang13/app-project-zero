@@ -7,8 +7,8 @@
 // structure's world-space bounding box, so it stays correct across chunk
 // load/unload and never needs to be treated as a "player edit" for
 // persistence purposes).
-import { CHUNK_SIZE, Chunk } from "../Chunk";
-import { getBlockByKey } from "../../data/blocks";
+import { CHUNK_SIZE, Chunk, localIndex } from "../core/Chunk";
+import { getBlockByKey } from "../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
 import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER, ROAD_WIDTH } from "./roads";
 import { getCastlePlan } from "./castle/blueprint";
@@ -26,7 +26,7 @@ import {
   PLAN_MAX_Y,
   PLAN_MIN_Z,
 } from "./castle/layout";
-import { getBlockById } from "../../data/blocks";
+import { getBlockById } from "../data/blocks";
 import { MOUNTAIN_CENTER } from "./mountain";
 
 export { CASTLE_CENTER, CASTLE_GATE_SPAWN };
@@ -150,7 +150,7 @@ function setWorldVoxel(chunks: Chunk[], cx: number, cz: number, wx: number, wy: 
   const chunk = chunks[cy];
   if (!chunk) return;
   const ly = wy - cy * CHUNK_SIZE;
-  const idx = lx | (ly << 5) | (lz << 10);
+  const idx = localIndex(lx, ly, lz);
   chunk.blocks[idx] = blockId;
   chunk.skyLight[idx] = 0;
 }
@@ -248,7 +248,7 @@ function stampCastle(cx: number, cz: number, chunks: Chunk[]): void {
       const lx = wx - chunkMinX;
       const lz = wz - chunkMinZ;
       for (let ly = CHUNK_SIZE - 1; ly >= 0; ly--) {
-        const idx = lx | (ly << 5) | (lz << 10);
+        const idx = localIndex(lx, ly, lz);
         if (chunk.blocks[idx] !== AIR_ID) {
           sky = getBlockById(chunk.blocks[idx]).lightOpacity >= 15 ? 0 : sky;
           chunk.skyLight[idx] = 0;

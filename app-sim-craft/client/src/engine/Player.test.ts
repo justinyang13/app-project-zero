@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { Player, type PlayerInput } from "./Player";
-import type { World } from "./World";
+import type { World } from "../core/World";
 
 /** A flat world: solid ground up to and including y = 63, air above. */
 const flatWorld = { getBlock: (_x: number, y: number) => (y <= 63 ? 3 : 0) } as unknown as World;

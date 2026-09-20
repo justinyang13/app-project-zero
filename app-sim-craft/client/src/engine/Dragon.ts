@@ -10,8 +10,8 @@
 // physics or pathfinding system — good enough for a scripted, decorative
 // flight loop.
 import * as THREE from "three";
-import type { World } from "./World";
-import { findSurfaceY } from "./Creature";
+import type { World } from "../core/World";
+import { findSurfaceY } from "../core/worldQueries";
 import { poolLight, releaseLight } from "./LightPool";
 import type { DismountSpot, Rideable, RideInput } from "./Rideable";
 import {
@@ -20,7 +20,7 @@ import {
   MOUNTAIN_CENTER,
   SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK,
   SUMMIT_DRAGON_FLIGHT_RADIUS,
-} from "./worldgen/mountain";
+} from "../worldgen/mountain";
 import { buildWing, getWingTexture, makeWingMaterial, type WingParts } from "./DragonWing";
 
 type DragonState = "flying" | "returning";

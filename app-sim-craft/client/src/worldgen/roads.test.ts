@@ -16,7 +16,7 @@ import { CAMPFIRE_SITES } from "./structures";
 import { VILLAGE_CORE } from "./village/layout";
 import { CASTLE_CENTER, PLAN_MAX_X, PLAN_MAX_Z, PLAN_MIN_X, PLAN_MIN_Z } from "./castle/layout";
 import { MOUNTAIN_CENTER, MOUNTAIN_RADIUS } from "./mountain";
-import { getBlockByKey } from "../../data/blocks";
+import { getBlockByKey } from "../data/blocks";
 
 const SEED = 42;
 

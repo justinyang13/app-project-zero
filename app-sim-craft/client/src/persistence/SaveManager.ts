@@ -3,9 +3,9 @@
 // it's given at load() — see persistence/migration.ts for how that id is
 // resolved (first run / legacy-save rename / already-chosen) before this
 // ever starts its autosave timer.
-import { hashSeedString } from "../engine/worldgen/noise";
+import { hashSeedString } from "../worldgen/noise";
 import { openSimCraftDB, type PlayerStateRecord } from "./db";
-import type { Chunk } from "../engine/Chunk";
+import type { Chunk } from "../core/Chunk";
 
 const SCHEMA_VERSION = 1;
 const AUTOSAVE_INTERVAL_MS = 2 * 60 * 1000; // spec default: every 2 real-world minutes

@@ -7,9 +7,9 @@
 // placements come from the castle plan (worldgen/castle/blueprint.ts), so
 // they line up with the walls they hang on by construction.
 import * as THREE from "three";
-import { getCastlePlan } from "./worldgen/castle/blueprint";
-import { CASTLE_CENTER, CASTLE_FLOOR_Y } from "./worldgen/castle/layout";
-import type { BannerSpec } from "./worldgen/castle/plan";
+import { getCastlePlan } from "../worldgen/castle/blueprint";
+import { CASTLE_CENTER, CASTLE_FLOOR_Y } from "../worldgen/castle/layout";
+import type { BannerSpec } from "../worldgen/castle/plan";
 
 const TEX_W = 48; // 3 blocks at 16 px per block, like the block textures
 const TEX_H = 144; // 9 blocks

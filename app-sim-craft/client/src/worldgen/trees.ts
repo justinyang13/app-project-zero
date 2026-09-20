@@ -13,7 +13,7 @@
 // grove into an orange birch wood into a red maple stand, with a scatter
 // of other species mixed through each. Cold ground grows snow-laden
 // conifers instead.
-import { CHUNK_SIZE, Chunk } from "../Chunk";
+import { CHUNK_SIZE, Chunk, localIndex } from "../core/Chunk";
 import { fbm2D, seededNoise2D } from "./noise";
 import { SEA_LEVEL, sampleColumn } from "./terrain";
 import { isRoadCorridorColumn } from "./roads";
@@ -134,7 +134,7 @@ export function placeTrees(seed: number, trees: TreeSpec[], cx: number, cz: numb
     const cy = Math.floor(y / CHUNK_SIZE);
     const chunk = chunks[cy];
     if (!chunk) return;
-    const idx = lx | ((y - cy * CHUNK_SIZE) << 5) | (lz << 10);
+    const idx = localIndex(lx, y - cy * CHUNK_SIZE, lz);
     if (onlyIfAir && chunk.blocks[idx] !== 0) return;
     chunk.blocks[idx] = block;
     chunk.skyLight[idx] = 0;

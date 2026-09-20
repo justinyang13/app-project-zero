@@ -17,7 +17,7 @@
 //   pine/spruce  snow-laden conifers for the cold country
 //   frostBirch birch in frost
 //   shrub      low leafy clumps that fill in the understory
-import { getBlockByKey } from "../../data/blocks";
+import { getBlockByKey } from "../data/blocks";
 
 export type TreeKind =
   | "oak"

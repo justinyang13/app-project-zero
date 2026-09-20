@@ -3,7 +3,7 @@
 // (not Chunk instances — class methods don't survive structured clone)
 // which the main thread turns into real Chunk objects.
 import * as Comlink from "comlink";
-import { generateColumn as generateColumnPure, sampleBiomeIndexAt } from "../engine/worldgen/terrain";
+import { generateColumn as generateColumnPure, sampleBiomeIndexAt } from "../worldgen/terrain";
 
 export interface GeneratedChunkData {
   cx: number;

@@ -8,7 +8,7 @@
 // `max(natural terrain, crag)`, exactly the way mountain.ts folds in the
 // dragon mountain.
 import { seededNoise2D } from "../noise";
-import { getBlockByKey } from "../../../data/blocks";
+import { getBlockByKey } from "../../data/blocks";
 import { CASTLE_CENTER, CASTLE_FLOOR_Y, RAMP_DROP_PER_BLOCK, RAMP_HALF_WIDTH, RAMP_START_Z } from "./layout";
 
 const CRAG_SEED = 0x7a11c0de;

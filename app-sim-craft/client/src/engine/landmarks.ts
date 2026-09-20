@@ -1,9 +1,9 @@
 // The world's fixed points of interest, shared by the full-screen map
 // (ui/FullMap.tsx) and the minimap's edge arrows (engine/MiniMap.ts).
-import { CASTLE_CENTER } from "./worldgen/structures";
-import { VILLAGE_CENTER } from "./worldgen/village/layout";
-import { MOUNTAIN_CENTER } from "./worldgen/mountain";
-import { DEEP_LAKE_CENTER } from "./worldgen/deepLake";
+import { CASTLE_CENTER } from "../worldgen/structures";
+import { VILLAGE_CENTER } from "../worldgen/village/layout";
+import { MOUNTAIN_CENTER } from "../worldgen/mountain";
+import { DEEP_LAKE_CENTER } from "../worldgen/deepLake";
 
 export interface Landmark {
   x: number;

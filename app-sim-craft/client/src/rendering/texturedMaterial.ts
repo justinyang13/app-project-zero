@@ -13,7 +13,7 @@
 //    lighting;
 //  - the baked block-light "glow" vertex color the mesher derives from
 //    the castle's light map, added as warm firelight on lit surfaces.
-// Main-thread only (builds GPU textures) — see engine/ChunkManager.ts.
+// Main-thread only (builds GPU textures) — see rendering/meshLayers.ts.
 import * as THREE from "three";
 import { paintAllTiles } from "./blockPainter";
 import { TEXTURE_LAYER_COUNT, TEXTURE_SIZE } from "../data/blockTextures";

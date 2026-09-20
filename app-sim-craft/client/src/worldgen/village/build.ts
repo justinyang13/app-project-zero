@@ -4,7 +4,7 @@
 // each with one or two furnished rooms inside — plus a town hall, tavern,
 // chapel with a bell tower, barn, lamp posts, a footbridge over the stream
 // and oak trees in whatever space is left. Later drawing overwrites earlier.
-import { getBlockByKey } from "../../../data/blocks";
+import { getBlockByKey } from "../../data/blocks";
 import { VILLAGE_CORE, VILLAGE_Y, AVENUE_X, AVENUE_Z, PLAZA, STREETS_Z, STREET_HALF, STREET_X, getVillageLayout, hash2, type Building, type Field, type Rect, type Stall } from "./layout";
 import { VillagePlan } from "./plan";
 import { riverCenterZ } from "./ground";

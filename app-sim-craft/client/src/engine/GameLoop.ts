@@ -3,16 +3,17 @@
 // loop — it only reads a throttled snapshot pushed into hudStore once
 // per render frame.
 import * as THREE from "three";
-import { World } from "./World";
+import { World } from "../core/World";
+import { CHUNK_SIZE } from "../core/Chunk";
 import { MouseLook } from "./Camera";
 import { Player, EYE_HEIGHT, type PlayerInput } from "./Player";
 import { ChunkManager, RENDER_DISTANCE_COLUMNS } from "./ChunkManager";
 import { raycastVoxels, type RaycastHit } from "./Raycaster";
-import { Creature, findSurfaceY, ALL_SPECIES } from "./Creature";
+import { Creature, ALL_SPECIES } from "./Creature";
+import { findSurfaceY, findNearbyWaterSpots } from "../core/worldQueries";
+import { sampleRandom } from "../core/random";
 import {
   Fish,
-  findNearbyWaterSpots,
-  sampleRandom,
   pickSwimY,
   spawnDepthFor,
   ALL_FISH_SPECIES,
@@ -22,9 +23,9 @@ import { Dragon, createDragons } from "./Dragon";
 import { LightPool } from "./LightPool";
 import { useGraphicsStore, type GraphicsSettings } from "../state/graphicsStore";
 import type { Rideable, RideInput } from "./Rideable";
-import { DEEP_LAKE_CENTER, DEEP_LAKE_RADIUS } from "./worldgen/deepLake";
+import { DEEP_LAKE_CENTER, DEEP_LAKE_RADIUS } from "../worldgen/deepLake";
 import { Car, type CarInput } from "./Car";
-import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER } from "./worldgen/roads";
+import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER } from "../worldgen/roads";
 import { PlayerModel } from "./PlayerModel";
 import { HeldItem } from "./HeldItem";
 import { Clouds } from "./Clouds";
@@ -36,10 +37,10 @@ import { StreetLamp } from "./StreetLamp";
 import { CastleBanners } from "./CastleBanners";
 import { Torch } from "./Torch";
 import { Flag } from "./Flag";
-import { CAMPFIRE_SITES, CASTLE_CENTER, CASTLE_GATE_SPAWN, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "./worldgen/structures";
+import { CAMPFIRE_SITES, CASTLE_CENTER, CASTLE_GATE_SPAWN, LAMP_SITES, LAMP_POST_HEIGHT, getStructureAnchors } from "../worldgen/structures";
 import { MiniMap, type MiniMapMarker } from "./MiniMap";
 import { AIR_ID, getBlockById, getBlockByKey } from "../data/blocks";
-import { sampleColumn, biomeKeyFromIndex, sampleBiomeIndexAt } from "./worldgen/terrain";
+import { sampleColumn, biomeKeyFromIndex, sampleBiomeIndexAt } from "../worldgen/terrain";
 import { useHudStore } from "../state/hudStore";
 import { useHotbarStore, HOTBAR_SLOTS } from "../state/hotbarStore";
 import { useMinimapStore } from "../state/minimapStore";
@@ -273,7 +274,7 @@ export class GameLoop {
   /** Applies the player's graphics settings (see state/graphicsStore.ts) to the running game — at startup and whenever they change. */
   private applyGraphics(settings: GraphicsSettings): void {
     this.chunkManager.setRenderDistance(settings.renderDistance, this.player.position.x, this.player.position.z);
-    this.sky.setViewDistance(settings.renderDistance * 32);
+    this.sky.setViewDistance(settings.renderDistance * CHUNK_SIZE);
     this.lightPool.setSize(this.scene, settings.lights);
     this.clouds.setQuality(settings.clouds);
     this.adaptiveResolution = settings.adaptive;

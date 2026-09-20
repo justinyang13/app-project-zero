@@ -4,7 +4,7 @@ import { getVillagePlan } from "./build";
 import { UNSET } from "./plan";
 import { riverFactor, villageGround, villageWeight } from "./ground";
 import { sampleColumn, generateColumn, SEA_LEVEL } from "../terrain";
-import { getBlockById, getBlockByKey } from "../../../data/blocks";
+import { getBlockById, getBlockByKey } from "../../data/blocks";
 
 const overlap = (a: Building, b: Building, margin: number): boolean =>
   a.x0 - margin <= b.x1 && a.x1 + margin >= b.x0 && a.z0 - margin <= b.z1 && a.z1 + margin >= b.z0;
