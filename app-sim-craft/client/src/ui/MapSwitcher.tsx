@@ -183,7 +183,7 @@ export function MapSwitcher() {
         // top (below DebugOverlay), out of TouchJoystick.tsx's
         // bottom-left footprint — desktop keeps its original corner spot.
         ...(isTouch
-          ? { top: 46, left: 8, zIndex: 5, boxSizing: "border-box", maxHeight: "calc(100vh - 60px)", overflowY: "auto" }
+          ? { top: 46, left: 8, zIndex: 5, boxSizing: "border-box", maxHeight: "calc(var(--app-h, 100vh) - 60px)", overflowY: "auto" }
           : { bottom: 16, left: 16 }),
         // Collapsed on a phone it's just a compact header, clear of the minimap on the right.
         width: isTouch && !open ? 150 : 220,

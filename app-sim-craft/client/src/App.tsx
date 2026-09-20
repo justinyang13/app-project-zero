@@ -102,7 +102,9 @@ export function App() {
 
   return (
     <>
-      <canvas ref={canvasRef} style={{ position: "fixed", inset: 0, display: "block", width: "100%", height: "100%", touchAction: "none" }} />
+      <canvas ref={canvasRef} style={{ position: "fixed", top: 0, left: 0, display: "block", width: "100%", height: "var(--app-h, 100%)", touchAction: "none" }} />
+      {/* The HUD lives in a box as tall as the usable screen (see viewportInsets.ts): the transform makes it the containing block for the fixed-position HUD pieces, so "bottom" means the top of Safari's toolbar rather than the bottom of the screen. */}
+      <div id="hud" style={{ position: "fixed", top: 0, left: 0, width: "100%", height: "var(--app-h, 100%)", transform: "translateZ(0)", pointerEvents: "none" }}>
       <Crosshair />
       <Hotbar />
       <DebugOverlay />
@@ -115,6 +117,7 @@ export function App() {
       <TouchControls />
       <TouchOverrideToggle />
       <GraphicsPanel />
+      </div>
     </>
   );
 }

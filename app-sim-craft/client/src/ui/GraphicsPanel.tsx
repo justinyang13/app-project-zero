@@ -86,7 +86,7 @@ export function GraphicsPanel() {
             top: isTouch ? 48 : 40,
             right: 0,
             width: isTouch ? "min(300px, calc(100vw - 24px))" : 280,
-            maxHeight: "calc(100vh - 80px)",
+            maxHeight: "calc(var(--app-h, 100vh) - 80px)",
             overflowY: "auto",
             boxSizing: "border-box",
             padding: 12,
