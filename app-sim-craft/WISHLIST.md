@@ -3,7 +3,19 @@
 Running list of feature/polish ideas, not yet scoped or built. Add to it
 freely; move an item out (or check it off) once it ships.
 
-_(empty — add new ideas above this line)_
+1. Ice castle, as big as the current (dark) castle. Ask the user for a
+   reference image before designing it. Needs secret passageways. Must
+   include a big, tall library room filled with books, at least 3
+   stories tall.
+2. A beach biome/shoreline with palm trees
+3. An island in the middle of the deep lake
+4. New creatures: unicorns, alicorns, pegasus
+5. Pet system: a creature found in the wild can be asked to follow the
+   player around. Only one pet at a time.
+6. Bug: whales and sharks can't swim past the bridge. Clear the invisible
+   underwater structures (likely leftovers), especially under the bridge.
+
+_(add new ideas above this line)_
 
 ## Shipped
 
