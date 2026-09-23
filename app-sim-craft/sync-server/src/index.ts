@@ -16,7 +16,7 @@ const PORT = Number(process.env.PORT ?? 4177);
 // simply unreachable from anywhere but the tailnet, independent of the
 // Mac's normal LAN/Wi-Fi network — the whole point of this feature.
 // Override with TAILSCALE_BIND_HOST if this Mac's tailnet IP differs.
-const BIND_HOST = process.env.TAILSCALE_BIND_HOST ?? "100.64.70.111";
+const BIND_HOST = process.env.TAILSCALE_BIND_HOST ?? "100.127.234.114";
 const DB_PATH = process.env.SIMCRAFT_DB_PATH ?? join(ROOT, "data", "simcraft.db");
 const CERT_PATH = join(ROOT, "certs", "cert.pem");
 const KEY_PATH = join(ROOT, "certs", "key.pem");
