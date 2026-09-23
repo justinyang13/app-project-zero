@@ -140,12 +140,39 @@ check the Mac hasn't gone to sleep, and check the logs at
 `sync-server/logs/stdout.log` / `stderr.log` (or `~/Library/Logs/` if
 you redirected them elsewhere in the plist).
 
+## Hosting on the Maxi (Mac Studio)
+
+The server runs on the Maxi, reachable only over Tailscale at
+`http://100.127.234.114:4177` (plain HTTP until a cert is issued — see
+section 3). The SQLite database lives at `data/simcraft.db` on the Maxi and
+is gitignored, so it is **not** carried by `git pull`. To move it to another
+machine, take a consistent single-file copy first (the DB runs in WAL mode,
+so copying `simcraft.db` alone can lose recent writes):
+
+```bash
+sqlite3 data/simcraft.db ".backup /tmp/simcraft-move.db"
+```
+
+Copy that file to the new machine as `data/simcraft.db` (no `-wal`/`-shm`).
+
+Background service: copy `com.simcraft.syncserver.plist` to
+`~/Library/LaunchAgents/`, fix the path placeholders (node from
+`which node` under `nvm use 25`, and this folder), then load it with
+`launchctl bootstrap gui/$(id -u) ~/Library/LaunchAgents/com.simcraft.syncserver.plist`.
+Plist edits only take effect after `launchctl bootout gui/$(id -u)/com.simcraft.syncserver`
+then `bootstrap` again — `kickstart` alone does not reload them. It is a
+per-user agent, so it starts at login, not at boot.
+
+`./start-simcraft-server.sh` runs the server in the foreground for testing.
+
 ## CORS
 
-Only two origins are allowed to call this server from a browser:
-`http://localhost:5177` (local client dev server) and the deployed
-GitHub Pages origin (`https://justinyang13.github.io`) — see
-`src/app.ts`'s `DEFAULT_ALLOWED_ORIGINS`. Everything else gets a 403.
+Only allow-listed origins can call this server from a browser; everything
+else gets a 403. The built-in defaults are `http://localhost:5177` and the
+deployed GitHub Pages origin (`https://justinyang13.github.io`) — see
+`src/app.ts`'s `DEFAULT_ALLOWED_ORIGINS`. Set `SIMCRAFT_ALLOWED_ORIGINS`
+(comma-separated) to replace them; the Maxi's plist does this to also allow
+Vite's default dev port, `http://localhost:5173`.
 This doesn't affect `curl` (CORS is a browser-only restriction), which is
 why the health checks above work regardless.
 

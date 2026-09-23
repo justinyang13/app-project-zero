@@ -36,6 +36,12 @@
   <dict>
     <key>PATH</key>
     <string>/usr/local/bin:/usr/bin:/bin</string>
+    <!-- This Mac's Tailscale IP (`tailscale ip -4`). Maxi: 100.127.234.114 -->
+    <key>TAILSCALE_BIND_HOST</key>
+    <string>100.127.234.114</string>
+    <!-- Browser origins allowed to call the server (replaces the built-in defaults). -->
+    <key>SIMCRAFT_ALLOWED_ORIGINS</key>
+    <string>http://localhost:5173,http://localhost:5177,https://justinyang13.github.io</string>
   </dict>
 </dict>
 </plist>
