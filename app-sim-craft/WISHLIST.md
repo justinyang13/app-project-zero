@@ -14,6 +14,7 @@ freely; move an item out (or check it off) once it ships.
    player around. Only one pet at a time.
 6. Bug: whales and sharks can't swim past the bridge. Clear the invisible
    underwater structures (likely leftovers), especially under the bridge.
+7. Add more glowing vines trees around the castle, especially brighter with lights at night
 
 _(add new ideas above this line)_
 
