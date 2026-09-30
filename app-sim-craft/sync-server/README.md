@@ -143,7 +143,7 @@ you redirected them elsewhere in the plist).
 ## Hosting on the Maxi (Mac Studio)
 
 The server runs on the Maxi, reachable only over Tailscale at
-`http://100.127.234.114:4177` (plain HTTP until a cert is issued — see
+`http://100.86.110.0:4177` (plain HTTP until a cert is issued — see
 section 3). The SQLite database lives at `data/simcraft.db` on the Maxi and
 is gitignored, so it is **not** carried by `git pull`. To move it to another
 machine, take a consistent single-file copy first (the DB runs in WAL mode,

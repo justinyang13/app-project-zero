@@ -10,7 +10,7 @@ nvm use 25 >/dev/null
 cd "$(dirname "$0")"
 
 # Override with TAILSCALE_BIND_HOST if this Mac's tailnet IP differs.
-export TAILSCALE_BIND_HOST="${TAILSCALE_BIND_HOST:-100.127.234.114}"
+export TAILSCALE_BIND_HOST="${TAILSCALE_BIND_HOST:-100.86.110.0}"
 
 npm run build
 npm start
