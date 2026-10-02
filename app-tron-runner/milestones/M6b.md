@@ -1,0 +1,4 @@
+# M6b — Screens and game flow
+Small focused task. Do NOT plan at length: start by writing code immediately, one file at a time, run tests after each file. The full SPEC.md is above; read STATE.md first. Parent milestone description for context: milestones/parents/M6.md (ONLY this sub-task). Prerequisite: Hud exists.
+Create client/src/ui/Screens.ts: Title (title.jpg background, glowing title, blinking PRESS ENTER, controls panel, live attract-mode 3D behind), Countdown 3-2-1-GO, Pause, Game Over (DEREZZED + stats), Victory (GRID CLEARED + stars + stats) per SPEC §2, and a pure game/flow.ts state-transition function with flow.test.ts (title->countdown->playing<->paused->gameover/victory->countdown; R resets all run state; 5 retries leave no leaked state).
+Acceptance: files exist, lint+test+build pass, STATE.md updated, finish.

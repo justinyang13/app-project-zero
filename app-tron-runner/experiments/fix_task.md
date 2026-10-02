@@ -1,0 +1,5 @@
+# TASK: make the existing client code compile and its tests pass (bug-fix only)
+The project is a three.js runner game; milestones M1–M3 were written earlier (see STATE.md and SPEC.md). Currently `cd client && npm run build` shows ~59 TypeScript errors (mostly `src/game/Game.ts` using APIs that do not match `PlayerModel`, `Trail`, `CameraRig`, `RunStats`, `PlayerState`, `Input`) and 2 tests in `src/logic/player.test.ts` fail (lane change movement, gap fall integrity reduction).
+Goal: `cd client && npm run lint && npm test && npm run build` all green, with MINIMAL edits. Do not add features, do not rewrite files wholesale, do not delete tests to make them pass.
+Method: run `npm run build`, read the first errors, open the file the error names AND the module it uses, fix the mismatch by editing the caller or callee (whichever is wrong per SPEC), rerun. Contract reminders: input actions are edge-triggered (pass the pressed action on the first step, idle after); lane is the target lane; a gap fall decrements integrity exactly once.
+When all three commands pass, call finish.

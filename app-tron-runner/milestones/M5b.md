@@ -1,0 +1,4 @@
+# M5b — Pickups, boost, particles
+Small focused task. Do NOT plan at length: start by writing code immediately, one file at a time, run tests after each file. The full SPEC.md is above; read STATE.md first. Parent milestone description for context: milestones/parents/M5.md (ONLY this sub-task). Prerequisite: scoring.ts exists.
+Create client/src/render/Particles.ts (pooled GPU particle system: bit sparks+ring, landing shockwave/dust, slide sparks, wall-run sparks, boost speed lines, death shatter; quality caps; no per-frame allocation) with a pure test for pool logic; pickups (bits spinning/bobbing, repair, boost pads: speed x1.3 for 1.5 s) integrated in Game with events; game/events.ts floating-score event queue for the HUD.
+Acceptance: files exist, lint+test+build pass, STATE.md updated, finish.

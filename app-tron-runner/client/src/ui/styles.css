@@ -1,0 +1,276 @@
+/* NEON RUNNER HUD (SPEC §7) — chamfered neon panels, cyan borders, glow. */
+
+/* WebGL canvas: always pinned to the viewport (M11 fix #1). */
+canvas.game-canvas,
+body > canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  display: block;
+}
+
+
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+  font-family: 'Orbitron', 'Rajdhani', 'Eurostile', 'Segoe UI', sans-serif;
+  color: #cfefff;
+}
+
+.hud-panel {
+  position: absolute;
+  background: rgba(4, 10, 24, 0.55);
+  border: 1px solid rgba(25, 242, 255, 0.5);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  padding: 10px 16px;
+  box-shadow: inset 0 0 18px rgba(25, 242, 255, 0.08);
+}
+
+/* ---- top-left: score / target / progress / section ---- */
+.hud-score-panel {
+  top: 16px;
+  left: 16px;
+  min-width: 230px;
+}
+
+.hud-score {
+  font-size: clamp(20px, 2.6vmin, 36px);
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: #eaffff;
+  text-shadow: 0 0 12px #19f2ff, 0 0 30px rgba(25, 242, 255, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-target {
+  font-size: 11px;
+  letter-spacing: 3px;
+  opacity: 0.6;
+  margin-top: 2px;
+}
+
+.hud-progress-track {
+  height: 4px;
+  background: rgba(25, 242, 255, 0.15);
+  margin-top: 8px;
+  overflow: hidden;
+}
+
+.hud-progress-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, #19f2ff, #7df9ff);
+  box-shadow: 0 0 8px #19f2ff;
+  transition: width 0.2s linear;
+}
+
+.hud-section {
+  font-size: 10px;
+  letter-spacing: 2px;
+  opacity: 0.75;
+  margin-top: 6px;
+}
+
+/* ---- top-right: multiplier ring ---- */
+.hud-mult-panel {
+  top: 16px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.hud-mult-ring {
+  width: clamp(44px, 6vmin, 64px);
+  height: clamp(44px, 6vmin, 64px);
+  transform: rotate(-90deg);
+}
+
+.hud-mult-ring circle {
+  fill: none;
+  stroke-width: 4;
+}
+
+.hud-mult-ring .ring-bg {
+  stroke: rgba(255, 230, 0, 0.18);
+}
+
+.hud-mult-ring .ring-fg {
+  stroke: #ffe600;
+  stroke-linecap: round;
+  filter: drop-shadow(0 0 4px #ffe600);
+  transition: stroke-dashoffset 0.25s ease;
+}
+
+.hud-mult-value {
+  font-size: clamp(18px, 2.4vmin, 30px);
+  color: #ffe600;
+  font-weight: 700;
+  text-shadow: 0 0 12px #ffe600;
+}
+
+.hud-mult-panel.mult-pulse .hud-mult-value {
+  animation: mult-pulse 0.45s ease-out;
+}
+
+@keyframes mult-pulse {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.35); text-shadow: 0 0 24px #ffe600; }
+  100% { transform: scale(1); }
+}
+
+/* ---- top-center: integrity pips ---- */
+.hud-pips-panel {
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 10px 22px;
+}
+
+.hud-pips {
+  display: flex;
+  gap: 10px;
+}
+
+.hud-pip {
+  width: clamp(22px, 3vmin, 34px);
+  height: clamp(10px, 1.5vmin, 16px);
+  clip-path: polygon(0 0, 100% 0, calc(100% - 8px) 100%, 0 100%);
+  background: rgba(25, 242, 255, 0.12);
+  transition: background 0.2s, box-shadow 0.2s;
+}
+
+.hud-pip.on {
+  background: #19f2ff;
+  box-shadow: 0 0 10px #19f2ff;
+}
+
+.hud-pips-panel.hit-flash .hud-pip {
+  background: #ff1744;
+  box-shadow: 0 0 14px #ff1744;
+  animation: pip-flash 0.5s ease-out;
+}
+
+@keyframes pip-flash {
+  0% { background: #fff; }
+  100% { background: #ff1744; }
+}
+
+/* ---- right-middle: contextual prompt ---- */
+.hud-prompt-panel {
+  right: 16px;
+  top: 40%;
+  display: none;
+  text-align: right;
+  border-color: rgba(255, 212, 0, 0.6);
+  animation: prompt-in 0.25s ease-out;
+}
+
+@keyframes prompt-in {
+  from { opacity: 0; transform: translateX(12px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.hud-prompt-key {
+  display: inline-block;
+  min-width: 26px;
+  padding: 3px 8px;
+  margin-left: 8px;
+  border: 1px solid rgba(255, 212, 0, 0.8);
+  border-radius: 4px;
+  background: rgba(255, 212, 0, 0.1);
+  color: #ffe600;
+  font-size: clamp(11px, 1.4vmin, 15px);
+  letter-spacing: 1px;
+  text-align: center;
+  box-shadow: 0 0 8px rgba(255, 212, 0, 0.4);
+}
+
+.hud-prompt-action {
+  font-size: clamp(14px, 1.9vmin, 22px);
+  font-weight: 700;
+  letter-spacing: 3px;
+  color: #fff;
+  text-shadow: 0 0 10px #ffe600;
+}
+
+.hud-prompt-hint {
+  font-size: clamp(9px, 1.2vmin, 12px);
+  letter-spacing: 2px;
+  opacity: 0.7;
+  margin-top: 3px;
+}
+
+/* ---- floating popups (bottom-center-left) ---- */
+.hud-popups {
+  position: absolute;
+  left: 12%;
+  bottom: 18%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.hud-popup {
+  font-size: clamp(14px, 1.9vmin, 22px);
+  letter-spacing: 2px;
+  margin-bottom: 6px;
+  font-weight: 700;
+  animation: hud-float 1.2s ease-out forwards;
+}
+
+.hud-popup.score { color: #ffe600; text-shadow: 0 0 10px #ffe600; }
+.hud-popup.good { color: #2bff88; text-shadow: 0 0 10px #2bff88; }
+.hud-popup.danger { color: #ff4d1a; text-shadow: 0 0 10px #ff4d1a; }
+.hud-popup.info { color: #19f2ff; text-shadow: 0 0 10px #19f2ff; }
+
+@keyframes hud-float {
+  0% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(-44px); }
+}
+
+/* ---- section banner ---- */
+.hud-banner {
+  position: absolute;
+  top: 30%;
+  left: 0;
+  right: 0;
+  text-align: center;
+  font-size: clamp(22px, 4.2vmin, 52px);
+  letter-spacing: 8px;
+  font-weight: 700;
+  color: #fff;
+  text-shadow: 0 0 20px #19f2ff, 0 0 44px #19f2ff;
+  opacity: 0;
+  transition: opacity 0.4s;
+}
+
+.hud-banner.show {
+  opacity: 1;
+  animation: banner-in 2.5s ease-out forwards;
+}
+
+@keyframes banner-in {
+  0% { opacity: 0; transform: scale(0.92); }
+  12% { opacity: 1; transform: scale(1); }
+  80% { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* ---- bottom-right: debug / quality / mute ---- */
+.hud-debug-panel {
+  right: 16px;
+  bottom: 16px;
+  text-align: right;
+  font-size: 10px;
+  letter-spacing: 2px;
+  line-height: 1.7;
+  opacity: 0.85;
+}
+
+.hud-debug-panel .fps { color: #2bff88; }
+.hud-debug-panel .dim { opacity: 0.6; }

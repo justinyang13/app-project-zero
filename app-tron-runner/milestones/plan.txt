@@ -1,0 +1,19 @@
+M4a|client/src/logic/rng.ts client/src/logic/patterns.ts client/src/logic/level.ts client/src/logic/rng.test.ts
+M4b1|client/src/logic/collision.ts client/src/logic/collision.test.ts
+M4b2|client/src/logic/solvable.ts client/src/logic/solvable.test.ts
+M4c|client/src/render/ObstacleMeshes.ts
+M5a|client/src/logic/scoring.ts client/src/logic/scoring.test.ts
+M5b|client/src/render/Particles.ts client/src/game/events.ts
+M6a|client/src/ui/Hud.ts client/src/ui/prompts.ts client/src/ui/styles.css
+M6b|client/src/ui/Screens.ts client/src/game/flow.ts client/src/game/flow.test.ts
+M7a|client/src/audio/AudioEngine.ts client/src/audio/Music.ts
+M7b|client/src/audio/Sfx.ts
+M8a|client/src/logic/solvable.ts
+M8b|client/src/render/ObstacleMeshes.ts
+M9a|client/src/logic/boss.ts client/src/logic/boss.test.ts
+M9b|client/src/render/Boss.ts client/src/render/Finish.ts
+M10a|client/src/logic/bot.ts client/src/logic/bot.test.ts
+M10b|README.md
+M11|README.md
+M12|README.md
+M13|README.md

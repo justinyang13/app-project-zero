@@ -70,4 +70,14 @@ export const projects: Project[] = [
     href: "app-sim-craft/",
     linkLabel: "Start building",
   },
+  {
+    id: "tron-runner",
+    name: "Neon Runner",
+    tagline: "A five-minute neon parkour run through a digital grid",
+    description:
+      "Dodge barriers, wall-run along glowing grid walls, ride a light cycle, and outrun the Sentinel in a fixed five-minute course with bloom-lit 3D graphics. Keyboard only, no install.",
+    tags: ["TypeScript", "Three.js", "WebGL"],
+    href: "app-tron-runner/",
+    linkLabel: "Start running",
+  },
 ];

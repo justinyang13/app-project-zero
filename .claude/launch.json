@@ -30,6 +30,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "app-sim-craft/client", "--", "--port", "5177"],
       "port": 5177
+    },
+    {
+      "name": "tron-runner-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--prefix", "app-tron-runner/client", "--", "--port", "5180"],
+      "port": 5180
     }
   ]
 }

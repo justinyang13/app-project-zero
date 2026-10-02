@@ -12,6 +12,7 @@ A small monorepo of standalone personal projects, fronted by a hub page.
 | [`app-storyden/`](app-storyden/README.md) | Top 100 kids'/YA books by genre, sourced from the OpenLibrary API (static, no backend) |
 | [`app-drift-loop/`](app-drift-loop/README.md) | 3D drift racing game with a chase camera (Godot 4 + C#) |
 | [`app-sim-craft/`](app-sim-craft/README.md) | Browser-based voxel sandbox — mine, build, and explore a procedurally generated world (static, no backend) |
+| [`app-tron-runner/`](app-tron-runner/README.md) | Neon Runner — five-minute Tron-style 3D parkour run (Vite + TypeScript + three.js, static, no backend) |
 
 Each folder is a fully standalone app: its own dependencies, its own
 README, runnable and testable on its own without the others present. The

@@ -1,0 +1,13 @@
+{"ts": 1790925587, "model": "qwen3.8:27b", "think": "0", "wall_s": 34.2, "prompt_tokens": 11936, "gen_tokens": 66, "gen_s": 1.2, "prefill_s": 21.8, "think_chars": 57, "ctx_msgs": 2}
+{"ts": 1790925621, "model": "qwen3.8:27b", "think": "0", "wall_s": 6.2, "prompt_tokens": 13035, "gen_tokens": 96, "gen_s": 2.1, "prefill_s": 2.3, "think_chars": 139, "ctx_msgs": 5}
+{"ts": 1790925627, "model": "qwen3.8:27b", "think": "0", "wall_s": 15.1, "prompt_tokens": 16928, "gen_tokens": 293, "gen_s": 6.9, "prefill_s": 8.1, "think_chars": 1036, "ctx_msgs": 8}
+{"ts": 1790925643, "model": "qwen3.8:27b", "think": "0", "wall_s": 202.7, "prompt_tokens": 17694, "gen_tokens": 6135, "gen_s": 198.6, "prefill_s": 1.9, "think_chars": 18338, "ctx_msgs": 10}
+{"ts": 1790925846, "model": "qwen3.8:27b", "think": "0", "wall_s": 14.2, "prompt_tokens": 19173, "gen_tokens": 110, "gen_s": 2.3, "prefill_s": 3.4, "think_chars": 82, "ctx_msgs": 13}
+{"ts": 1790925860, "model": "qwen3.8:27b", "think": "0", "wall_s": 135.7, "prompt_tokens": 20489, "gen_tokens": 4245, "gen_s": 127.4, "prefill_s": 3.2, "think_chars": 11948, "ctx_msgs": 16}
+{"ts": 1790925996, "model": "qwen3.8:27b", "think": "0", "wall_s": 12.6, "prompt_tokens": 23076, "gen_tokens": 200, "gen_s": 5.0, "prefill_s": 7.6, "think_chars": 382, "ctx_msgs": 19}
+{"ts": 1790926008, "model": "qwen3.8:27b", "think": "0", "wall_s": 124.3, "prompt_tokens": 25139, "gen_tokens": 3560, "gen_s": 118.9, "prefill_s": 5.3, "think_chars": 15426, "ctx_msgs": 22}
+{"ts": 1790926134, "model": "qwen3.8:27b", "think": "0", "wall_s": 11.7, "prompt_tokens": 28479, "gen_tokens": 99, "gen_s": 2.7, "prefill_s": 8.9, "think_chars": 125, "ctx_msgs": 25}
+{"ts": 1790926147, "model": "qwen3.8:27b", "think": "0", "wall_s": 249.9, "prompt_tokens": 30740, "gen_tokens": 4816, "gen_s": 243.5, "prefill_s": 6.3, "think_chars": 14265, "ctx_msgs": 28}
+{"ts": 1790926397, "model": "qwen3.8:27b", "think": "0", "wall_s": 109.5, "prompt_tokens": 34489, "gen_tokens": 1648, "gen_s": 93.4, "prefill_s": 15.9, "think_chars": 6816, "ctx_msgs": 33}
+{"ts": 1790926506, "model": "qwen3.8:27b", "think": "0", "wall_s": 102.5, "prompt_tokens": 36384, "gen_tokens": 1871, "gen_s": 92.1, "prefill_s": 10.3, "think_chars": 7939, "ctx_msgs": 38}
+{"ts": 1790926609, "model": "qwen3.8:27b", "think": "0", "wall_s": 313.7, "prompt_tokens": 37473, "gen_tokens": 8021, "gen_s": 307.7, "prefill_s": 5.9, "think_chars": 25018, "ctx_msgs": 41}

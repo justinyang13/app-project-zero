@@ -1,0 +1,4 @@
+# M8a — Advanced obstacle logic
+Small focused task. Do NOT plan at length: start by writing code immediately, one file at a time, run tests after each file. The full SPEC.md is above; read STATE.md first. Parent milestone description for context: milestones/parents/M8.md (ONLY this sub-task).
+Logic only: add drone, laser, wallBlock, longGap to patterns.ts/level.ts recipes for sections 2,3,5 (wall strips with margins, longGap 24 m at ~2200), collision rules (drone sine patrol deterministic by time/phase, laser on/off schedule + flicker flag, wallBlock by row, longGap requires wall), extend solvable.ts for timed obstacles and walls; keep isLevelSolvable true and the ideal-score test in range. Tests for all new logic incl. deterministic drone/laser timing.
+Acceptance: files exist, lint+test+build pass, STATE.md updated, finish.
