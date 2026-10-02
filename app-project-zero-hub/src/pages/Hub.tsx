@@ -12,11 +12,6 @@ export function Hub() {
             <h2>{project.name}</h2>
             <p className="project-card__tagline">{project.tagline}</p>
             <p className="project-card__description">{project.description}</p>
-            <ul className="project-card__tags">
-              {project.tags.map((tag) => (
-                <li key={tag}>{tag}</li>
-              ))}
-            </ul>
             <a className="project-card__link" href={project.href} target="_blank" rel="noreferrer">
               {project.linkLabel} →
             </a>
