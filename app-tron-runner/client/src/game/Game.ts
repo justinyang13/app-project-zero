@@ -17,6 +17,8 @@ import { Input } from '../input/Input';
 import type { Action } from '../input/InputBuffer';
 import { Renderer } from '../render/Renderer';
 import { PlayerModel } from '../render/PlayerModel';
+import { RealisticRunner } from '../render/RealisticRunner';
+import type { RunnerView } from '../render/runnerView';
 import { CameraRig } from '../render/CameraRig';
 import { Trail } from '../render/Trail';
 import { Track } from '../render/Track';
@@ -58,7 +60,10 @@ export class Game {
   private renderer: Renderer;
   private scene: Scene;
   private playerState: PlayerState;
-  private playerModel: PlayerModel;
+  private playerModel: RunnerView;
+  private classicModel: PlayerModel;
+  private charChoice: 'real' | 'classic' = 'real';
+  private charActive: 'real' | 'classic' = 'classic';
   private trail: Trail;
   private cameraRig: CameraRig;
   private track: Track;
@@ -136,8 +141,13 @@ export class Game {
     this.popups = createPopupQueue();
 
     this.playerState = createPlayerState();
-    this.playerModel = new PlayerModel();
-    this.scene.add(this.playerModel.getModel());
+    // M14b: character selection. `?char=real` (default) uses the realistic
+    // GLB runner; `?char=classic` keeps the procedural model. Until the GLB
+    // is ready (or if it fails to load) the classic model is shown so there
+    // is never a frame without a character.
+    this.classicModel = new PlayerModel();
+    this.playerModel = this.classicModel;
+    this.scene.add(this.classicModel.getModel());
     this.cycleModel = new CycleModel();
     this.cycleModel.getModel().visible = false;
     this.scene.add(this.cycleModel.getModel());
@@ -162,6 +172,8 @@ export class Game {
     const flags = parseFlags();
     this.debugEnabled = flags.debug;
     if (this.debugEnabled) this.hud.setDebug(true);
+    this.charChoice = flags.char;
+    if (this.charChoice === 'real') this.startRealisticRunner();
 
     // Audio (SPEC §9): context unlocks on the first key press.
     this.audio = new AudioEngine();
@@ -265,6 +277,30 @@ export class Game {
         });
       }
     }
+  }
+
+  /**
+   * M14b: load the realistic runner asynchronously. The classic model stays
+   * visible until the GLB is ready (swap on ready), and if the load fails
+   * (network/decoder error) we fall back to the classic model with one
+   * console.warn.
+   */
+  private startRealisticRunner(): void {
+    const runner = new RealisticRunner();
+    runner.ready.then(() => {
+      if (this.charChoice !== 'real') return;
+      this.charActive = 'real';
+      this.classicModel.getModel().visible = false;
+      this.scene.add(runner.getModel());
+      this.playerModel = runner;
+      this.cameraRig.setRealisticMode(true);
+    }).catch((err: unknown) => {
+      console.warn('[neon-runner] realistic runner failed to load, falling back to classic model:', err);
+      this.charActive = 'classic';
+      this.classicModel.getModel().visible = true;
+      this.playerModel = this.classicModel;
+      this.cameraRig.setRealisticMode(false);
+    });
   }
 
   private setupInput(): void {
@@ -513,6 +549,7 @@ export class Game {
         triangles: info.triangles,
         quality: this.renderer.getQuality(),
         muted: this.audio.isMuted,
+        char: this.charActive,
       });
     }
   }

@@ -1,0 +1,4 @@
+runner.glb is built from CC0 (public domain) assets by Quaternius (https://quaternius.com):
+- Universal Base Characters [Standard] (Superhero Male body mesh)
+- Universal Animation Library 1 and 2 [Standard] (animation clips: Sprint_Loop, Jog_Fwd_Loop, Idle_Loop, Jump_Start/Loop/Land, Slide_Start/Loop/Exit, Hit_Chest, Hit_Knockback, Death01, Dance_Loop, Roll, NinjaJump_Idle_Loop)
+Merged and compressed (WebP textures, resampled animation) with glTF-Transform (MIT); build script: experiments/build_runner_glb.mjs

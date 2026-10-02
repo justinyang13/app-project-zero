@@ -8,7 +8,10 @@ export class CameraRig {
   private current = new THREE.Vector3();
   private followDistance = 5.5;
   private followHeight = 2.8;
+  private lookAhead = 5;
+  private lookY = 1.3;
   private baseFOV = 68;
+  private realistic = false;
   private maxFOV = 86;
   private currentRoll = 0;
   private targetRoll = 0;
@@ -50,8 +53,8 @@ export class CameraRig {
     }
     this.prevInvuln = state.invulnerabilityTimer;
 
-    // Target point: 5 m ahead of the player (ahead = -Z), y ≈ 1.3.
-    this.target.set(state.x, state.y + 1.3, state.z - 5);
+    // Target point: lookAhead m ahead of the player (ahead = -Z).
+    this.target.set(state.x, state.y + this.lookY, state.z - this.lookAhead);
 
     // Desired camera position: behind and above the player.
     this.desired.set(
@@ -133,7 +136,7 @@ export class CameraRig {
     const z = playerPos.z + THREE.MathUtils.lerp(14, this.followDistance, t);
     const y = THREE.MathUtils.lerp(6, this.followHeight, t);
     this.camera.position.set(playerPos.x, y, z);
-    this.camera.lookAt(playerPos.x, 1.3, playerPos.z - 5);
+    this.camera.lookAt(playerPos.x, this.lookY, playerPos.z - this.lookAhead);
     if (t >= 1) this.introActive = false;
   }
 
@@ -150,8 +153,32 @@ export class CameraRig {
       this.followHeight = 2.4;
       this.baseFOV = 74;
     } else {
+      this.applyRunnerMode();
+    }
+  }
+
+  /**
+   * M14b: closer camera for the taller, more detailed realistic runner
+   * (offset (0, 2.15, 3.9), look-at 4.5 m ahead at y 1.15). Classic model
+   * keeps the original (0, 2.8, 5.5) / 5 m ahead at y 1.3.
+   */
+  setRealisticMode(on: boolean): void {
+    this.realistic = on;
+    this.applyRunnerMode();
+  }
+
+  private applyRunnerMode(): void {
+    if (this.realistic) {
+      this.followDistance = 3.9;
+      this.followHeight = 2.15;
+      this.lookAhead = 4.5;
+      this.lookY = 1.15;
+      this.baseFOV = 68;
+    } else {
       this.followDistance = 5.5;
       this.followHeight = 2.8;
+      this.lookAhead = 5;
+      this.lookY = 1.3;
       this.baseFOV = 68;
     }
   }

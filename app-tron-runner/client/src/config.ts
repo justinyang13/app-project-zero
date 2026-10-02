@@ -35,6 +35,10 @@ export const SECTIONS: Section[] = [
 ];
 
 export const TARGET_SCORE = 1500000;
+
+// M14a: flip the realistic runner's facing if the GLB faces the wrong way.
+// The reviewer toggles this after looking at the model in-game.
+export const RUNNER_FACING_FLIP = true;
 export const MAX_INTEGRITY = 3;
 
 export const SPEEDS = SECTIONS.map(section => section.speed);

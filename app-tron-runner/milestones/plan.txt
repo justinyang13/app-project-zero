@@ -17,3 +17,7 @@ M10b|README.md
 M11|README.md
 M12|README.md
 M13|README.md
+M14a|client/src/render/runnerView.ts client/src/logic/animMap.ts client/src/logic/animMap.test.ts client/src/render/RealisticRunner.ts client/src/logic/trimMask.ts
+M14b|client/src/logic/cloth.ts client/src/logic/cloth.test.ts client/src/render/Cape.ts
+M14c|client/src/logic/trimMask.ts
+M14d|client/src/render/RealisticRunner.ts

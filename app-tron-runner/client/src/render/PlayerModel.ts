@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { PlayerState } from '../logic/player';
+import type { RunnerView } from './runnerView';
 
 const CYAN = 0x19f2ff;
 const ORANGE = 0xff7a18;
@@ -11,7 +12,7 @@ interface Limb {
   lower: THREE.Group;
 }
 
-export class PlayerModel {
+export class PlayerModel implements RunnerView {
   private root: THREE.Group;
   private body: THREE.Group;
   private head: THREE.Group;

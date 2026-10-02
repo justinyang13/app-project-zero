@@ -21,6 +21,7 @@ export interface DebugInfo {
   triangles: number;
   quality: string;
   muted: boolean;
+  char?: string;
 }
 
 export class Hud {
@@ -255,7 +256,8 @@ export class Hud {
     this.debugEl.innerHTML =
       `<div class="fps">FPS ${info.fps}</div>` +
       `<div class="dim">DRAWS ${info.drawCalls} · TRIS ${(info.triangles / 1000).toFixed(0)}k</div>` +
-      `<div class="dim">${info.quality.toUpperCase()} · ${info.muted ? 'MUTED' : 'SOUND ON'}</div>`;
+      `<div class="dim">${info.quality.toUpperCase()} · ${info.muted ? 'MUTED' : 'SOUND ON'}</div>` +
+      (info.char ? `<div class="dim">CHAR ${info.char.toUpperCase()}</div>` : '');
   }
 
   /** Reset transient state at the start of a run. */

@@ -91,6 +91,13 @@ score.
 - Quality toggle (`Q`) and auto-downgrade to Low if average fps < 40 for 3 s.
 - Auto-pause when the tab is hidden.
 
+## Character models
+
+The runner uses the realistic CC0 Quaternius character (GLB, `public/assets/models/runner.glb`)
+by default, with a Tron suit, helmet and glowing trim; no cloth cape.
+Use `?char=classic` for the original procedural runner. If the GLB fails to load,
+the game automatically falls back to the classic model.
+
 ## Credits
 
 All assets (textures, music) are locally generated and shipped in
