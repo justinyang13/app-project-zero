@@ -30,10 +30,8 @@ export function mountainHeightBoost(seed: number, worldX: number, worldZ: number
   return Math.round(dome * MOUNTAIN_PEAK_BOOST + ripple * 5 * dome);
 }
 
-// The two dragons fly wide circuits round the hill, high above its summit
-// (see engine/Dragon.ts): the green-winged one closer and lower, the
-// crimson one wider and higher, the other way round.
+// The green-winged dragon flies a wide circuit round the hill, high above its
+// summit (see entities/Dragon.ts). The crimson and ice dragons circle the dark
+// and ice castles instead.
 export const GREEN_DRAGON_FLIGHT_RADIUS = MOUNTAIN_RADIUS + 40;
 export const GREEN_DRAGON_ALTITUDE_ABOVE_PEAK = 40;
-export const SUMMIT_DRAGON_FLIGHT_RADIUS = MOUNTAIN_RADIUS + 70;
-export const SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK = 55;

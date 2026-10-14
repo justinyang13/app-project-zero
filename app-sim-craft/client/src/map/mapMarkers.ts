@@ -2,7 +2,7 @@
 // the world. Cheap to rebuild every frame — a handful of fixed points and one
 // per creature/fish.
 import type { MapMarker, PlacedTorch } from "../core/playerState";
-import { CAMPFIRE_SITES, CASTLE_CENTER } from "../worldgen/structures";
+import { CAMPFIRE_SITES, CASTLE_CENTER, ICE_CASTLE_CENTER } from "../worldgen/structures";
 import type { MiniMapMarker, MiniMapMarkerKind } from "./MiniMap";
 
 /** Anything with a spot in the world — the entities the map draws satisfy this without the map knowing about them. */
@@ -19,7 +19,9 @@ export interface MarkerSources {
 }
 
 export function collectMapMarkers(sources: MarkerSources): MiniMapMarker[] {
-  const markers: MiniMapMarker[] = [{ x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, kind: "castle" }];
+  const markers: MiniMapMarker[] = [{ x: CASTLE_CENTER.x, z: CASTLE_CENTER.z, kind: "castle" },
+    { x: ICE_CASTLE_CENTER.x, z: ICE_CASTLE_CENTER.z, kind: "iceCastle" },
+  ];
   const addEntities = (entities: Iterable<Positioned>, kind: MiniMapMarkerKind): void => {
     for (const entity of entities) markers.push({ x: entity.position.x, z: entity.position.z, kind });
   };

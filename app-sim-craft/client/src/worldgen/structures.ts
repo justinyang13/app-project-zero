@@ -11,25 +11,16 @@ import { CHUNK_SIZE, Chunk, localIndex } from "../core/Chunk";
 import { getBlockByKey } from "../data/blocks";
 import { sampleColumn, SEA_LEVEL } from "./terrain";
 import { pointAtProgress, roadDeckYAtProgress, LOOP_PERIMETER, ROAD_WIDTH } from "./roads";
-import { getCastlePlan } from "./castle/blueprint";
 import { chunkOverlapsVillage, stampVillage, VILLAGE_TOP_Y } from "./village/stamp";
 import { UNSET } from "./castle/plan";
-import {
-  CASTLE_BASE_Y,
-  CASTLE_CENTER,
-  CASTLE_FLOOR_Y,
-  CASTLE_GATE_SPAWN,
-  PLAN_MAX_X,
-  PLAN_MAX_Z,
-  PLAN_MIN_X,
-  PLAN_MIN_Y,
-  PLAN_MAX_Y,
-  PLAN_MIN_Z,
-} from "./castle/layout";
+import { CASTLE_BASE_Y, CASTLE_CENTER, CASTLE_GATE_SPAWN } from "./castle/layout";
+import { CASTLE_SITES } from "./castle/sites";
+import type { CastleSite } from "./castle/site";
+import { ICE_CASTLE_CENTER, ICE_CASTLE_GATE_SPAWN } from "./iceCastle/layout";
 import { getBlockById } from "../data/blocks";
 import { MOUNTAIN_CENTER } from "./mountain";
 
-export { CASTLE_CENTER, CASTLE_GATE_SPAWN };
+export { CASTLE_CENTER, CASTLE_GATE_SPAWN, ICE_CASTLE_CENTER, ICE_CASTLE_GATE_SPAWN };
 
 const WALL_ID = getBlockByKey("greystone").id;
 const PLANK_ID = getBlockByKey("plank").id;
@@ -40,13 +31,11 @@ export const BRIDGE_CENTER = { x: 14, z: 0 };
 const BRIDGE_HALF_LENGTH = 8;
 const BRIDGE_HALF_WIDTH = 1;
 
-// The castle is a big plan-based build (worldgen/castle/): the highest
-// thing it reaches above the courtyard floor, for sizing chunk columns.
-const CASTLE_TOP_ABOVE_FLOOR = 74;
-// A chunk column this close to the castle (blocks) might hold some of it or
-// of the lava cascading down its crag; anything farther skips the castle
-// entirely (and never builds its plan).
-const CASTLE_NEAR_RADIUS = 150;
+// The castles are big plan-based builds (worldgen/castle/, worldgen/iceCastle/,
+// listed in castle/sites.ts): each site says how high it reaches above its
+// courtyard floor (for sizing chunk columns) and how near a chunk column
+// must be to possibly hold some of it or of the lava/ice cascading down its
+// crag — anything farther skips the castle entirely (and never builds its plan).
 
 // Several small camps scattered near spawn, each a fire pit ringed by
 // seating (see stampCampfireSite) — deliberately kept off the road grid
@@ -171,17 +160,19 @@ export function structureMaxYFor(seed: number, cx: number, cz: number): number {
   ) {
     maxY = Math.max(maxY, cachedBridgeDeckY + 3);
   }
-  if (
-    chunkOverlapsBox(
-      cx,
-      cz,
-      CASTLE_CENTER.x + PLAN_MIN_X,
-      CASTLE_CENTER.x + PLAN_MAX_X,
-      CASTLE_CENTER.z + PLAN_MIN_Z,
-      CASTLE_CENTER.z + PLAN_MAX_Z,
-    )
-  ) {
-    maxY = Math.max(maxY, CASTLE_FLOOR_Y + CASTLE_TOP_ABOVE_FLOOR);
+  for (const site of CASTLE_SITES) {
+    if (
+      chunkOverlapsBox(
+        cx,
+        cz,
+        site.center.x + site.bounds.minX,
+        site.center.x + site.bounds.maxX,
+        site.center.z + site.bounds.minZ,
+        site.center.z + site.bounds.maxZ,
+      )
+    ) {
+      maxY = Math.max(maxY, site.floorY + site.topAboveFloor);
+    }
   }
   if (chunkOverlapsVillage(cx, cz)) maxY = Math.max(maxY, VILLAGE_TOP_Y);
   return maxY;
@@ -206,27 +197,28 @@ function stampBridge(seed: number, cx: number, cz: number, chunks: Chunk[]): voi
   }
 }
 
-/** Copies the castle plan (worldgen/castle/blueprint.ts) over this chunk column, then re-derives the sky light of every column it touched: open air above the roofs stays lit, rooms under them go dark. */
-function stampCastle(cx: number, cz: number, chunks: Chunk[]): void {
-  if (!chunkOverlapsBox(cx, cz, CASTLE_CENTER.x - CASTLE_NEAR_RADIUS, CASTLE_CENTER.x + CASTLE_NEAR_RADIUS, CASTLE_CENTER.z - CASTLE_NEAR_RADIUS, CASTLE_CENTER.z + CASTLE_NEAR_RADIUS)) return;
-  const plan = getCastlePlan();
+/** Copies a castle's plan (its blueprint) over this chunk column, then re-derives the sky light of every column it touched: open air above the roofs stays lit, rooms under them go dark. */
+function stampCastle(site: CastleSite, cx: number, cz: number, chunks: Chunk[]): void {
+  const { center, floorY, bounds } = site;
+  if (!chunkOverlapsBox(cx, cz, center.x - site.nearRadius, center.x + site.nearRadius, center.z - site.nearRadius, center.z + site.nearRadius)) return;
+  const plan = site.getPlan();
 
   const chunkMinX = cx * CHUNK_SIZE;
   const chunkMinZ = cz * CHUNK_SIZE;
-  const minX = Math.max(chunkMinX, CASTLE_CENTER.x + PLAN_MIN_X);
-  const maxX = Math.min(chunkMinX + CHUNK_SIZE - 1, CASTLE_CENTER.x + PLAN_MAX_X);
-  const minZ = Math.max(chunkMinZ, CASTLE_CENTER.z + PLAN_MIN_Z);
-  const maxZ = Math.min(chunkMinZ + CHUNK_SIZE - 1, CASTLE_CENTER.z + PLAN_MAX_Z);
+  const minX = Math.max(chunkMinX, center.x + bounds.minX);
+  const maxX = Math.min(chunkMinX + CHUNK_SIZE - 1, center.x + bounds.maxX);
+  const minZ = Math.max(chunkMinZ, center.z + bounds.minZ);
+  const maxZ = Math.min(chunkMinZ + CHUNK_SIZE - 1, center.z + bounds.maxZ);
 
   const touched: [number, number][] = [];
   if (minX <= maxX && minZ <= maxZ) {
     for (let wx = minX; wx <= maxX; wx++) {
       for (let wz = minZ; wz <= maxZ; wz++) {
         let any = false;
-        for (let ly = PLAN_MIN_Y; ly <= PLAN_MAX_Y; ly++) {
-          const block = plan.get(wx - CASTLE_CENTER.x, ly, wz - CASTLE_CENTER.z);
+        for (let ly = bounds.minY; ly <= bounds.maxY; ly++) {
+          const block = plan.get(wx - center.x, ly, wz - center.z);
           if (block === UNSET) continue;
-          setWorldVoxel(chunks, cx, cz, wx, CASTLE_FLOOR_Y + ly, wz, block);
+          setWorldVoxel(chunks, cx, cz, wx, floorY + ly, wz, block);
           any = true;
         }
         if (any) touched.push([wx, wz]);
@@ -306,7 +298,7 @@ function stampStreetLamps(seed: number, cx: number, cz: number, chunks: Chunk[])
 /** Stamps every fixed structure that overlaps this chunk column. Mutates `chunks` in place. */
 export function stampStructures(seed: number, cx: number, cz: number, chunks: Chunk[]): void {
   stampBridge(seed, cx, cz, chunks);
-  stampCastle(cx, cz, chunks);
+  for (const site of CASTLE_SITES) stampCastle(site, cx, cz, chunks);
   stampCampfires(seed, cx, cz, chunks);
   stampStreetLamps(seed, cx, cz, chunks);
   stampVillage(cx, cz, chunks);

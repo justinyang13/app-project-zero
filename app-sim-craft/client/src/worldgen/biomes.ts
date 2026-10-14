@@ -58,3 +58,13 @@ export const CRAG_BIOME: BiomeDef = {
   heightBase: 68,
   heightAmplitude: 0,
 };
+
+/** Like CRAG_BIOME but for the ice castle's glacier (worldgen/iceCastle/crag.ts): the minimaps draw it as pale blue ice and trees skip it. */
+export const ICE_CRAG_BIOME: BiomeDef = {
+  key: "icecrag",
+  name: "Frostspire Glacier",
+  surfaceBlock: getBlockByKey("snow_rock").id,
+  subsurfaceBlock: getBlockByKey("glacier_rock").id,
+  heightBase: 68,
+  heightAmplitude: 0,
+};

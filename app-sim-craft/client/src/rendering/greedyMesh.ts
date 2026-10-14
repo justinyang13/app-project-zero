@@ -93,10 +93,20 @@ function faceIndex(axis: Axis, dir: number): number {
   return axis * 2 + (dir > 0 ? 0 : 1);
 }
 
-/** Baked block light -> the warm glow color added to a face (firelight: dim reads deep red-orange, bright reads gold). */
-function glowColor(level: number): [number, number, number] {
+/**
+ * A baked block-light sample is a level (low 4 bits, 0-15) plus a tint (the bits above): 0 is firelight,
+ * 1 is the cold light of the ice castle (see worldgen/castle/lightMap.ts). The tint only changes the colour
+ * the light adds to a face, never how far it reaches.
+ */
+const GLOW_LEVEL_MASK = 15;
+const GLOW_TINT_SHIFT = 4;
+
+/** Baked block light -> the glow color added to a face. Warm firelight: dim reads deep red-orange, bright reads gold. Cold light: dim reads deep blue, bright reads icy white-blue. */
+function glowColor(sample: number): [number, number, number] {
+  const level = sample & GLOW_LEVEL_MASK;
   if (level <= 0) return [0, 0, 0];
   const t = Math.pow(level / 15, 1.7); // a steeper curve keeps distant walls dark and pools the light around the flames
+  if (sample >> GLOW_TINT_SHIFT === 1) return [Math.min(1, 0.34 * Math.pow(t, 1.1)), Math.min(1, 0.7 * Math.pow(t, 1.05)), Math.min(1, t * 1.25)];
   return [Math.min(1, t * 1.15), 0.6 * Math.pow(t, 1.2), 0.16 * Math.pow(t, 2)];
 }
 
@@ -331,7 +341,7 @@ function emitTexturedQuad(
   v0: number,
   v1: number,
   light: number,
-  glowLevel: number,
+  glowSample: number,
 ): void {
   const faceVal = dir > 0 ? slice + 1 : slice;
   const corners: [number, number][] = dir > 0 ? [[u0, v0], [u1, v0], [u1, v1], [u0, v1]] : [[u0, v0], [u0, v1], [u1, v1], [u1, v0]];
@@ -339,8 +349,8 @@ function emitTexturedQuad(
   const layer = FACE_TILE[face];
   const frames = FACE_FRAMES[face];
   // Sky light and block light are alternatives, not a sum: a face is as bright as the brighter of the two, so a lamp-lit room reads as lit by day too (the glow below only adds warm colour, and fades with daylight).
-  const brightness = lightToBrightness(Math.max(light, glowLevel));
-  const [gr, gg, gb] = glowColor(glowLevel);
+  const brightness = lightToBrightness(Math.max(light, glowSample & GLOW_LEVEL_MASK));
+  const [gr, gg, gb] = glowColor(glowSample);
 
   const baseIndex = out.positions.length / 3;
   const p: [number, number, number] = [0, 0, 0];

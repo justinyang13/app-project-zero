@@ -8,6 +8,10 @@
 // nothing but the fixed layout, it is built once per worker/thread and
 // cached.
 import { CASTLE_CENTER, CASTLE_FLOOR_Y, PLAN_MAX_X, PLAN_MAX_Y, PLAN_MAX_Z, PLAN_MIN_X, PLAN_MIN_Y, PLAN_MIN_Z } from "./layout";
+import type { PlanBounds } from "./site";
+
+/** The dark castle's plan box (the default). */
+export const DARK_BOUNDS: PlanBounds = { minX: PLAN_MIN_X, maxX: PLAN_MAX_X, minY: PLAN_MIN_Y, maxY: PLAN_MAX_Y, minZ: PLAN_MIN_Z, maxZ: PLAN_MAX_Z };
 
 export const UNSET = 0xffff;
 
@@ -34,16 +38,26 @@ export interface WorldExtra {
 }
 
 export class CastlePlan {
-  readonly sizeX = PLAN_MAX_X - PLAN_MIN_X + 1;
-  readonly sizeY = PLAN_MAX_Y - PLAN_MIN_Y + 1;
-  readonly sizeZ = PLAN_MAX_Z - PLAN_MIN_Z + 1;
-  readonly blocks = new Uint16Array(this.sizeX * this.sizeY * this.sizeZ).fill(UNSET);
+  readonly sizeX: number;
+  readonly sizeY: number;
+  readonly sizeZ: number;
+  readonly blocks: Uint16Array;
   readonly banners: BannerSpec[] = [];
   readonly extras: WorldExtra[] = [];
+  readonly bounds: PlanBounds;
+
+  constructor(bounds: PlanBounds = DARK_BOUNDS) {
+    this.bounds = bounds;
+    this.sizeX = bounds.maxX - bounds.minX + 1;
+    this.sizeY = bounds.maxY - bounds.minY + 1;
+    this.sizeZ = bounds.maxZ - bounds.minZ + 1;
+    this.blocks = new Uint16Array(this.sizeX * this.sizeY * this.sizeZ).fill(UNSET);
+  }
 
   index(lx: number, ly: number, lz: number): number {
-    if (lx < PLAN_MIN_X || lx > PLAN_MAX_X || ly < PLAN_MIN_Y || ly > PLAN_MAX_Y || lz < PLAN_MIN_Z || lz > PLAN_MAX_Z) return -1;
-    return (ly - PLAN_MIN_Y) * this.sizeZ * this.sizeX + (lz - PLAN_MIN_Z) * this.sizeX + (lx - PLAN_MIN_X);
+    const b = this.bounds;
+    if (lx < b.minX || lx > b.maxX || ly < b.minY || ly > b.maxY || lz < b.minZ || lz > b.maxZ) return -1;
+    return (ly - b.minY) * this.sizeZ * this.sizeX + (lz - b.minZ) * this.sizeX + (lx - b.minX);
   }
 
   get(lx: number, ly: number, lz: number): number {

@@ -7,7 +7,7 @@
 // and mine into.
 import { CHUNK_SIZE, Chunk, localIndex } from "../core/Chunk";
 import { fbm2D, seededNoise2D } from "./noise";
-import { pickBiome, CRAG_BIOME, type BiomeDef } from "./biomes";
+import { pickBiome, BIOMES, CRAG_BIOME, ICE_CRAG_BIOME, type BiomeDef } from "./biomes";
 import { WATER_ID, getBlockByKey } from "../data/blocks";
 import { placeTrees, planTrees, treesMaxY } from "./trees";
 import { stampStructures, structureMaxYFor } from "./structures";
@@ -17,6 +17,7 @@ import { mountainHeightBoost } from "./mountain";
 import { deepLakeHeight } from "./deepLake";
 import { villageGround, villageWeight } from "./village/ground";
 import { applyCrag, blightSurfaceBlock, castleBlight, cragBodyBlock, cragSurfaceBlock, raiseCastleGround, CRAG_NONE } from "./castle/crag";
+import { applyIceCrag, iceCragBodyBlock, iceCragSurfaceBlock, iceFrost, iceFrostSurfaceBlock, raiseIceGround, ICE_RAMP, ICE_ROCK } from "./iceCastle/crag";
 
 const SALT_TEMPERATURE = 0x5eed01;
 const SALT_HEIGHT = 0x5eed02;
@@ -52,6 +53,8 @@ export interface ColumnSample {
   village: number;
   /** 0-1: how blighted the natural ground here is by the castle's shadow (see castleBlight); 0 on crag columns and far from the castle. */
   blight: number;
+  /** 0-1: how frosted the natural ground here is by the ice castle's glacier (see iceFrost); 0 on crag columns and far from it. */
+  frost: number;
 }
 
 /** Pure function of (seed, world x/z) — see spec/01-tech-stack-architecture.md §9. */
@@ -66,14 +69,20 @@ export function sampleColumn(seed: number, worldX: number, worldZ: number): Colu
   const naturalHeight =
     Math.round(biome.heightBase + detail * biome.heightAmplitude) + mountainHeightBoost(seed, worldX, worldZ);
   const lakeHeight = deepLakeHeight(naturalHeight, worldX, worldZ, SEA_LEVEL);
-  const { height, kind } = applyCrag(villageGround(raiseCastleGround(lakeHeight, worldX, worldZ), worldX, worldZ), worldX, worldZ);
+  const darkCrag = applyCrag(villageGround(raiseIceGround(raiseCastleGround(lakeHeight, worldX, worldZ), worldX, worldZ), worldX, worldZ), worldX, worldZ);
+  const iceCrag = applyIceCrag(darkCrag.height, worldX, worldZ);
+  const height = iceCrag.height;
+  const kind = iceCrag.kind !== CRAG_NONE ? iceCrag.kind : darkCrag.kind;
 
   const blight = kind === CRAG_NONE && height >= SEA_LEVEL ? castleBlight(worldX, worldZ) : 0;
+  const frost = kind === CRAG_NONE && height >= SEA_LEVEL ? iceFrost(worldX, worldZ) : 0;
   const village = kind === CRAG_NONE ? villageWeight(worldX, worldZ) : 0;
   // Snow: all of the tundra, and any high ground above a ragged snow line.
   const snowLine = SNOW_LINE_Y + fbm2D(heightNoise, worldX, worldZ, 2, 1 / 22) * 7;
-  const snowy = kind === CRAG_NONE && village === 0 && (biome.key === "tundra" || height >= snowLine);
-  return { height, biome: kind === CRAG_NONE ? biome : CRAG_BIOME, crag: kind, blight, village, snowy };
+  const snowy = kind === CRAG_NONE && village === 0 && (biome.key === "tundra" || height >= snowLine || frost > 0.12);
+  // Under the ice castle's frost the ground is tundra whatever the climate said (trees, subsurface and map color follow).
+  const columnBiome = kind === ICE_ROCK || kind === ICE_RAMP ? ICE_CRAG_BIOME : kind !== CRAG_NONE ? CRAG_BIOME : frost > 0.5 && village === 0 ? BIOMES.tundra : biome;
+  return { height, biome: columnBiome, crag: kind, blight, village, snowy, frost };
 }
 
 /** Highest chunk-Y layer (inclusive) that can contain solid terrain for a max column height. */
@@ -118,7 +127,7 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
 
   for (let lx = 0; lx < CHUNK_SIZE; lx++) {
     for (let lz = 0; lz < CHUNK_SIZE; lz++) {
-      const { height, biome, crag, blight, village, snowy } = columns[lx * CHUNK_SIZE + lz];
+      const { height, biome, crag, blight, village, snowy, frost } = columns[lx * CHUNK_SIZE + lz];
       // The village is always on green meadow; snowy ground is snow-capped turf.
       const surfaceBlock = village > 0.5 ? TURF_ID : snowy ? SNOW_TURF_ID : biome.surfaceBlock;
 
@@ -156,7 +165,7 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
             if (bridgeBlock !== 0) chunk.blocks[idx] = bridgeBlock;
             else if (worldY > groundTop) chunk.skyLight[idx] = 15;
             else if (worldY > height) chunk.blocks[idx] = WATER_ID;
-            else if (worldY === height) chunk.blocks[idx] = blightSurfaceBlock(worldX, worldZ, blight, surfaceBlock);
+            else if (worldY === height) chunk.blocks[idx] = iceFrostSurfaceBlock(worldX, worldZ, frost, blightSurfaceBlock(worldX, worldZ, blight, surfaceBlock));
             else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
             else chunk.blocks[idx] = STONE_ID;
           } else if (isBridge) {
@@ -169,16 +178,18 @@ export function generateColumn(seed: number, cx: number, cz: number): Chunk[] {
             else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
             else chunk.blocks[idx] = STONE_ID;
           } else if (crag !== CRAG_NONE && !isRoad) {
-            // The castle's crag / approach ramp: dark rock all the way down, since its cliffs expose every layer.
+            // A castle's crag / approach ramp: rock all the way down (dark for the dark castle, glacier slate and ice for the ice castle), since its cliffs expose every layer.
             if (worldY > height) chunk.blocks[idx] = WATER_ID;
-            else if (worldY === height) chunk.blocks[idx] = cragSurfaceBlock(worldX, worldZ, crag);
+            else if (crag >= ICE_ROCK) {
+              chunk.blocks[idx] = worldY === height ? iceCragSurfaceBlock(worldX, worldZ, crag) : iceCragBodyBlock(worldX, worldY, worldZ, height, crag);
+            } else if (worldY === height) chunk.blocks[idx] = cragSurfaceBlock(worldX, worldZ, crag);
             else chunk.blocks[idx] = cragBodyBlock(worldX, worldY, worldZ, height, crag);
           } else if (isRoad) {
             if (worldY === deckY) chunk.blocks[idx] = ROAD_ID;
             else if (worldY >= deckY - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
             else chunk.blocks[idx] = STONE_ID;
           } else if (worldY > height) chunk.blocks[idx] = WATER_ID;
-          else if (worldY === height) chunk.blocks[idx] = blightSurfaceBlock(worldX, worldZ, blight, surfaceBlock);
+          else if (worldY === height) chunk.blocks[idx] = iceFrostSurfaceBlock(worldX, worldZ, frost, blightSurfaceBlock(worldX, worldZ, blight, surfaceBlock));
           else if (worldY >= height - 3) chunk.blocks[idx] = biome.subsurfaceBlock;
           else chunk.blocks[idx] = STONE_ID;
         }

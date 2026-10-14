@@ -1,15 +1,16 @@
-// The castle's red banners: thin cloth planes hung flat against its walls
+// A castle's banners (the dark castle's crimson, the ice castle's royal blue): thin cloth planes hung flat against its walls
 // (a full voxel cube would jut a whole block out of the wall), one merged
 // mesh for all of them. The cloth is a pixel-art canvas texture — crimson
 // with dark borders, a forked swallow-tail bottom and a glowing horned
 // sigil that stays lit at night through an emissive map — and sways gently
 // in a vertex shader (bottom edge most, top edge pinned to its rod). The
-// placements come from the castle plan (worldgen/castle/blueprint.ts), so
+// placements come from the castle's plan (worldgen/castle/blueprint.ts, worldgen/iceCastle/blueprint.ts), so
 // they line up with the walls they hang on by construction.
 import * as THREE from "three";
-import { getCastlePlan } from "../worldgen/castle/blueprint";
-import { CASTLE_CENTER, CASTLE_FLOOR_Y } from "../worldgen/castle/layout";
 import type { BannerSpec } from "../worldgen/castle/plan";
+import type { CastleSite } from "../worldgen/castle/site";
+
+export type BannerStyle = "dark" | "ice";
 
 const TEX_W = 48; // 3 blocks at 16 px per block, like the block textures
 const TEX_H = 144; // 9 blocks
@@ -80,7 +81,28 @@ function drawSigil(ctx: CanvasRenderingContext2D): void {
   ctx.fillRect(23, 58, 1, 52);
 }
 
-function paintBanner(): BannerTextures {
+/** Draws a six-armed snowflake (mirrored automatically by its symmetry) centred on (24, 62) in the current fill style. */
+function drawSnowflake(ctx: CanvasRenderingContext2D): void {
+  const cx = 24;
+  const cy = 62;
+  for (let k = 0; k < 6; k++) {
+    const a = (k * Math.PI) / 3 + Math.PI / 2;
+    const tip = [Math.round(cx + Math.cos(a) * 17), Math.round(cy + Math.sin(a) * 17)] as const;
+    pixelLine(ctx, cx, cy, tip[0], tip[1]);
+    // Two little branches on each arm, angled back toward the centre.
+    for (const t of [0.45, 0.75]) {
+      const bx = cx + Math.cos(a) * 17 * t;
+      const by = cy + Math.sin(a) * 17 * t;
+      for (const side of [-1, 1]) {
+        const ba = a + side * (Math.PI / 3.2);
+        pixelLine(ctx, Math.round(bx), Math.round(by), Math.round(bx + Math.cos(ba) * 5), Math.round(by + Math.sin(ba) * 5));
+      }
+    }
+  }
+  ctx.fillRect(cx - 2, cy - 2, 5, 5);
+}
+
+function paintBanner(style: BannerStyle): BannerTextures {
   const map = document.createElement("canvas");
   map.width = TEX_W;
   map.height = TEX_H;
@@ -98,37 +120,47 @@ function paintBanner(): BannerTextures {
       const fade = 1 - (y / TEX_H) * 0.32;
       const grain = 0.94 + hash(x, y, 3) * 0.12;
       const k = fold * fade * grain;
-      ctx.fillStyle = `rgb(${Math.round(112 * k)},${Math.round(20 * k)},${Math.round(24 * k)})`;
+      ctx.fillStyle = style === "ice" ? `rgb(${Math.round(34 * k)},${Math.round(84 * k)},${Math.round(206 * k)})` : `rgb(${Math.round(112 * k)},${Math.round(20 * k)},${Math.round(24 * k)})`;
       ctx.fillRect(x, y, 1, 1);
     }
   }
   // Borders: a black edge with a thin crimson-bright line inside it.
-  ctx.fillStyle = "#1c0507";
+  ctx.fillStyle = style === "ice" ? "#0a1a52" : "#1c0507";
   ctx.fillRect(0, 0, 3, TEX_H);
   ctx.fillRect(TEX_W - 3, 0, 3, TEX_H);
-  ctx.fillStyle = "#8a1a1d";
+  ctx.fillStyle = style === "ice" ? "#b4ccf2" : "#8a1a1d";
   ctx.fillRect(3, 6, 1, TEX_H);
   ctx.fillRect(TEX_W - 4, 6, 1, TEX_H);
   // The rod at the top, with gilded ends.
-  ctx.fillStyle = "#1a1416";
+  ctx.fillStyle = style === "ice" ? "#27345c" : "#1a1416";
   ctx.fillRect(0, 0, TEX_W, 5);
-  ctx.fillStyle = "#3a3236";
+  ctx.fillStyle = style === "ice" ? "#9cb4dc" : "#3a3236";
   ctx.fillRect(0, 0, TEX_W, 1);
-  ctx.fillStyle = "#a8842f";
+  ctx.fillStyle = style === "ice" ? "#e4eefc" : "#a8842f";
   ctx.fillRect(1, 1, 3, 3);
   ctx.fillRect(TEX_W - 4, 1, 3, 3);
 
-  // The sigil, drawn dim-orange on the cloth and bright in the emissive map.
-  ctx.fillStyle = "#e0561f";
-  drawSigil(ctx);
-  ctx.fillStyle = "#ffc24a";
-  for (const [x, y] of [[20, 44], [21, 44], [20, 45], [21, 45], [27, 44], [28, 44], [27, 45], [28, 45]]) ctx.fillRect(x, y, 1, 1);
-  ectx.fillStyle = "#000";
-  ectx.fillRect(0, 0, TEX_W, TEX_H);
-  ectx.fillStyle = "#e85a1e";
-  drawSigil(ectx);
-  ectx.fillStyle = "#ffd060";
-  for (const [x, y] of [[20, 44], [21, 44], [20, 45], [21, 45], [27, 44], [28, 44], [27, 45], [28, 45]]) ectx.fillRect(x, y, 1, 1);
+  // The sigil, drawn dim on the cloth and bright in the emissive map.
+  const eyes = [[20, 44], [21, 44], [20, 45], [21, 45], [27, 44], [28, 44], [27, 45], [28, 45]];
+  if (style === "ice") {
+    ctx.fillStyle = "#cfe6ff";
+    drawSnowflake(ctx);
+    ectx.fillStyle = "#000";
+    ectx.fillRect(0, 0, TEX_W, TEX_H);
+    ectx.fillStyle = "#6fc4ff";
+    drawSnowflake(ectx);
+  } else {
+    ctx.fillStyle = "#e0561f";
+    drawSigil(ctx);
+    ctx.fillStyle = "#ffc24a";
+    for (const [x, y] of eyes) ctx.fillRect(x, y, 1, 1);
+    ectx.fillStyle = "#000";
+    ectx.fillRect(0, 0, TEX_W, TEX_H);
+    ectx.fillStyle = "#e85a1e";
+    drawSigil(ectx);
+    ectx.fillStyle = "#ffd060";
+    for (const [x, y] of eyes) ectx.fillRect(x, y, 1, 1);
+  }
 
   // Swallow-tail hem plus a ragged edge: cut to transparent (alpha-tested).
   for (const c of [ctx, ectx]) {
@@ -162,8 +194,8 @@ export class CastleBanners {
   private readonly mesh: THREE.Mesh | null;
   private readonly textures: BannerTextures | null;
 
-  constructor() {
-    const banners = getCastlePlan().banners;
+  constructor(site: CastleSite, style: BannerStyle) {
+    const banners = site.getPlan().banners;
     if (banners.length === 0) {
       this.mesh = null;
       this.textures = null;
@@ -180,10 +212,10 @@ export class CastleBanners {
       const base = positions.length / 3;
       for (let r = 0; r <= ROWS; r++) {
         const t = r / ROWS;
-        const y = CASTLE_FLOOR_Y + banner.y - banner.height * t;
+        const y = site.floorY + banner.y - banner.height * t;
         for (const side of [0, 1]) {
           const along = side * banner.width - banner.width / 2;
-          const p = worldPoint(banner, along);
+          const p = worldPoint(site, banner, along);
           positions.push(p.x, y, p.z);
           normals.push(p.nx, 0, p.nz);
           uvs.push(side, 1 - t);
@@ -201,7 +233,7 @@ export class CastleBanners {
     geometry.setAttribute("uv", new THREE.Float32BufferAttribute(uvs, 2));
     geometry.setIndex(indices);
 
-    this.textures = paintBanner();
+    this.textures = paintBanner(style);
     const material = new THREE.MeshLambertMaterial({
       map: this.textures.map,
       emissiveMap: this.textures.emissive,
@@ -245,9 +277,9 @@ export class CastleBanners {
 }
 
 /** World-space position (x, z) `along` the banner's width from its center, and the outward wall normal. */
-function worldPoint(b: BannerSpec, along: number): { x: number; z: number; nx: number; nz: number } {
-  const cx = CASTLE_CENTER.x + b.x;
-  const cz = CASTLE_CENTER.z + b.z;
+function worldPoint(site: CastleSite, b: BannerSpec, along: number): { x: number; z: number; nx: number; nz: number } {
+  const cx = site.center.x + b.x;
+  const cz = site.center.z + b.z;
   switch (b.facing) {
     case "S":
       return { x: cx + along, z: cz, nx: 0, nz: 1 };

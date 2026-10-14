@@ -77,8 +77,8 @@ function insidePolygon(p: P2, poly: P2[]): boolean {
 const textureCache = new Map<string, THREE.CanvasTexture>();
 
 /** Pixelated membrane texture: `dark` at the veins/arm/wrist fading to `red` at the ragged trailing edge. */
-export function getWingTexture(dark: number, red: number): THREE.CanvasTexture {
-  const key = `${dark}-${red}`;
+export function getWingTexture(dark: number, red: number, emberColor = 0xff7a4a): THREE.CanvasTexture {
+  const key = `${dark}-${red}-${emberColor}`;
   const cached = textureCache.get(key);
   if (cached) return cached;
 
@@ -95,7 +95,7 @@ export function getWingTexture(dark: number, red: number): THREE.CanvasTexture {
   const trailing = poly.slice(2).concat([poly[0]]); // wrist -> tips/scallops -> root -> shoulder: the free edge
   const dc = new THREE.Color(dark);
   const rc = new THREE.Color(red);
-  const ember = new THREE.Color(0xff7a4a);
+  const ember = new THREE.Color(emberColor);
   const veinAngles = [10, 27.5, 45, 61.5, 78, 93, 108, 124, 140, 158, 178];
   const primary = new Set([10, 45, 78, 108, 140]);
 

@@ -3,22 +3,37 @@
 Running list of feature/polish ideas, not yet scoped or built. Add to it
 freely; move an item out (or check it off) once it ships.
 
-1. Ice castle, as big as the current (dark) castle. Ask the user for a
-   reference image before designing it. Needs secret passageways. Must
-   include a big, tall library room filled with books, at least 3
-   stories tall.
-2. A beach biome/shoreline with palm trees
-3. An island in the middle of the deep lake
-4. New creatures: unicorns, alicorns, pegasus
-5. Pet system: a creature found in the wild can be asked to follow the
+1. A beach biome/shoreline with palm trees
+2. An island in the middle of the deep lake
+3. New creatures: alicorns, pegasus (unicorns exist)
+4. Pet system: a creature found in the wild can be asked to follow the
    player around. Only one pet at a time.
-6. Bug: whales and sharks can't swim past the bridge. Clear the invisible
+5. Bug: whales and sharks can't swim past the bridge. Clear the invisible
    underwater structures (likely leftovers), especially under the bridge.
-7. Add more glowing vines trees around the castle, especially brighter with lights at night
+6. Add more glowing vines trees around the castle, especially brighter with lights at night
 
 _(add new ideas above this line)_
 
 ## Shipped
+
+- The ice castle, the dark castle's frozen twin at (-309, -363): the same
+  footprint and a plan box a little bigger, on a terraced glacier crag of
+  slate rock banded with packed and blue ice and ringed by crystalline ice
+  spires, in a snowfield that is frosted whatever the world's climate (so it
+  always stands in snow), a torch-lit stair climbing to the gate. Royal-blue
+  frost-brick walls under snow caps, steep blue spires with glowing
+  finials, round turrets under conical roofs, a three-tier keep with a
+  great rose window and a tall needle spire; a frozen stream through the
+  courtyard; a timber-gabled feast hall with a hearth and chimney stack; a
+  four-storey library (a 21-block nave, two balconies, stairs, ~1000
+  books, chandeliers); and three secret routes behind loose bricks and a
+  loose bookcase — hall -> corridor -> spiral stair -> tower study ->
+  library, hearth -> hidden stair -> treasury vault, vault -> long stair ->
+  an ice grotto. About forty new pixel-art textures (rendering/
+  frostPainter.ts), cold blue baked light (castle/lightMap.ts tints per
+  castle), blue snowflake banners, and an ice dragon that circles it (the
+  crimson dragon now circles the dark castle). `I` and the minimap's
+  snowflake button teleport there. See worldgen/iceCastle/.
 
 - The dark castle (replaces the grey box castle): a fixed, seed-independent
   fortress on a terraced crag at (-100, -30) — banner-hung curtain wall

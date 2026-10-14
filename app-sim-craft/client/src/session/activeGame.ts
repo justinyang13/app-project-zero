@@ -13,6 +13,7 @@ export interface GameCommands {
   toggleFlying(): void;
   toggleViewMode(): void;
   teleportToCastle(): void;
+  teleportToIceCastle(): void;
   /** The current build mode's action (break / place / torch / flag); pass `isRepeat` for held-button repeats. */
   triggerPrimaryAction(isRepeat?: boolean): void;
   setPrimaryActionHeld(held: boolean): void;

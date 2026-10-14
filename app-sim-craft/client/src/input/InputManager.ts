@@ -15,6 +15,7 @@ export interface GameActions {
   toggleFlying(): void;
   toggleViewMode(): void;
   teleportToCastle(): void;
+  teleportToIceCastle(): void;
   toggleMarkerAtPlayer(): void;
   /** Left click / the touch action button, on press (held repeats are driven by `primaryActionHeld`). */
   primaryAction(): void;
@@ -51,6 +52,7 @@ const ON_PRESS: Record<string, PressHandler> = {
   KeyV: () => useHotbarStore.getState().setMode("flag"),
   KeyE: (actions) => actions.interact(),
   KeyH: (actions) => actions.teleportToCastle(),
+  KeyI: (actions) => actions.teleportToIceCastle(),
   KeyK: (actions) => actions.toggleMarkerAtPlayer(),
   Minus: () => useMinimapStore.getState().zoomOut(),
   Equal: () => useMinimapStore.getState().zoomIn(),

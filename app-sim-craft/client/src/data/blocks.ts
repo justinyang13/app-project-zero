@@ -374,7 +374,73 @@ export const BLOCKS: BlockDef[] = [
   leafVariant(75, "leaves_cherry_dark", "Dusk Blossom Leaves", 0xb84c7c),
   leafVariant(76, "leaves_snowy", "Snow-laden Leaves", 0xf2f8fc),
   flatBlock(77, "cobblestone", "Cobblestone", 0x8c8c90, "pickaxe", 1.8),
+  // --- the ice castle's palette (ids 78+) ---------------------------------
+  // Royal-blue "frost brick" castle walls under snow caps, slate-blue glacier
+  // rock, packed and blue ice, steep blue roofs and amber-glowing stained
+  // windows (see worldgen/iceCastle/ and rendering/frostPainter.ts).
+  textured(78, "frost_brick", "Frost Brick", 2.0, { all: "frost_brick" }, 0x306ce4),
+  textured(79, "frost_brick_cracked", "Cracked Frost Brick", 1.6, { all: "frost_brick_cracked" }, 0x2c62d0),
+  textured(80, "frost_brick_rimed", "Rimed Frost Brick", 2.0, { all: "frost_brick_rimed" }, 0x6a98e0),
+  textured(81, "frost_brick_snowy", "Snow-capped Frost Brick", 2.0, { top: "snow_top", side: "frost_snowcap_side", bottom: "frost_brick" }, 0xe4eefc),
+  textured(82, "frost_polished", "Polished Frostmarble", 2.0, { all: "frost_polished" }, 0x5486dc),
+  textured(83, "frost_column", "Frost Column", 2.0, { side: "frost_column_side", top: "frost_polished", bottom: "frost_polished" }, 0x84acec),
+  textured(84, "frost_floor_light", "Pale Frostmarble Flag", 2.0, { all: "frost_floor_light" }, 0xd4e2f6),
+  textured(85, "frost_floor_dark", "Deep Frostmarble Flag", 2.0, { all: "frost_floor_dark" }, 0x2446a4),
+  textured(86, "frost_trim", "Silver Frost Trim", 2.0, { all: "frost_trim" }, 0xccdaf0),
+  // The hidden door: looks like frost brick bar one faint etched snowflake, and gives way to a bare hand.
+  textured(87, "loose_brick", "Loose Frost Brick", 0.4, { all: "loose_brick" }, 0x306ce4, { toolType: "none" }),
+  textured(88, "glacier_rock", "Glacier Rock", 1.8, { all: "glacier_rock" }, 0x3e507c),
+  textured(89, "glacier_cobble", "Glacier Cobble", 1.8, { all: "glacier_cobble" }, 0x46587f),
+  textured(90, "snow_rock", "Snowy Glacier Rock", 1.2, { top: "snow_top", side: "snow_rock_side", bottom: "glacier_rock" }, 0xe4eefc, { toolType: "shovel" }),
+  textured(91, "packed_ice", "Packed Ice", 1.0, { all: "packed_ice" }, 0xb6e0f4),
+  textured(92, "blue_ice", "Blue Ice", 2.5, { all: "blue_ice" }, 0x3c88e6),
+  textured(93, "frost_crystal", "Frost Crystal", 1.0, { all: "frost_crystal" }, 0x6ee0ff),
+  textured(94, "frost_roof", "Frostslate Roof Tile", 1.5, { all: "frost_roof" }, 0x2a5cc4),
+  textured(95, "frost_roof_ridge", "Frostslate Ridge Tile", 1.5, { all: "frost_roof_ridge" }, 0x4a82e8),
+  textured(96, "frost_roof_snowy", "Snow-laden Roof Tile", 1.5, { top: "snow_top", side: "frost_roof", bottom: "frost_roof" }, 0xe4eefc),
+  // Stained-glass windows: opaque but self-lit, so they glow amber out of the blue walls.
+  textured(97, "frost_window", "Frost-glass Lancet Window", 0.8, { all: "frost_window" }, 0xa8dcff, { glow: { level: 11, stride: 1 } }),
+  textured(98, "frost_window_top", "Frost-glass Pointed Window", 0.8, { all: "frost_window_top" }, 0xa8dcff, { glow: { level: 11, stride: 1 } }),
+  textured(99, "frost_window_dark", "Dark Lancet Window", 0.8, { all: "frost_window_dark" }, 0x1c2848),
+  textured(100, "frost_slit", "Glowing Arrow Slit", 1.5, { all: "frost_slit" }, 0xa8dcff, { glow: { level: 8, stride: 1 } }),
+  textured(101, "frost_rose_0", "Rose Window (NW)", 0.8, { all: "frost_rose_0" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(102, "frost_rose_1", "Rose Window (N)", 0.8, { all: "frost_rose_1" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(103, "frost_rose_2", "Rose Window (NE)", 0.8, { all: "frost_rose_2" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(104, "frost_rose_3", "Rose Window (W)", 0.8, { all: "frost_rose_3" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(105, "frost_rose_4", "Rose Window (Centre)", 0.8, { all: "frost_rose_4" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(106, "frost_rose_5", "Rose Window (E)", 0.8, { all: "frost_rose_5" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(107, "frost_rose_6", "Rose Window (SW)", 0.8, { all: "frost_rose_6" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(108, "frost_rose_7", "Rose Window (S)", 0.8, { all: "frost_rose_7" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(109, "frost_rose_8", "Rose Window (SE)", 0.8, { all: "frost_rose_8" }, 0xa8dcff, { glow: { level: 10, stride: 1 } }),
+  textured(110, "frost_door_bottom", "Frostgate Door (lower)", 1.5, { all: "frost_door_bottom" }, 0x54382a, { toolType: "axe" }),
+  textured(111, "frost_door_top", "Frostgate Door (upper)", 1.5, { all: "frost_door_top" }, 0x54382a, { toolType: "axe" }),
+  textured(112, "frost_timber", "Frosted Timber", 1.2, { all: "frost_timber" }, 0x34221a, { toolType: "axe" }),
+  textured(113, "frost_plaster", "Frosted Plaster", 1.0, { all: "frost_plaster" }, 0xc4d2ea),
+  textured(114, "frost_lantern", "Frost Lantern", 0.5, { all: "frost_lantern" }, 0xb8e4ff, { glow: { level: 15, stride: 1 } }),
+  textured(115, "icicle", "Icicle", 0.1, { all: "icicle" }, 0xd8f0fc, {
+    solid: false,
+    shape: "cross",
+    transparentToRender: true,
+    lightOpacity: 0,
+    toolType: "none",
+  }),
+  textured(116, "frost_bookshelf", "Library Bookshelf", 0.8, { side: "frost_bookshelf_side", top: "frost_bookshelf_top", bottom: "frost_bookshelf_top" }, 0x6e4b2d, { toolType: "axe" }),
+  // A bookcase that swings aside: identical to the real ones, but gives way to a bare hand.
+  textured(117, "frost_bookshelf_loose", "Library Bookshelf", 0.4, { side: "frost_bookshelf_side", top: "frost_bookshelf_top", bottom: "frost_bookshelf_top" }, 0x6e4b2d, { toolType: "none" }),
+  textured(118, "frost_carpet", "Frost Carpet", 0.4, { all: "frost_carpet" }, 0x1e3a96),
+  // Cold fire: the ice castle's torches and braziers burn blue-white.
+  textured(119, "frost_flame", "Frostfire", 0, { all: "frost_flame" }, 0x7fd0ff, {
+    solid: false,
+    shape: "cross",
+    transparentToRender: true,
+    lightOpacity: 0,
+    glow: { level: 14, stride: 1 },
+  }),
+  textured(120, "frost_brazier", "Frost Brazier", 2.0, { top: "frost_brazier_top", side: "frost_brazier_side", bottom: "frost_brazier_side" }, 0x2a3250, {
+    glow: { level: 9, stride: 1 },
+  }),
 ];
+
 
 // The everyday terrain and building blocks were flat colors; give them the
 // pixel-art textures painted in rendering/blockPainter.ts (grass with a

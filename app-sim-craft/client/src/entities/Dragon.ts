@@ -1,9 +1,9 @@
 // The giant landmark dragons — not part of the ambient Creature.ts roster
 // (species table, wander AI, ground-snapping — see that file's own notes
-// on scope). There are two, sharing everything but a DragonConfig: a
-// green-winged one and a crimson one with glowing scales, each endlessly
-// circling the hill in worldgen/mountain.ts at its own radius and height
-// (opposite ways round). They never land — there is no perch — so a
+// on scope). There are three, sharing everything but a DragonConfig: a
+// green-winged one circling the hill in worldgen/mountain.ts, a crimson one
+// with glowing scales circling the dark castle, and a frost-blue one circling
+// the ice castle — each endlessly, at its own radius and height. They never land — there is no perch — so a
 // dragon that has been ridden and released simply flies back up to its
 // circuit and carries on.
 // Position/orientation are driven by a tiny explicit state machine, not a
@@ -23,10 +23,18 @@ import {
   GREEN_DRAGON_ALTITUDE_ABOVE_PEAK,
   GREEN_DRAGON_FLIGHT_RADIUS,
   MOUNTAIN_CENTER,
-  SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK,
-  SUMMIT_DRAGON_FLIGHT_RADIUS,
 } from "../worldgen/mountain";
+import { CASTLE_CENTER, CASTLE_FLOOR_Y } from "../worldgen/castle/layout";
+import { ICE_CASTLE_CENTER, ICE_FLOOR_Y } from "../worldgen/iceCastle/layout";
 import { buildWing, getWingTexture, makeWingMaterial, type WingParts } from "./DragonWing";
+
+// The crimson dragon circles the dark castle, clear of its crag spires (about 75 blocks out) and high above its keep.
+const CASTLE_DRAGON_FLIGHT_RADIUS = 125;
+const CASTLE_DRAGON_ALTITUDE_ABOVE_FLOOR = 85;
+
+// The ice dragon's circuit: wide enough to clear the castle's spires (which reach about 65 blocks out) and high above the needle.
+const ICE_DRAGON_FLIGHT_RADIUS = 125;
+const ICE_DRAGON_ALTITUDE_ABOVE_FLOOR = 85;
 
 type DragonState = "flying" | "returning";
 
@@ -39,8 +47,23 @@ interface DragonPalette {
   wingDark: number; // membrane at the veins/arm
   wingRed: number; // membrane toward the trailing edge (the palette's main wing color — green for the green-winged dragon)
   eye: number;
-  glowAccents: boolean; // red glowing scale plates, chest gem and tail fin
+  glowAccents: boolean; // glowing scale plates, chest gem and tail fin
+  glowA: number; // the brighter glow color (scale plates, chest gem, tail fin)
+  glowB: number; // the deeper glow color
+  ember: number; // the odd bright speck in the wing membrane
+  breath: number[]; // the breath jet's cones, mouth to tip
+  breathLight: number; // the point light the breath throws
 }
+
+// Fire, bright near the mouth cooling to a dull ember red at the far tip.
+const FIRE_COLORS = [0xfff3b0, 0xffd24a, 0xff8c2a, 0xd94a1a, 0x8a2a12];
+const FIRE_DEFAULTS = {
+  glowA: 0xd41818,
+  glowB: 0x8e0c10,
+  ember: 0xff7a4a,
+  breath: FIRE_COLORS,
+  breathLight: 0xff8c2a,
+};
 
 const BROWN_PALETTE: DragonPalette = {
   body: 0x2a1c12,
@@ -52,6 +75,7 @@ const BROWN_PALETTE: DragonPalette = {
   wingRed: 0xc41818,
   eye: 0xd6ff4a,
   glowAccents: false,
+  ...FIRE_DEFAULTS,
 };
 
 // The original's brown body with green wings.
@@ -72,6 +96,26 @@ const CRIMSON_PALETTE: DragonPalette = {
   wingRed: 0xe01418,
   eye: 0xffa63a,
   glowAccents: true,
+  ...FIRE_DEFAULTS,
+};
+
+// The ice castle's own colors: royal-blue scales, snow-white belly and horns, azure wings flecked with
+// frost-white, cyan frost-crystal glow, and a breath of frost instead of fire.
+const ICE_PALETTE: DragonPalette = {
+  body: 0x2457c8,
+  belly: 0xdcebff,
+  dark: 0x0f2468,
+  horn: 0xeaf4ff,
+  wingBone: 0x1d3f9c,
+  wingDark: 0x0c2468,
+  wingRed: 0x6cb8ff,
+  eye: 0xb8ecff,
+  glowAccents: true,
+  glowA: 0x9fe8ff,
+  glowB: 0x3aa6e8,
+  ember: 0xcfeaff,
+  breath: [0xf6fdff, 0xc4ecff, 0x84d2ff, 0x4aa2e8, 0x2c64b4],
+  breathLight: 0x7fd0ff,
 };
 
 /** Everything that differs between one dragon and the next: how it looks, where it lives, and the circuit it flies. */
@@ -85,7 +129,7 @@ export interface DragonConfig {
   direction: 1 | -1; // which way round
 }
 
-/** The two dragons of the hill, circling it at their own heights, built from the summit height getStructureAnchors reports. */
+/** The three dragons: two circling the hill at their own heights (built from the summit height getStructureAnchors reports) and the ice dragon round the ice castle. */
 export function createDragons(peakY: number): Dragon[] {
   return [
     new Dragon({
@@ -100,11 +144,21 @@ export function createDragons(peakY: number): Dragon[] {
     new Dragon({
       name: "crimson dragon",
       palette: CRIMSON_PALETTE,
-      flightCenter: MOUNTAIN_CENTER,
-      flightRadius: SUMMIT_DRAGON_FLIGHT_RADIUS,
-      flightAltitude: peakY + SUMMIT_DRAGON_ALTITUDE_ABOVE_PEAK,
+      flightCenter: CASTLE_CENTER,
+      flightRadius: CASTLE_DRAGON_FLIGHT_RADIUS,
+      flightAltitude: CASTLE_FLOOR_Y + CASTLE_DRAGON_ALTITUDE_ABOVE_FLOOR,
       startTheta: 0,
       direction: -1,
+    }),
+    // The ice dragon circles the ice castle's spires, well clear of them.
+    new Dragon({
+      name: "ice dragon",
+      palette: ICE_PALETTE,
+      flightCenter: ICE_CASTLE_CENTER,
+      flightRadius: ICE_DRAGON_FLIGHT_RADIUS,
+      flightAltitude: ICE_FLOOR_Y + ICE_DRAGON_ALTITUDE_ABOVE_FLOOR,
+      startTheta: Math.PI / 2,
+      direction: 1,
     }),
   ];
 }
@@ -184,10 +238,8 @@ interface FireBreathParts {
   light: THREE.PointLight;
 }
 
-// Bright near the mouth, cooling to a dull ember red at the far tip —
-// same gradient idea as a real flame, just stretched into a long jet
-// instead of Torch/CampfireVisual's short upward lick.
-const FIRE_COLORS = [0xfff3b0, 0xffd24a, 0xff8c2a, 0xd94a1a, 0x8a2a12];
+// A breath is a gradient (bright near the mouth, fading toward the far tip) — for fire the same idea as a real
+// flame, just stretched into a long jet instead of Torch/CampfireVisual's short upward lick.
 
 /**
  * A tapering stream of translucent cones plus a warm point light — the
@@ -196,17 +248,18 @@ const FIRE_COLORS = [0xfff3b0, 0xffd24a, 0xff8c2a, 0xd94a1a, 0x8a2a12];
  * straight up. Built once (like every other body part) and toggled by
  * Dragon.updateFireBreath's visibility/scale, not rebuilt per breath.
  */
-function buildFireBreath(): FireBreathParts {
+function buildFireBreath(palette: DragonPalette): FireBreathParts {
   const group = new THREE.Group();
 
   let z = 0.4;
-  const segments = FIRE_COLORS.length;
+  const colors = palette.breath;
+  const segments = colors.length;
   for (let i = 0; i < segments; i++) {
     const t = i / (segments - 1);
     const radius = lerp(1.15, 0.12, t);
     const length = lerp(1.7, 2.3, t);
     const mat = new THREE.MeshBasicMaterial({
-      color: FIRE_COLORS[i],
+      color: colors[i],
       transparent: true,
       opacity: lerp(0.95, 0.35, t),
     });
@@ -219,7 +272,7 @@ function buildFireBreath(): FireBreathParts {
     z += length * 0.7; // overlap segments so the stream reads as continuous, not stacked cones
   }
 
-  const light = poolLight(new THREE.PointLight(0xff8c2a, 0, 16, 2));
+  const light = poolLight(new THREE.PointLight(palette.breathLight, 0, 16, 2));
   light.position.z = z * 0.4;
   group.add(light);
 
@@ -258,7 +311,7 @@ function buildDragonMesh(palette: DragonPalette): DragonMeshParts {
   const darkMat = new THREE.MeshLambertMaterial({ color: palette.dark });
   const hornMat = new THREE.MeshLambertMaterial({ color: palette.horn });
   const boneMat = new THREE.MeshLambertMaterial({ color: palette.wingBone });
-  const membraneMat = makeWingMaterial(getWingTexture(palette.wingDark, palette.wingRed));
+  const membraneMat = makeWingMaterial(getWingTexture(palette.wingDark, palette.wingRed, palette.ember));
   const eyeMat = new THREE.MeshBasicMaterial({ color: palette.eye });
   const neckBodyMat = bodyMat.clone();
   const neckHornMat = hornMat.clone();
@@ -317,7 +370,7 @@ function buildDragonMesh(palette: DragonPalette): DragonMeshParts {
     addBox(head, 0.4, 2, 0.4, headHornMat, sx * 1.6, 2.3, 1.6, -0.5, 0, sx * 0.5); // secondary smaller horn
   }
 
-  const fireBreath = buildFireBreath();
+  const fireBreath = buildFireBreath(palette);
   fireBreath.group.position.set(0, -0.05, 7.2); // just past the snout tip, between the jaws
   head.add(fireBreath.group);
 
@@ -386,11 +439,11 @@ function buildDragonMesh(palette: DragonPalette): DragonMeshParts {
   addBox(tailCursor, 1.6, 0.3, 1.4, hornMat, 0, -0.5, -0.5, 0.5, 0, 0);
 
   if (palette.glowAccents) {
-    // Glowing red scale plates down the back, on the flanks and along the
-    // tail, a burning gem on the chest, and a red fin at the tail tip —
+    // Glowing scale plates down the back, on the flanks and along the
+    // tail, a burning gem on the chest, and a fin at the tail tip —
     // unlit (MeshBasic) so they glow at night the way the wing membrane does.
-    const glowA = new THREE.MeshBasicMaterial({ color: 0xd41818 });
-    const glowB = new THREE.MeshBasicMaterial({ color: 0x8e0c10 });
+    const glowA = new THREE.MeshBasicMaterial({ color: palette.glowA });
+    const glowB = new THREE.MeshBasicMaterial({ color: palette.glowB });
     for (let i = 0; i < 6; i++) {
       addBox(torso, 0.9, 0.5, 1.5, i % 2 ? glowA : glowB, 0, 8.05 - i * 0.35, 7.2 - i * 2.6, 0.5, 0, 0);
     }

@@ -18,7 +18,7 @@ const MAX_CACHE_ENTRIES = 6000; // bound memory for long sessions that roam far
 
 type TerrainSample = "water" | "road" | "land";
 
-export type MiniMapMarkerKind = "castle" | "campfire" | "creature" | "custom" | "torch" | "dragon" | "fish";
+export type MiniMapMarkerKind = "castle" | "iceCastle" | "campfire" | "creature" | "custom" | "torch" | "dragon" | "fish";
 
 export interface MiniMapMarker {
   x: number;
@@ -28,6 +28,7 @@ export interface MiniMapMarker {
 
 const MARKER_STYLE: Record<MiniMapMarkerKind, { color: string; radius: number; shape: "square" | "circle" | "diamond" }> = {
   castle: { color: "#e2e2e2", radius: 4, shape: "square" },
+  iceCastle: { color: "#9fd3ff", radius: 4, shape: "square" },
   campfire: { color: "#ff8c2a", radius: 3, shape: "circle" },
   creature: { color: "#fff066", radius: 2, shape: "circle" },
   custom: { color: "#ff4fd8", radius: 4, shape: "diamond" },

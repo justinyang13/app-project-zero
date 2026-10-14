@@ -7,11 +7,13 @@ const LEGEND: { color: string; label: string }[] = [
   { color: "#8a8a8a", label: "Road" },
   { color: "#3f7fd0", label: "Water" },
   { color: "#e2e2e2", label: "Castle" },
+  { color: "#9fd3ff", label: "Ice castle" },
   { color: "#ff8c2a", label: "Campfire" },
   { color: "#fff066", label: "Animal" },
   { color: "#ff4fd8", label: "Marker" },
   { color: "#ffb347", label: "Torch" },
   { color: "#f2f2f2", label: "C castle" },
+  { color: "#9fd3ff", label: "I ice castle" },
   { color: "#ffd27a", label: "V village" },
   { color: "#ff7a5a", label: "M mountain" },
   { color: "#bfe3ff", label: "L lake" },
@@ -66,6 +68,13 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           🏰
         </button>
         <button
+          onClick={() => getActiveGame()?.teleportToIceCastle()}
+          title="To the ice castle (I)"
+          style={{ ...zoomButtonStyle(false, isTouch ? 160 : ICE_ANGLE, size, buttonSize), fontSize: isTouch ? 13 : 12 }}
+        >
+          ❄️
+        </button>
+        <button
           onClick={zoomIn}
           disabled={zoomIndex === 0}
           title="Zoom in (=)"
@@ -117,7 +126,7 @@ export function MiniMapPanel({ canvasRef }: { canvasRef: RefObject<HTMLCanvasEle
           color: "rgba(255, 255, 255, 0.8)",
         }}
       >
-        M: full map · H: castle · K: mark spot · ZTXCV/B: mode · +/-: zoom
+        M: full map · H: castle · I: ice castle · K: mark spot · ZTXCV/B: mode · +/-: zoom
       </div>
       )}
       <button
@@ -151,6 +160,7 @@ const TOUCH_SIZE = 84;
 const ZOOM_IN_ANGLE = 40;
 const ZOOM_OUT_ANGLE = 66;
 const HOME_ANGLE = 122;
+const ICE_ANGLE = 150;
 
 function zoomButtonStyle(disabled: boolean, angleDeg: number, size: number, buttonSize: number): React.CSSProperties {
   const rad = (angleDeg * Math.PI) / 180;

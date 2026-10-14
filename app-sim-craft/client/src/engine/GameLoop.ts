@@ -45,7 +45,8 @@ import { Flag } from "./Flag";
 import { Torch } from "./Torch";
 import { MiniMap, type MiniMapMarker } from "../map/MiniMap";
 import type { MapSnapshot } from "../map/MapSnapshot";
-import { CASTLE_GATE_SPAWN, getStructureAnchors } from "../worldgen/structures";
+import { CASTLE_GATE_SPAWN, ICE_CASTLE_GATE_SPAWN, getStructureAnchors } from "../worldgen/structures";
+import { ICE_BASE_Y } from "../worldgen/iceCastle/layout";
 import { sampleColumn } from "../worldgen/terrain";
 import { SaveManager } from "../persistence/SaveManager";
 import type { MapMarker, PlacedTorch, PlayerSnapshot } from "../core/playerState";
@@ -110,7 +111,10 @@ export class GameLoop implements GameActions {
   ): Promise<GameLoop> {
     const saveManager = new SaveManager();
     const { seed, playerState } = await saveManager.load(worldId);
-    return new GameLoop(canvas, minimapCanvas, seed, saveManager, playerState, renderDistanceColumns);
+    const game = new GameLoop(canvas, minimapCanvas, seed, saveManager, playerState, renderDistanceColumns);
+    // Dev builds only: a console handle for poking at the running game (teleporting the camera around a build, say).
+    if (import.meta.env.DEV) (window as unknown as { __simGame?: GameLoop }).__simGame = game;
+    return game;
   }
 
   private constructor(
@@ -283,6 +287,14 @@ export class GameLoop implements GameActions {
     const { x, z } = CASTLE_GATE_SPAWN;
     const { castleBaseY } = getStructureAnchors(this.world.seed);
     this.controller.teleportTo({ x, y: castleBaseY + 2, z }, this.world);
+    this.camera.rotation.set(0, 0, 0, "YXZ"); // facing -z, toward the castle
+    this.chunkManager.update(x, z); // start streaming the destination right away
+  }
+
+  /** Sends the player to just outside the ice castle's gate, dropping whatever they were driving or riding. */
+  teleportToIceCastle(): void {
+    const { x, z } = ICE_CASTLE_GATE_SPAWN;
+    this.controller.teleportTo({ x, y: ICE_BASE_Y + 2, z }, this.world);
     this.camera.rotation.set(0, 0, 0, "YXZ"); // facing -z, toward the castle
     this.chunkManager.update(x, z); // start streaming the destination right away
   }
