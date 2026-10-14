@@ -11,7 +11,7 @@ import type { WorldExportBlob } from "../persistence/worldExport";
 // secret (Tailscale itself is the access control), just not a player-facing
 // setting. Override at build/dev time with VITE_SYNC_SERVER_URL (see
 // .env.example) to point at a different server, e.g. a local one.
-const DEFAULT_SYNC_SERVER_URL = "http://100.86.110.0:4177";
+const DEFAULT_SYNC_SERVER_URL = "https://maxi.tailc56cd9.ts.net:8443";
 
 export const SYNC_SERVER_URL: string = import.meta.env.VITE_SYNC_SERVER_URL || DEFAULT_SYNC_SERVER_URL;
 
