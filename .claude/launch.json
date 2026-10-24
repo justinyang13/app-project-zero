@@ -36,6 +36,12 @@
       "runtimeExecutable": "npm",
       "runtimeArgs": ["run", "dev", "--prefix", "app-tron-runner/client", "--", "--port", "5180"],
       "port": 5180
+    },
+    {
+      "name": "heart-note-dev",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "app-heart-note", "-l", "5178"],
+      "port": 5178
     }
   ]
 }

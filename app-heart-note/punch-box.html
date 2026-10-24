@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Punch Box Activity – HeartNote</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<main class="solo">
+  <div class="card">
+    <h2>🎁 Punch Box Activity</h2>
+    <p id="intro">A cardboard box split into little compartments, covered by a sheet of paper. Punch through the paper on any compartment to find a gift. Then click the gift to play with it!</p>
+    <p class="feeling-note" id="feelnote"></p>
+    <div class="scene"><div class="punchbox" id="box" role="group" aria-label="Punch box"></div></div>
+    <p class="gift-msg" id="msg" aria-live="polite"></p>
+    <p class="quip" id="quip" aria-live="polite"></p>
+    <button class="btn" id="reset">Reset box</button>
+    <button class="btn" id="sound" aria-pressed="true">Sound on</button>
+  </div>
+  <p><a class="btn" href="index.html">← Back to HeartNote</a></p>
+</main>
+<script src="sfx.js"></script>
+<script src="themed.js"></script>
+<script src="themed-more.js"></script>
+<script src="punch-box.js"></script>
+</body>
+</html>

@@ -99,6 +99,8 @@ jobs:
           cp -r app-hello-world/client/dist/. site/app-hello-world/
           mkdir -p site/app-note-ninja
           cp app-note-ninja/index.html app-note-ninja/game.js app-note-ninja/style.css site/app-note-ninja/
+          mkdir -p site/app-heart-note
+          cp app-heart-note/index.html app-heart-note/punch-box.html app-heart-note/punch-box.js app-heart-note/sfx.js app-heart-note/themed.js app-heart-note/themed-more.js app-heart-note/app.js app-heart-note/style.css site/app-heart-note/
           mkdir -p site/app-pool-party-forecast
           cp app-pool-party-forecast/index.html site/app-pool-party-forecast/
           mkdir -p site/app-loot-raider

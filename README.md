@@ -7,6 +7,7 @@ A small monorepo of standalone personal projects, fronted by a hub page.
 | [`app-project-zero-hub/`](app-project-zero-hub/README.md) | Landing page — cards linking out to every app below |
 | [`app-hello-world/`](app-hello-world/README.md) | Full-stack Hello World reference app (React + .NET GraphQL), Clean Architecture template |
 | [`app-note-ninja/`](app-note-ninja/README.md) | Ear-training game for piano-playing kids |
+| [`app-heart-note/`](app-heart-note/README.md) | Emotional-support page — pick a feeling, get tips, breathing exercise, crisis resources (static, no backend) |
 | [`app-pool-party-forecast/`](app-pool-party-forecast/README.md) | Green/yellow/red pool-weather verdict for a place and date |
 | [`app-loot-raider/`](app-loot-raider/README.md) | Crowd-sourced map for spotted Happy Meal collectibles (React + .NET GraphQL) |
 | [`app-storyden/`](app-storyden/README.md) | Top 100 kids'/YA books by genre, sourced from the OpenLibrary API (static, no backend) |
@@ -30,16 +31,16 @@ See each app's own README for how to run and test it locally.
   unit tests, the Playwright e2e suite against the real Hello World stack,
   Loot Raider's backend build + xUnit tests and frontend build/lint/unit
   tests, StoryDen's frontend build/lint/unit tests, and SimCraft's frontend
-  build/lint/unit tests. `app-note-ninja` and `app-pool-party-forecast` are
+  build/lint/unit tests. `app-note-ninja`, `app-heart-note` and `app-pool-party-forecast` are
   plain static apps with no build step, so they have no CI job. `app-drift-
   loop` is a Godot game, built/run outside this pipeline (see its own
   README) — not part of the Pages site. Any failure fails the workflow.
 - [`.github/workflows/deploy.yml`](.github/workflows/deploy.yml) runs after
   CI succeeds on `main`: builds the hub, the Hello World client, the Loot
   Raider client, the StoryDen client, and the SimCraft client, copies in
-  Note Ninja's and Pool Party Forecast's static files, and assembles all
-  seven into one GitHub Pages site — the hub at the site root,
-  `app-hello-world/`, `app-note-ninja/`, `app-pool-party-forecast/`,
+  Note Ninja's, HeartNote's and Pool Party Forecast's static files, and assembles all
+  eight into one GitHub Pages site — the hub at the site root,
+  `app-hello-world/`, `app-note-ninja/`, `app-heart-note/`, `app-pool-party-forecast/`,
   `app-loot-raider/`, `app-storyden/`, and `app-sim-craft/` as subpaths —
   matching the relative links the hub's cards use. It also triggers a
   Render deploy of the Hello World `Api` and the Loot Raider `Api` via

@@ -72,4 +72,13 @@ export const projects: Project[] = [
     href: "app-tron-runner/",
     linkLabel: "Start running",
   },
+  {
+    id: "heart-note",
+    name: "HeartNote",
+    tagline: "A gentle place to land when feelings get big",
+    description:
+      "Pick how you feel and get a kind word, a few small things to try, a guided breathing circle, and crisis resources. Static, private, no account.",
+    href: "app-heart-note/",
+    linkLabel: "Open HeartNote",
+  },
 ];
