@@ -45,6 +45,14 @@ for (const [key, e] of Object.entries(EMOTIONS)) {
   nav.appendChild(b);
 }
 
+// how many finished punch boxes this feeling has (the collection is kept in this browser)
+function collectionBadge(key) {
+  try {
+    const n = (JSON.parse(localStorage.getItem("heartnote-boxes")) || []).filter(b => b.feeling === key).length;
+    return n ? ` <span class="badge">${n}</span>` : "";
+  } catch { return ""; }
+}
+
 function show(key) {
   const e = EMOTIONS[key];
   nav.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.key === key)));
@@ -68,7 +76,7 @@ function show(key) {
         </div>
       </div>
     </div>
-    <p><a class="btn" href="punch-box.html#${key}">Punch box activity</a></p>
+    <p class="btn-row"><a class="btn" href="punch-box.html#${key}">Punch box activity</a> <a class="btn" href="punch-collection.html#${key}">Punch box collection${collectionBadge(key)}</a></p>
     <div class="card crisis">
       <h3>Need to talk to someone now?</h3>
       <p>In the US, call or text <strong>988</strong>, or text HOME to <strong>741741</strong>. Emergency: <strong>911</strong>.</p>
