@@ -72,3 +72,7 @@ const BoxStore = (() => {
     add(b) { const list = [...read(), b]; mem = list; try { localStorage.setItem(KEY, JSON.stringify(list)); } catch {} return list; }
   };
 })();
+
+// Ask the browser not to clear HeartNote's saved progress when it is short on space.
+const Persist = { ask() { try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {} } };
+Persist.ask();

@@ -1,9 +1,9 @@
 // The punch box collection: every punch box you finished for one feeling, one at a time.
 const COLS = 6, ROWS = 4, CELL = 100;
 const SVGNS = "http://www.w3.org/2000/svg";
-const FEELING_WORDS = { sad: "sad", anxious: "anxious", angry: "angry", lonely: "lonely", stressed: "stressed", overwhelmed: "overwhelmed", tired: "tired or numb", guilty: "guilty or ashamed", happy: "happy", grateful: "hopeful and grateful" };
 const feeling = location.hash.slice(1);
 const word = FEELING_WORDS[feeling];
+const msg = document.getElementById("msg"), quip = document.getElementById("quip");
 const stage = document.getElementById("stage"), caption = document.getElementById("caption"), dots = document.getElementById("dots");
 const prev = document.getElementById("prev"), next = document.getElementById("next");
 let boxes = [], at = 0, uid = 0;
@@ -46,7 +46,20 @@ function finishedSheet(d) {
   return sheet;
 }
 
+// boxes finished before notes were saved get their notes rebuilt the same way the game builds them
+function withNotes(rec) {
+  let gi = 0;
+  rec.gifts.forEach((g, i) => {
+    if (g.text) return;
+    if (g.kind === "scroll") { const pool = TIPS[rec.feeling] || DEFAULT_TIPS; g.text = pool[((g.variant || 0) + i) % pool.length]; }
+    else g.text = THEMED[g.kind] ? THEMED[g.kind].note : noteFor(g.kind, gi++);
+  });
+  return rec;
+}
+const ctx = { msg, quip, feelWord: word };
+
 function renderBox(rec) {
+  withNotes(rec);
   const d = DESIGNS.find(x => x.name === rec.design) || DESIGNS[0];
   const scene = document.createElement("div");
   scene.className = "scene";
@@ -69,6 +82,8 @@ function renderBox(rec) {
     span.className = "popper-gift";
     span.style.animationDelay = `${i * 45}ms, ${900 + i * 45}ms`;
     span.innerHTML = giftArt(g);
+    span.title = "Click me!";
+    span.addEventListener("click", e => { e.stopPropagation(); react(pop, g, ctx); });
     pop.appendChild(span);
     layer.appendChild(pop);
   });
@@ -80,7 +95,9 @@ function renderBox(rec) {
 
 function show(i, dir = 0) {
   at = Math.max(0, Math.min(boxes.length - 1, i));
+  try { localStorage.setItem(`heartnote-coll-${feeling}`, String(at)); } catch {}
   const rec = boxes[at], prize = PRIZES.find(p => p.id === rec.prize);
+  msg.className = "gift-msg"; msg.textContent = "Click any gift to play with it and read its note."; quip.textContent = "";
   const old = stage.firstElementChild, scene = renderBox(rec);
   stage.appendChild(scene);
   if (old) {
@@ -109,6 +126,12 @@ function init() {
   prev.onclick = () => show(at - 1, -1);
   next.onclick = () => show(at + 1, 1);
   addEventListener("keydown", e => { if (e.key === "ArrowLeft" && !prev.disabled) show(at - 1, -1); if (e.key === "ArrowRight" && !next.disabled) show(at + 1, 1); });
-  show(0, 0);
+  let start = 0;
+  try { start = parseInt(localStorage.getItem(`heartnote-coll-${feeling}`), 10) || 0; } catch {}
+  show(start, 0);
 }
+const soundBtn = document.getElementById("sound");
+const showSound = () => { soundBtn.textContent = Sfx.on ? "🔊 Sound on" : "🔇 Sound off"; soundBtn.setAttribute("aria-pressed", String(Sfx.on)); };
+soundBtn.onclick = () => { Sfx.toggle(); showSound(); };
+showSound();
 init();

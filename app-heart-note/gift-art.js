@@ -4,21 +4,28 @@ const RIBBONS = [
   ["#8e1f33", "#e0475e", "#9c2339", "#c93a53"], ["#1f3f8e", "#4d7ee0", "#27479c", "#3a64c9"], ["#1f6a3a", "#4cc07a", "#26793f", "#37a862"],
   ["#5a2a8e", "#a068e0", "#612f9c", "#8650c9"], ["#a8520f", "#f0903a", "#b25a12", "#e0792a"], ["#0f6a70", "#35c0c8", "#147a82", "#27a3ab"]
 ];
-const scrollArt = n => { const c = RIBBONS[n % RIBBONS.length]; return `<svg viewBox="0 0 72 56" width="100%" height="100%"><defs>
-    <linearGradient id="pg" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d9bd84"/><stop offset=".12" stop-color="#f8ecc8"/><stop offset=".88" stop-color="#f4e5bb"/><stop offset="1" stop-color="#d2b57a"/></linearGradient>
-    <linearGradient id="rl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b8935a"/><stop offset=".35" stop-color="#f6e6b8"/><stop offset=".7" stop-color="#e0c88c"/><stop offset="1" stop-color="#a2804a"/></linearGradient>
-    <linearGradient id="rb${n}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${c[0]}"/><stop offset=".4" stop-color="${c[1]}"/><stop offset="1" stop-color="${c[2]}"/></linearGradient>
-    <radialGradient id="rc" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#c7a468"/><stop offset="1" stop-color="#8e6c36"/></radialGradient></defs>
-    <ellipse cx="36" cy="52" rx="30" ry="3" fill="#000" opacity=".25"/>
-    <rect x="14" y="10" width="44" height="34" fill="url(#pg)"/>
-    <path d="M18 19h36M18 25h36M18 31h36M18 37h22" stroke="#9c7f45" stroke-opacity=".55" stroke-width="1.3" stroke-linecap="round"/>
-    <path d="M14 10h44v3H14z" fill="#000" opacity=".14"/><path d="M14 41h44v3H14z" fill="#000" opacity=".14"/>
-    <rect x="6" y="6" width="12" height="42" rx="6" fill="url(#rl)"/><ellipse cx="12" cy="6.5" rx="6" ry="2.6" fill="url(#rc)"/><ellipse cx="12" cy="6.5" rx="3" ry="1.2" fill="#6f5127" opacity=".6"/>
-    <rect x="54" y="6" width="12" height="42" rx="6" fill="url(#rl)"/><ellipse cx="60" cy="6.5" rx="6" ry="2.6" fill="url(#rc)"/><ellipse cx="60" cy="6.5" rx="3" ry="1.2" fill="#6f5127" opacity=".6"/>
-    <rect x="8.5" y="12" width="2" height="30" rx="1" fill="#fff" opacity=".45"/>
-    <rect x="31" y="4" width="10" height="46" fill="url(#rb${n})"/><rect x="33" y="4" width="2" height="46" fill="#fff" opacity=".3"/>
-    <path d="M36 27c-10-9-14 1-6 3zM36 27c10-9 14 1 6 3z" fill="url(#rb${n})" stroke="${c[0]}" stroke-width=".8"/><circle cx="36" cy="28" r="3.2" fill="${c[3]}" stroke="${c[0]}" stroke-width=".8"/>
-    <path d="M36 30l-4 9M36 30l4 9" stroke="${c[2]}" stroke-width="2.2" stroke-linecap="round"/></svg>`; };
+const scrollArt = n => {
+  const c = RIBBONS[n % RIBBONS.length];
+  return `<svg viewBox="0 0 72 56" width="100%" height="100%"><defs>
+    <linearGradient id="pgH" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#a97f44"/><stop offset=".07" stop-color="#e4c98c"/><stop offset=".5" stop-color="#fbf0cf"/><stop offset=".93" stop-color="#e1c585"/><stop offset="1" stop-color="#a47a3e"/></linearGradient>
+    <linearGradient id="pgV" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#6a4410" stop-opacity=".45"/><stop offset=".16" stop-color="#6a4410" stop-opacity="0"/><stop offset=".84" stop-color="#6a4410" stop-opacity="0"/><stop offset="1" stop-color="#6a4410" stop-opacity=".45"/></linearGradient>
+    <linearGradient id="roll" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6a4a22"/><stop offset=".28" stop-color="#e2c58a"/><stop offset=".52" stop-color="#fff3cf"/><stop offset=".78" stop-color="#d6b878"/><stop offset="1" stop-color="#5e4220"/></linearGradient>
+    <radialGradient id="knob" cx=".35" cy=".3" r=".8"><stop offset="0" stop-color="#fff6b0"/><stop offset=".6" stop-color="#e0aa24"/><stop offset="1" stop-color="#8f6208"/></radialGradient>
+    <linearGradient id="rb${n}" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="${c[0]}"/><stop offset=".45" stop-color="${c[1]}"/><stop offset="1" stop-color="${c[2]}"/></linearGradient>
+    <radialGradient id="seal${n}" cx=".35" cy=".3" r=".85"><stop offset="0" stop-color="${c[1]}"/><stop offset=".65" stop-color="${c[3]}"/><stop offset="1" stop-color="${c[0]}"/></radialGradient></defs>
+    <ellipse cx="36" cy="53" rx="31" ry="2.600" fill="#000" opacity=".28"/>
+    <path d="M17 10.500Q36 7 55 10.500L56 45.500Q36 49 16 45.500Z" fill="url(#pgH)"/><path d="M17 10.500Q36 7 55 10.500L56 45.500Q36 49 16 45.500Z" fill="url(#pgV)"/>
+    <path d="M17 10.500Q36 7 55 10.500L56 45.500Q36 49 16 45.500Z" fill="none" stroke="#7a5424" stroke-opacity=".55" stroke-width=".7"/>
+    <g stroke="#5a3d17" stroke-opacity=".55" stroke-width="1" stroke-linecap="round" fill="none"><path d="M21 17q4-1.200 8 0t8 0M21 22q5-1 10 0t9 0M21 27q4-1.200 8 0M44 17q4 1 8 0M44 22q3 1 7 0M44 27q4 1 8 0M21 32q3-1 6 0M45 32q3 1 6 0M21 37q4-1 8 0M43 37q4 1 8 0"/></g>
+    <g><rect x="6" y="9" width="13" height="38" rx="6.500" fill="url(#roll)" stroke="#5e4220" stroke-width=".8"/><ellipse cx="12.500" cy="9.500" rx="6.500" ry="2.600" fill="#e9d09a" stroke="#5e4220" stroke-width=".8"/><path d="M12.500 9.500m-4 0a4 1.600 0 108 0 3 1.100 0 10-6 0m5.500 0a2 .7 0 10-4 0" fill="none" stroke="#8a6a34" stroke-width=".7"/><ellipse cx="12.500" cy="46.500" rx="6.500" ry="2.600" fill="#c9ab6a" stroke="#5e4220" stroke-width=".8"/>
+      <rect x="11.200" y="2.800" width="2.600" height="6" fill="#7a5224"/><circle cx="12.500" cy="2.600" r="2.500" fill="url(#knob)" stroke="#7a5200" stroke-width=".6"/><rect x="11.200" y="47" width="2.600" height="5" fill="#7a5224"/><circle cx="12.500" cy="52.200" r="2.500" fill="url(#knob)" stroke="#7a5200" stroke-width=".6"/></g>
+    <g><rect x="53" y="9" width="13" height="38" rx="6.500" fill="url(#roll)" stroke="#5e4220" stroke-width=".8"/><ellipse cx="59.500" cy="9.500" rx="6.500" ry="2.600" fill="#e9d09a" stroke="#5e4220" stroke-width=".8"/><path d="M59.500 9.500m-4 0a4 1.600 0 108 0 3 1.100 0 10-6 0m5.500 0a2 .7 0 10-4 0" fill="none" stroke="#8a6a34" stroke-width=".7"/><ellipse cx="59.500" cy="46.500" rx="6.500" ry="2.600" fill="#c9ab6a" stroke="#5e4220" stroke-width=".8"/>
+      <rect x="58.200" y="2.800" width="2.600" height="6" fill="#7a5224"/><circle cx="59.500" cy="2.600" r="2.500" fill="url(#knob)" stroke="#7a5200" stroke-width=".6"/><rect x="58.200" y="47" width="2.600" height="5" fill="#7a5224"/><circle cx="59.500" cy="52.200" r="2.500" fill="url(#knob)" stroke="#7a5200" stroke-width=".6"/></g>
+    <rect x="31" y="8.500" width="10" height="38" fill="url(#rb${n})" opacity=".96"/><rect x="33" y="8.500" width="1.800" height="38" fill="#fff" opacity=".28"/><path d="M31 8.500v38M41 8.500v38" stroke="#000" stroke-opacity=".18" stroke-width=".6"/>
+    <path d="M36 21c-9-8-14 1-6.500 3zM36 21c9-8 14 1 6.500 3z" fill="url(#rb${n})" stroke="${c[0]}" stroke-width=".8"/><path d="M36 22l-4.500 10 3-1zM36 22l4.500 10-3-1z" fill="${c[2]}" stroke="${c[0]}" stroke-width=".7"/><circle cx="36" cy="22" r="3" fill="${c[3]}" stroke="${c[0]}" stroke-width=".8"/>
+    <path d="M36 33.500c-3.500 0-6 2.500-5.500 5.500s3 5.500 6 5 5.500-3 5-6-2.500-4.500-5.500-4.500z" fill="url(#seal${n})" stroke="${c[0]}" stroke-width=".7"/><circle cx="36" cy="39" r="3.800" fill="none" stroke="${c[0]}" stroke-opacity=".55" stroke-width=".6"/>
+    <path d="M36 42c-3.500-2.500-3-5-1.500-5 .8 0 1.500.8 1.500.8s.7-.8 1.500-.8c1.500 0 2 2.500-1.500 5z" fill="${c[0]}" opacity=".6"/><ellipse cx="33.800" cy="36.200" rx="1.400" ry=".8" fill="#fff" opacity=".5"/></svg>`;
+};
 const ART = {
   giftbox: `<svg viewBox="0 0 56 56" width="100%" height="100%"><defs>
     <linearGradient id="gb1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7fb4ee"/><stop offset="1" stop-color="#2c63a8"/></linearGradient>
@@ -110,5 +117,38 @@ Object.assign(ART, {
 for (const [k, f] of Object.entries({ cupcake: face(28, 21, .5), icecream: face(28, 16, .5), sun: face(28, 29, .8), moon: face(21, 29, .55), mug: face(26, 37, .65), cloud: face(28, 35, .8) })) {
   ART[k] = ART[k].replace("</svg>", f + "</svg>");
 }
-const giftArt = g => (g.kind === "scroll" ? scrollArt(g.variant) : THEMED_ART[g.kind] || ART[g.kind]);
+// ---- polish: one shared finishing pass that makes every drawing look like a glossy, puffy little toy ----
+// a soft bevel (shaded edges + shiny highlight) from lighting the shape's outline, a gentle depth shadow,
+// and a couple of twinkling glints. Applied to all gifts, so each one looks rounder, shinier and cuter.
+let polishN = 0;
+function polish(raw) {
+  if (!raw) return raw;
+  const m = raw.match(/^(<svg[^>]*viewBox="0 0 (\d+) (\d+)"[^>]*>)([\s\S]*)<\/svg>$/);
+  if (!m) return raw;
+  const [, open, w, h] = m; let inner = m[4];
+  const id = `gp${++polishN}`, W = +w, H = +h;
+  // keep the soft floor shadow out of the bevel, so it stays a flat shadow
+  let floor = "";
+  inner = inner.replace(/<ellipse[^>]*fill="#000"[^>]*\/>/, e => { floor = e; return ""; });
+  const lx = W * 0.26, ly = H * 0.14, lz = W * 0.85;
+  const filter = `<filter id="${id}" x="-8%" y="-8%" width="116%" height="124%" color-interpolation-filters="sRGB">
+    <feGaussianBlur in="SourceAlpha" stdDeviation="${(W / 34).toFixed(2)}" result="b"/>
+    <feDiffuseLighting in="b" surfaceScale="${(W / 30).toFixed(2)}" diffuseConstant="1.3" lighting-color="#ffffff" result="d"><fePointLight x="${lx}" y="${ly}" z="${lz}"/></feDiffuseLighting>
+    <feComposite in="d" in2="SourceAlpha" operator="in" result="dIn"/>
+    <feBlend in="SourceGraphic" in2="dIn" mode="multiply" result="shaded"/>
+    <feSpecularLighting in="b" surfaceScale="${(W / 22).toFixed(2)}" specularConstant=".3" specularExponent="34" lighting-color="#ffffff" result="s"><fePointLight x="${lx}" y="${ly}" z="${lz}"/></feSpecularLighting>
+    <feComposite in="s" in2="SourceAlpha" operator="in" result="sIn"/>
+    <feComposite in="shaded" in2="sIn" operator="arithmetic" k1="0" k2="1" k3=".4" k4="0" result="lit"/>
+    <feDropShadow in="lit" dx="0" dy="${(H / 40).toFixed(2)}" stdDeviation="${(W / 56).toFixed(2)}" flood-color="#10102a" flood-opacity=".38"/>
+  </filter>`;
+  // sparkle glints at spots that vary a little from gift to gift
+  const sd = (inner.length * 7 + id.length) % 5;
+  const spots = [[W * 0.84, H * 0.16], [W * 0.14, H * (0.28 + sd * 0.04)]];
+  const glints = spots.map(([x, y], i) => {
+    const s = i ? 1.6 : 2.2;
+    return `<path class="glint" style="animation-delay:${(Math.random() * 2.6).toFixed(2)}s" d="M${x} ${y - s * 1.6}L${x + s * 0.45} ${y - s * 0.45}L${x + s * 1.6} ${y}L${x + s * 0.45} ${y + s * 0.45}L${x} ${y + s * 1.6}L${x - s * 0.45} ${y + s * 0.45}L${x - s * 1.6} ${y}L${x - s * 0.45} ${y - s * 0.45}Z" fill="#fff"/>`;
+  }).join("");
+  return `${open}<defs>${filter}</defs>${floor}<g filter="url(#${id})">${inner}</g>${glints}</svg>`;
+}
+const giftArt = g => polish(g.kind === "scroll" ? scrollArt(g.variant) : THEMED_ART[g.kind] || ART[g.kind]);
 const OBJECT_KINDS = Object.keys(ART).filter(k => k !== "scroll");

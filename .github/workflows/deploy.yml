@@ -100,7 +100,7 @@ jobs:
           mkdir -p site/app-note-ninja
           cp app-note-ninja/index.html app-note-ninja/game.js app-note-ninja/style.css site/app-note-ninja/
           mkdir -p site/app-heart-note
-          cp app-heart-note/index.html app-heart-note/punch-box.html app-heart-note/punch-box.js app-heart-note/sfx.js app-heart-note/themed.js app-heart-note/themed-more.js app-heart-note/prizes.js app-heart-note/gift-art.js app-heart-note/punch-collection.html app-heart-note/punch-collection.js app-heart-note/app.js app-heart-note/style.css site/app-heart-note/
+          cp app-heart-note/index.html app-heart-note/punch-box.html app-heart-note/punch-box.js app-heart-note/sfx.js app-heart-note/themed.js app-heart-note/themed-more.js app-heart-note/prizes.js app-heart-note/game-common.js app-heart-note/games.css app-heart-note/worry-boat.html app-heart-note/worry-boat.js app-heart-note/lantern-friends.html app-heart-note/lantern-friends.js app-heart-note/lullaby-lights.html app-heart-note/lullaby-lights.js app-heart-note/joy-jar.html app-heart-note/joy-jar.js app-heart-note/gift-art.js app-heart-note/notes.js app-heart-note/gift-play.js app-heart-note/themed-extra.js app-heart-note/punch-collection.html app-heart-note/punch-collection.js app-heart-note/app.js app-heart-note/style.css site/app-heart-note/
           mkdir -p site/app-pool-party-forecast
           cp app-pool-party-forecast/index.html site/app-pool-party-forecast/
           mkdir -p site/app-loot-raider

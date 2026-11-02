@@ -43,3 +43,17 @@ Each feeling page has two buttons: **Punch box activity** and **Punch box collec
 
 Files: `punch-box.js` (game), `gift-art.js` (shared gift drawings), `themed*.js` (feeling-specific gifts and notes),
 `prizes.js` (prizes, box designs, storage), `sfx.js` (synthesized sounds), `punch-collection.js` (collection page).
+
+## Calm games
+
+A feeling can have its own small game. Each one practises something that helps with that feeling, saves your progress
+in this browser, and has a "My ..." button for what you have collected. The button appears on the feeling's page.
+
+| Feeling | Game | What you practise |
+|---|---|---|
+| Anxious | `worry-boat.html` — write a worry, fold a paper boat, then steer it with your breath: hold to rise (in for 4), let go to sink (out for 6) and follow the glowing path to collect pearls. Spot sea friends, earn stars and a sailor rank, then decide if the worry is yours to fix | slow breathing, then "is this mine to fix?" with a small step |
+| Lonely | `lantern-friends.html` — release cute kind lanterns in 12 colors; Lantern Keepers (written messages) answer. When 12 lanterns join they are saved as a named constellation (every note still readable under **Constellations**) and the sky clears | reaching out; "Send a real hello" is the real goal |
+| Tired | `lullaby-lights.html` — echo the sleepy stars as the sky dims and slows until a sleepy friend falls asleep | winding down, rest without pressure |
+| Happy | `joy-jar.html` — catch firefly "good moments", savor each for five seconds, keep them in a jar to reread, and release any of them when you are ready. Filling a jar earns a gift for the **Firefly Gift Collection** | savoring, remembering, and letting go |
+
+Shared files: `game-common.js` (helpers), `games.css`. Planned next: Gratitude Garden, Star Jar, Rain to Rainbow.

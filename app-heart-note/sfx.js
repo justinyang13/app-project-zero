@@ -144,12 +144,20 @@ const Sfx = (() => {
   Object.assign(sounds, themed);
   // finishing a box: a soft whoosh when it slides, and a warm fanfare for the prize
   Object.assign(sounds, {
+    // a tiny kiss and giggle for the wax seal
+    seal: () => { tone(620, 0, 0.1, { type: "triangle", vol: 0.14, to: 1000 }); noise(0.1, 0.05, { f: 1800, q: 2, vol: 0.18 }); tone(1320, 0.16, 0.08, { vol: 0.08 }); tone(1568, 0.26, 0.1, { vol: 0.08 }); tone(1760, 0.36, 0.14, { vol: 0.07 }); },
     slide: () => noise(0, 0.8, { f: 400, to: 1800, q: 0.5, vol: 0.2 }),
     prize: () => { seq([523, 659, 784, 1047], 0.13, { type: "triangle", vol: 0.12 }); [523, 659, 784, 1047].forEach(f => tone(f, 0.55, 1.2, { vol: 0.06 })); tone(2093, 0.6, 1.0, { vol: 0.04 }); }
   });
 
   // fallback sounds for gifts without their own recipe: preset(name, pitch)
   const presets = {
+    bark: f => rep(2, 0.2, t => tone(f, t, 0.14, { type: "sawtooth", vol: 0.12, to: f * 0.6 })),
+    crackle: f => rep(9, 0.07, () => noise(Math.random() * 0.5, 0.04, { f: f * (0.6 + Math.random() * 0.8), q: 2, vol: 0.2 })),
+    creak: f => tone(f, 0, 0.55, { type: "sawtooth", vol: 0.07, to: f * 1.6, vib: 16 }),
+    wood: f => rep(2, 0.16, t => { tone(f, t, 0.14, { vol: 0.28, to: f * 0.7 }); noise(t, 0.04, { f: 900, q: 3, vol: 0.2 }); }),
+    crunch: f => rep(3, 0.1, () => noise(0, 0.06, { f: f * (0.8 + Math.random() * 0.5), q: 3, vol: 0.35 })),
+    heart: () => sounds.heart(),
     ding: f => { tone(f, 0, 0.9, { vol: 0.12 }); tone(f * 1.5, 0.02, 0.6, { vol: 0.06 }); },
     chime: f => seq([f, f * 1.25, f * 1.5], 0.11, { vol: 0.1 }),
     boing: f => tone(f, 0, 0.5, { vol: 0.2, to: f * 2.2, vib: 12 }),

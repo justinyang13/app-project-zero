@@ -45,6 +45,16 @@ for (const [key, e] of Object.entries(EMOTIONS)) {
   nav.appendChild(b);
 }
 
+// a calm game made for some feelings (more are coming)
+const GAMES = {
+  anxious: ["worry-boat.html", "Worry Boat"], lonely: ["lantern-friends.html", "Lantern Friends"],
+  tired: ["lullaby-lights.html", "Lullaby Lights"], happy: ["joy-jar.html", "Joy Jar"]
+};
+function gameButton(key) {
+  const g = GAMES[key];
+  return g ? ` <a class="btn game-btn" href="${g[0]}">🎮 Play ${g[1]}</a>` : "";
+}
+
 // how many finished punch boxes this feeling has (the collection is kept in this browser)
 function collectionBadge(key) {
   try {
@@ -53,7 +63,9 @@ function collectionBadge(key) {
   } catch { return ""; }
 }
 
+const LAST_KEY = "heartnote-last-feeling";
 function show(key) {
+  try { localStorage.setItem(LAST_KEY, key); } catch {}
   const e = EMOTIONS[key];
   nav.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.key === key)));
   clearInterval(timer);
@@ -76,13 +88,14 @@ function show(key) {
         </div>
       </div>
     </div>
-    <p class="btn-row"><a class="btn" href="punch-box.html#${key}">Punch box activity</a> <a class="btn" href="punch-collection.html#${key}">Punch box collection${collectionBadge(key)}</a></p>
+    <p class="btn-row"><a class="btn" href="punch-box.html#${key}">Punch box activity</a> <a class="btn" href="punch-collection.html#${key}">Punch box collection${collectionBadge(key)}</a>${gameButton(key)}</p>
     <div class="card crisis">
       <h3>Need to talk to someone now?</h3>
       <p>In the US, call or text <strong>988</strong>, or text HOME to <strong>741741</strong>. Emergency: <strong>911</strong>.</p>
     </div>
     <p><button class="btn" id="back">Back</button></p>`;
   main.querySelector("#back").onclick = () => {
+    try { localStorage.removeItem(LAST_KEY); } catch {}
     clearInterval(timer);
     main.innerHTML = welcome;
     nav.querySelectorAll("button").forEach(b => b.setAttribute("aria-pressed", "false"));
@@ -102,3 +115,7 @@ function show(key) {
     }, 1000);
   };
 }
+
+// coming back later: show the feeling you were on, and ask the browser to keep your progress
+try { const last = localStorage.getItem(LAST_KEY); if (last && EMOTIONS[last]) show(last); } catch {}
+try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch {}
