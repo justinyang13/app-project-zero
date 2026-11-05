@@ -27,6 +27,7 @@ if (!S.jars.some(j => !j.sealed)) S.jars.push({ id: Date.now(), name: "", memori
 let gifts = G.load(JJ_GIFTS, []);
 const save = () => G.save(JJ_KEY, S), saveGifts = () => G.save(JJ_GIFTS, gifts);
 const cur = () => S.jars.find(j => !j.sealed);
+const jarCount = j => j.memories.reduce((n, m) => n + (m.golden ? 2 : 1), 0); // a golden moment fills two spots
 
 // ---- art ----
 // a cute, lifelike firefly: translucent veined wings, a segmented body, a glowing tail, big friendly eyes
@@ -51,17 +52,17 @@ const jarSvg = (label = "") => `<svg viewBox="0 0 130 160"><defs><linearGradient
 const garden = G.el("div", "g-stage jj-garden");
 garden.innerHTML = `<div class="jj-glow" id="glow"></div><div class="jj-jar" id="jar"><div class="jj-inside" id="inside"></div>${jarSvg()}</div>`;
 root.appendChild(garden);
-root.appendChild(G.el("div", "g-row", `<button class="btn" id="open" type="button">🫙 Open the jar</button><button class="btn primary" id="rand" type="button">Read a good moment</button><button class="btn" id="giftbtn" type="button">Firefly Gift Collection <span class="badge" id="giftcount">0</span></button><span class="g-grow"></span><span class="g-stat">Tap a glowing firefly to catch a good moment.</span>`));
+root.appendChild(G.el("div", "g-row", `<button class="btn" id="open" type="button">🫙 Open the jar</button><button class="btn primary" id="rand" type="button">Read a good moment</button><button class="btn" id="giftbtn" type="button">Firefly Gift Collection <span class="badge" id="giftcount">0</span></button><span class="g-grow"></span><span class="g-stat">Move gently: fireflies come close when you are calm and flit away when you rush. Golden ones are rare!</span>`));
 const inside = garden.querySelector("#inside"), glow = garden.querySelector("#glow"), jar = garden.querySelector("#jar");
 for (let i = 0; i < 30; i++) { const s = G.el("i", "lf-star"); s.style.cssText = `left:${Math.random() * 100}%;top:${Math.random() * 45}%;animation-delay:${Math.random() * 3}s`; garden.appendChild(s); }
 const toast = t => { const d = G.el("div", "g-toast", G.esc(t)); garden.appendChild(d); setTimeout(() => d.remove(), 3300); };
 
 function paintJar() {
   const j = cur(); inside.innerHTML = "";
-  j.memories.forEach((m, i) => { const d = G.el("span", "jj-mini", fireflySvg); d.style.left = (4 + (i * 37) % 62) + "%"; d.style.top = (6 + ((i * 53) % 62)) + "%"; d.style.animationDelay = (i * 0.37) + "s"; inside.appendChild(d); });
-  glow.style.opacity = Math.min(1, j.memories.length / CAP);
+  j.memories.forEach((m, i) => { const d = G.el("span", "jj-mini" + (m.golden ? " golden" : ""), fireflySvg); d.style.left = (4 + (i * 37) % 62) + "%"; d.style.top = (6 + ((i * 53) % 62)) + "%"; d.style.animationDelay = (i * 0.37) + "s"; inside.appendChild(d); });
+  glow.style.opacity = Math.min(1, jarCount(j) / CAP);
   const all = S.jars.reduce((n, x) => n + x.memories.length, 0), sealed = S.jars.filter(x => x.sealed).length;
-  stat.textContent = `Good moments saved: ${all} · This jar: ${j.memories.length} of ${CAP}${sealed ? ` · Jars sealed: ${sealed}` : ""}`;
+  stat.textContent = `Good moments saved: ${all} · This jar: ${jarCount(j)} of ${CAP}${sealed ? ` · Jars sealed: ${sealed}` : ""}`;
   document.getElementById("giftcount").textContent = gifts.length;
 }
 
@@ -71,22 +72,48 @@ function wander(b) {
   if (!b.isConnected || b.dataset.held) return;
   const x = 6 + Math.random() * 62, old = parseFloat(b.style.left);
   b.firstChild.style.transform = x < old ? "scaleX(-1)" : "scaleX(1)"; // face the way it flies
-  b.style.left = x + "%"; b.style.top = (8 + Math.random() * 62) + "%"; setTimeout(() => wander(b), 3200 + Math.random() * 2200);
+  b.style.left = x + "%"; b.style.top = (8 + Math.random() * 62) + "%"; setTimeout(() => wander(b), 1900 + Math.random() * 1700);
 }
 function spawn() {
   if (flies.size >= 5) return;
-  const b = G.el("button", "jj-fly", fireflySvg); b.type = "button"; b.setAttribute("aria-label", "Catch a good moment");
-  b.style.left = (6 + Math.random() * 62) + "%"; b.style.top = (8 + Math.random() * 62) + "%"; b.style.transition = "left 4s ease-in-out, top 4s ease-in-out";
+  const roll = Math.random(), type = roll < 0.12 ? "golden" : roll < 0.4 ? "shy" : "normal";
+  const b = G.el("button", "jj-fly", fireflySvg); b.type = "button"; b.dataset.type = type; b.setAttribute("aria-label", type === "golden" ? "Catch a rare golden moment" : "Catch a good moment");
+  b.style.left = (6 + Math.random() * 62) + "%"; b.style.top = (8 + Math.random() * 62) + "%"; b.style.transition = "left 2.6s ease-in-out, top 2.6s ease-in-out";
   b.style.setProperty("--d", (Math.random() * 2).toFixed(2) + "s");
-  b.onclick = () => catchFly(b); garden.appendChild(b); flies.add(b); setTimeout(() => wander(b), 80);
+  b.onclick = () => {
+    const chance = { normal: 0.2, shy: 0.4, golden: 0.55 }[type]; b._dodged = b._dodged || 0;
+    if (b._dodged < 2 && Math.random() < chance) { // whoosh: it slips away, try again gently
+      b._dodged++; const nx = 6 + Math.random() * 62, ny = 8 + Math.random() * 58; b.style.transition = "left .5s ease-out, top .5s ease-out"; b.style.left = nx + "%"; b.style.top = ny + "%"; b.classList.add("spooked");
+      setTimeout(() => { b.classList.remove("spooked"); b.style.transition = "left 2.6s ease-in-out, top 2.6s ease-in-out"; }, 600); Sfx.preset("hush"); toast(["Too quick! Try again, gently.", "It slipped away! Move slowly.", "Oops! Be calm and it will stay."][b._dodged % 3]); return; }
+    catchFly(b); };
+  garden.appendChild(b); flies.add(b); setTimeout(() => wander(b), 80);
 }
+// the fireflies react to your pointer: move gently and they come close, rush at them and they flit away
+const ptr = { x: -999, y: -999, v: 0, t: 0 };
+garden.addEventListener("pointermove", e => { const r = garden.getBoundingClientRect(), nx = e.clientX - r.left, ny = e.clientY - r.top, now = performance.now(); const dt = Math.max(1, now - ptr.t); ptr.v = Math.hypot(nx - ptr.x, ny - ptr.y) / dt * 0.7 + ptr.v * 0.3; ptr.x = nx; ptr.y = ny; ptr.t = now; });
+garden.addEventListener("pointerleave", () => { ptr.x = ptr.y = -999; });
+setInterval(() => { // slow the "speed" reading down when the pointer stops moving
+  if (performance.now() - ptr.t > 150) ptr.v *= 0.6;
+  const g = garden.getBoundingClientRect();
+  flies.forEach(b => { if (b.dataset.held || !b.isConnected) return;
+    const r = b.getBoundingClientRect(), cx = r.left - g.left + r.width / 2, cy = r.top - g.top + r.height / 2, d = Math.hypot(cx - ptr.x, cy - ptr.y), type = b.dataset.type;
+    const scare = type === "normal" ? 0.45 : 0.25;                                 // shy and golden fireflies spook more easily
+    if (d < 210 && ptr.v > scare) { // spooked: dart away from the pointer
+      const ang = Math.atan2(cy - ptr.y, cx - ptr.x), nx = Math.max(4, Math.min(72, (cx + Math.cos(ang) * 260) / g.width * 100)), ny = Math.max(6, Math.min(66, (cy + Math.sin(ang) * 200) / g.height * 100));
+      b.style.transition = "left .55s ease-out, top .55s ease-out"; b.style.left = nx + "%"; b.style.top = ny + "%"; b.classList.add("spooked"); setTimeout(() => { b.classList.remove("spooked"); b.style.transition = "left 2.6s ease-in-out, top 2.6s ease-in-out"; }, 650);
+    } else if (Math.random() < 0.45 && (d < 230 && d > 46 && ptr.v < 0.1 && type !== "shy" || (type === "shy" && d < 170 && d > 46 && ptr.v < 0.04))) { // curious: drift closer when you're gentle and still
+      const nx = (cx + (ptr.x - cx) * 0.35) / g.width * 100, ny = (cy + (ptr.y - cy) * 0.35) / g.height * 100;
+      b.style.transition = "left 2.2s ease-in-out, top 2.2s ease-in-out"; b.style.left = Math.max(4, Math.min(72, nx)) + "%"; b.style.top = Math.max(6, Math.min(66, ny)) + "%"; b.classList.add("curious"); setTimeout(() => b.classList.remove("curious"), 1600);
+    } });
+}, 140);
 setInterval(spawn, 5000); for (let i = 0; i < 4; i++) setTimeout(spawn, i * 400);
 
 function catchFly(b) {
-  if (cur().memories.length >= CAP) { sealJar(); return; } // a full jar must be sealed before filling a new one
-  Sfx.preset("bubble", 700);
+  if (jarCount(cur()) >= CAP) { sealJar(); return; } // a full jar must be sealed before filling a new one
+  Sfx.preset("softbell", 784);
   const ideas = G.shuffle(IDEAS).slice(0, 6);
-  const m = G.modal(`<h3>✨ You caught a good moment!</h3><p class="g-stat">What was it? It can be tiny.</p>
+  const golden = b.dataset.type === "golden";
+  const m = G.modal(`<h3>${golden ? "🌟 A rare golden moment!" : "✨ You caught a good moment!"}</h3><p class="g-stat">${golden ? "Golden moments fill two spots in your jar. What made this one shine?" : "What was it? It can be tiny."}</p>
     <input class="g-field" id="t" maxlength="90" placeholder="Something good that happened…"><div class="g-chips">${ideas.map(i => `<button type="button" class="g-chip">${G.esc(i)}</button>`).join("")}</div>
     <div class="g-row"><button class="btn primary" id="add" type="button">Savor it →</button><button class="btn" id="x" type="button">Let it go</button></div>`);
   const t = m.box.querySelector("#t"); t.focus();
@@ -98,24 +125,25 @@ function catchFly(b) {
       <div style="display:grid;place-items:center;margin:10px 0"><svg width="90" height="90" viewBox="0 0 90 90"><circle cx="45" cy="45" r="38" fill="none" stroke="#c9d6e8" stroke-width="6"/><circle id="ringp" cx="45" cy="45" r="38" fill="none" stroke="#ffd45e" stroke-width="6" stroke-linecap="round" stroke-dasharray="239" stroke-dashoffset="239" transform="rotate(-90 45 45)"/></svg></div>
       <div class="g-row"><button class="btn" id="go" type="button">Skip</button></div>`;
     m.box.querySelector("#ringp").animate([{ strokeDashoffset: 239 }, { strokeDashoffset: 0 }], { duration: 5000, fill: "forwards" });
-    Sfx.preset("purr", 180); let done = false;
-    const finish = () => { if (done) return; done = true; m.close(); intoJar(b, text); };
+    Sfx.preset("hum", 196); let done = false;
+    const finish = () => { if (done) return; done = true; m.close(); intoJar(b, text, golden); };
     const tm = setTimeout(finish, 5000); m.box.querySelector("#go").onclick = () => { clearTimeout(tm); finish(); };
   };
 }
-function intoJar(b, text) {
+function intoJar(b, text, golden = false) {
   // save the moment right away, so it's kept even if the page is hidden mid-animation
-  b.dataset.held = "1"; cur().memories.push({ text, at: Date.now() }); save();
+  const before = jarCount(cur()); b.dataset.held = "1"; cur().memories.push({ text, at: Date.now(), golden }); save();
   const a = b.getBoundingClientRect(), j = jar.getBoundingClientRect();
   const dx = j.left + j.width / 2 - (a.left + a.width / 2), dy = j.top + j.height * 0.55 - (a.top + a.height / 2);
-  b.style.transition = "none"; Sfx.preset("whoosh", 900);
+  b.style.transition = "none"; Sfx.preset("hush");
   let landed = false;
   const land = () => {
     if (landed) return; landed = true;
     b.remove(); flies.delete(b); paintJar();
-    Sfx.preset("chime", 1047); setTimeout(() => Sfx.preset("chime", 1319), 160);
+    Sfx.preset("softbell", 1047);
     jar.animate([{ transform: "scale(1)" }, { transform: "scale(1.08)" }, { transform: "scale(1)" }], { duration: 450 });
-    if (cur().memories.length >= CAP) sealJar();
+    const now = jarCount(cur()); const MS = [[3, "Your jar is starting to glow!"], [6, "Halfway there. Look how bright it is getting!"], [9, "Almost full! You found so much good."]]; MS.forEach(([n, msg]) => { if (before < n && now >= n) { toast(msg); jar.animate([{ filter: "brightness(1)" }, { filter: "brightness(1.8)" }, { filter: "brightness(1)" }], { duration: 900 }); } });
+    if (now >= CAP) sealJar();
   };
   if (G.reduced()) return land();
   b.animate([{ transform: "translate(0,0) scale(1)" }, { transform: `translate(${dx * 0.5}px,${dy * 0.5 - 60}px) scale(1.4)`, offset: .5 }, { transform: `translate(${dx}px,${dy}px) scale(.5)` }], { duration: 1200, easing: "ease-in-out" }).onfinish = land;
@@ -136,18 +164,18 @@ function flyAway(delay = 0) {
   anim.onfinish = () => f.remove(); setTimeout(() => f.remove(), 5500 + delay);
 }
 function release(j, idx, rerender) {
-  j.memories.splice(idx, 1); save(); paintJar(); Sfx.preset("whoosh", 500); setTimeout(() => Sfx.preset("chime", 659), 200);
+  j.memories.splice(idx, 1); save(); paintJar(); Sfx.preset("hush"); setTimeout(() => Sfx.preset("softbell", 659), 250);
   if (!G.reduced()) flyAway(); toast("Released. It still happened, and it still counts. ✨"); rerender();
 }
 function releaseAll(j, rerender) {
-  const n = j.memories.length; j.memories = []; save(); paintJar(); Sfx.preset("whoosh", 600);
-  for (let i = 0; i < Math.min(n, 10); i++) { if (!G.reduced()) flyAway(i * 220); setTimeout(() => Sfx.preset("chime", 523 + i * 80), 200 + i * 220); }
+  const n = j.memories.length; j.memories = []; save(); paintJar(); Sfx.preset("hush");
+  for (let i = 0; i < Math.min(n, 10); i++) { if (!G.reduced()) flyAway(i * 220); setTimeout(() => Sfx.preset("softbell", 523 + i * 60), 250 + i * 320); }
   toast(`${n} good moments flew out into the night. ✨`); rerender();
 }
 
 // ---- sealing a full jar, and the gift it gives ----
 function sealJar() {
-  const j = cur(); Sfx.play("prize");
+  const j = cur(); Sfx.preset("twin", 784);
   const m = G.modal(`<h3>🫙 Your jar is full!</h3><p>${CAP} good moments, glowing together. Give this jar a name, then seal it. You'll get a firefly gift for filling it.</p>
     <input class="g-field" id="n" maxlength="22" value="Jar ${S.jars.filter(x => x.sealed).length + 1}"><div class="g-row"><button class="btn primary" id="seal" type="button">Seal the jar</button></div>`, null);
   const n = m.box.querySelector("#n"); n.select();
@@ -157,17 +185,17 @@ function sealJar() {
     // the gift is saved right away, then shown (and shown again next visit if you leave before collecting it)
     const owned = new Set(gifts.map(g => g.id)), fresh = FF_GIFTS.filter(g => !owned.has(g.id));
     const g = G.pick(fresh.length ? fresh : FF_GIFTS);
-    gifts.push({ id: g.id, at: Date.now(), jar: j.name }); saveGifts(); S.pendingGift = g.id; save(); paintJar(); m.close(); Sfx.preset("chime", 784);
+    gifts.push({ id: g.id, at: Date.now(), jar: j.name }); saveGifts(); S.pendingGift = g.id; save(); paintJar(); m.close(); Sfx.preset("softbell", 784);
     setTimeout(() => showGift(g), 350);
   };
 }
 function showGift(g) {
-  Sfx.play("prize");
+  Sfx.preset("twin", 988);
   const m = G.modal(`<div style="text-align:center"><p class="g-stat" style="margin:0">Your jar gave you a firefly gift!</p>
     <div class="jj-giftart" id="art">${giftArt({ kind: g.kind })}</div><h3 style="margin:6px 0">${G.esc(g.name)}</h3><p>${G.esc(g.note)}</p>
     <div class="g-row" style="justify-content:center"><button class="btn primary" id="keep" type="button">Add to my Firefly Gift Collection</button></div></div>`, () => { S.pendingGift = null; save(); paintJar(); });
   m.box.querySelector("#art").animate([{ transform: "scale(.2) rotate(-180deg)", opacity: 0 }, { transform: "scale(1.2) rotate(10deg)", opacity: 1, offset: .65 }, { transform: "none" }], { duration: 900, easing: "ease-out" });
-  m.box.querySelector("#keep").onclick = () => { Sfx.preset("ding", 1175); m.close(); toast("Added to your Firefly Gift Collection ✨"); };
+  m.box.querySelector("#keep").onclick = () => { Sfx.preset("softbell", 1175); m.close(); toast("Added to your Firefly Gift Collection ✨"); };
 }
 function giftCollection() {
   const got = new Map(); gifts.forEach(x => got.set(x.id, x));
@@ -175,7 +203,7 @@ function giftCollection() {
     <div class="jj-gifts">${FF_GIFTS.map(g => got.has(g.id) ? `<div class="jj-gift" data-id="${g.id}" tabindex="0"><div class="jj-gart">${giftArt({ kind: g.kind })}</div><strong>${G.esc(g.name)}</strong><small>${G.esc(g.note)}</small><small class="from">From ${G.esc(got.get(g.id).jar)} · ${G.date(got.get(g.id).at)}</small></div>` : `<div class="jj-gift locked"><div class="jj-gart">?</div><strong>Mystery gift</strong><small>Fill a jar to find it.</small></div>`).join("")}</div>
     <div class="g-row"><button class="btn" id="x" type="button">Close</button></div>`);
   m.box.querySelector("#x").onclick = m.close;
-  m.box.querySelectorAll(".jj-gift[data-id]").forEach(c => c.onclick = () => { c.animate([{ transform: "scale(1)" }, { transform: "scale(1.08) rotate(-3deg)" }, { transform: "scale(1)" }], { duration: 450 }); Sfx.preset("chime", 880); });
+  m.box.querySelectorAll(".jj-gift[data-id]").forEach(c => c.onclick = () => { c.animate([{ transform: "scale(1)" }, { transform: "scale(1.08) rotate(-3deg)" }, { transform: "scale(1)" }], { duration: 450 }); Sfx.preset("softbell", 880); });
 }
 
 // ---- reading and releasing ----
@@ -197,7 +225,7 @@ function openJar(j = cur()) {
 }
 function randomMoment() {
   const all = S.jars.flatMap(j => j.memories); if (!all.length) { openJar(); return; }
-  const x = G.pick(all); Sfx.preset("chime", 880);
+  const x = G.pick(all); Sfx.preset("softbell", 880);
   const m = G.modal(`<h3>A good moment, just for you</h3><div class="lf-letter" style="text-align:center;font-size:1.2rem">${G.esc(x.text)}</div><p class="g-stat" style="text-align:center">You caught this on ${G.date(x.at)}. It still happened, and it still counts.</p>
     <div class="g-row"><button class="btn primary" id="again" type="button">Another one</button><button class="btn" id="x" type="button">Close</button></div>`);
   m.box.querySelector("#x").onclick = m.close; m.box.querySelector("#again").onclick = () => { m.close(); randomMoment(); };

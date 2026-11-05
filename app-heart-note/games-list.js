@@ -1,0 +1,43 @@
+// The list of every calm game: what you can play now, and what is coming for each feeling.
+const read = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v == null ? d : v; } catch { return d; } };
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const stats = {
+  worry: () => { const b = read("heartnote-boats", []); return b.length ? `${b.length} worr${b.length === 1 ? "y" : "ies"} sailed · ${read("heartnote-wb-friends", []).length} sea friends` : ""; },
+  lantern: () => { const s = read("heartnote-lanterns", { lanterns: [], constellations: [] }); const c = (s.constellations || []).length; return c || (s.lanterns || []).length ? `${c} constellation${c === 1 ? "" : "s"} · ${(s.lanterns || []).length} lanterns in the sky` : ""; },
+  lullaby: () => { const s = read("heartnote-lullaby", { nights: 0, pets: [] }); return s.nights ? `${s.nights} night${s.nights === 1 ? "" : "s"} · ${(s.pets || []).length} sleepy friends` : ""; },
+  rain: () => { const s = read("heartnote-rainrainbow", { named: [], rainbows: 0 }); return s.named.length ? `${s.rainbows} rainbow${s.rainbows === 1 ? "" : "s"} · ${s.named.length} feelings named` : ""; },
+  dragon: () => { const s = read("heartnote-dragons", { calmed: [] }); return s.calmed.length ? `${s.calmed.length} of 6 dragons calmed` : ""; },
+  sortb: () => { const s = read("heartnote-sortbubbles", { plans: [], letGo: 0 }); return s.plans.length ? `${s.plans.length} plan${s.plans.length === 1 ? "" : "s"} · ${s.letGo} things let go` : ""; },
+  onething: () => { const s = read("heartnote-onething", { jar: [], done: [] }); return s.done.length ? `${s.done.length} thing${s.done.length === 1 ? "" : "s"} done · ${s.jar.length} in the jar` : ""; },
+  mend: () => { const s = read("heartnote-goldenmend", { mended: [] }); return s.mended.length ? `${s.mended.length} plate${s.mended.length === 1 ? "" : "s"} mended in gold` : ""; },
+  grat: () => { const s = read("heartnote-gratgarden", { plants: [], waters: [] }); return s.plants.length ? `${s.plants.filter(Boolean).length} thank-yous planted · ${s.waters.length} days watered` : ""; },
+  brave: () => { const s = read("heartnote-bravelight", { done: [], found: [] }); return s.found.length ? `${s.done.length} room${s.done.length === 1 ? "" : "s"} cleared · ${s.found.length} friendly surprises found` : ""; },
+  silver: () => { const s = read("heartnote-silverlining", { linings: [], skies: 0 }); return s.linings.length ? `${s.skies} sky${s.skies === 1 ? "" : "ies"} cleared · ${s.linings.length} silver linings` : ""; },
+  garden: () => { const s = read("heartnote-owngarden", { done: [] }); return (s.done || []).length ? `${s.done.length} garden${s.done.length === 1 ? "" : "s"} in full bloom` : ""; },
+  zoom: () => { const s = read("heartnote-zoomout", { oops: [] }); return s.oops.length ? `${s.oops.length} moment${s.oops.length === 1 ? "" : "s"} zoomed out` : ""; },
+  fire: () => { const s = read("heartnote-fireworks", { shows: 0, fired: 0 }); return s.shows ? `${s.shows} show${s.shows === 1 ? "" : "s"} · ${s.fired} fireworks fired` : ""; },
+  joy: () => { const s = read("heartnote-joyjars", { jars: [] }); const n = (s.jars || []).reduce((a, j) => a + j.memories.length, 0), g = read("heartnote-joygifts", []).length; return n ? `${n} good moments · ${g} firefly gift${g === 1 ? "" : "s"}` : ""; }
+};
+const FEELINGS = [
+  ["sad", "😢 Sad", [["Rain to Rainbow", "Name the feeling inside each raindrop and watch it turn into a color, until the rainbow comes out.", "rain-rainbow.html", "rain"], ["Cloud Painter", "Color gray clouds with soft strokes and name each feeling as you go."]]],
+  ["anxious", "😰 Anxious", [["Worry Boat", "Fold your worry into an old wooden boat, steer it with slow breaths, and shrink the Worry Cloud.", "worry-boat.html", "worry"], ["Grounding Hunt", "A 5-4-3-2-1 treasure hunt: find things you can see, touch, hear, smell and taste."]]],
+  ["angry", "😠 Angry", [["Dragon Whisperer", "Stomp the steam out safely, then breathe with an angry dragon until it calms down and becomes your friend.", "dragon-whisperer.html", "dragon"], ["Thunder Tamer", "Flick away storm clouds to let it out, then cool down with slow breaths."]]],
+  ["lonely", "🫂 Lonely", [["Lantern Friends", "Draw pictures in the sky with kind lanterns, catch shooting stars, and send a real hello.", "lantern-friends.html", "lantern"], ["Friendship Bridge", "Lay planks with tiny real-life hello challenges, then cross to meet an island friend."]]],
+  ["stressed", "😖 Stressed", [["Sort the Bubbles", "Put everything on your mind in bubbles and sort it: only 3 for today, the rest for later or let go.", "sort-bubbles.html", "sortb"], ["Plate Spinner", "Keep plates spinning, and learn which ones you can put down."]]],
+  ["overwhelmed", "🌊 Overwhelmed", [["One Thing Jar", "Put everything in the jar, shake it, and do just one small thing for five minutes.", "one-thing-jar.html", "onething"], ["Fog Lifter", "Clear one patch of fog at a time to reveal a cozy little scene."]]],
+  ["tired", "😴 Tired / Numb", [["Lullaby Lights", "Seven stars sing little lullabies. Echo them, earn dream stars, and tuck in a sleepy friend.", "lullaby-lights.html", "lullaby"], ["Slow Sheep", "Count sheep that get slower and sleepier with every jump."]]],
+  ["guilty", "😔 Guilty / Ashamed", [["Golden Mend", "Mend a broken plate with five kind steps and golden seams, like kintsugi. Mended things can be beautiful.", "golden-mend.html", "mend"], ["Patch the Quilt", "Mend a torn quilt, choosing to say sorry, learn, or forgive yourself for each patch."]]],
+  ["happy", "😊 Happy", [["Joy Jar", "Catch shy fireflies by moving gently, keep your good moments, and earn firefly gifts.", "joy-jar.html", "joy"], ["Joy Parade", "A gentle rhythm game with a dancing pet and confetti."]]],
+  ["grateful", "🙏 Hopeful / Grateful", [["Gratitude Garden", "Plant things you're thankful for, water the garden each day, and watch it and its butterflies grow.", "gratitude-garden.html", "grat"], ["Star Jar", "Write a thanks and a hope on a star and send it into a jar of light."]]],
+["scared", "😨 Scared / Afraid", [["Brave Light", "Shine a flashlight on scary shadows and hold it steady. Each one turns out to be something friendly.", "brave-light.html", "brave"], ["Monster Makeover", "Give a scary monster silly hats and a goofy face until it's too funny to fear."]]],
+  ["disappointed", "😞 Disappointed", [["Silver Lining", "Open gray clouds to find the silver lining in each one, until the sun comes out.", "silver-lining.html", "silver"], ["Plan B Picnic", "When the rain cancels the picnic, find a cozy way to make something good anyway."]]],
+  ["jealous", "😒 Jealous / Envious", [["My Own Garden", "Grow flowers from true, good things about you. Peeking over the fence dims your garden.", "my-own-garden.html", "garden"], ["Your Own Race", "Race only against your own ghost from last time, and celebrate beating yourself."]]],
+  ["embarrassed", "😳 Embarrassed", [["Zoom Out", "Zoom out from your embarrassing moment, from the room to the galaxy, and watch it shrink.", "zoom-out.html", "zoom"], ["Oops to Story", "Turn an awkward moment into a funny story by picking silly endings."]]],
+  ["excited", "🤩 Excited", [["Firework Show", "Time your launches to light the sky, then settle your excitement with slow breaths.", "firework-show.html", "fire"], ["Calm the Sparkles", "Shake a jar of sparkles, then breathe slowly and watch them settle."]]]
+];
+const card = ([name, blurb, file, key]) => file
+  ? `<li class="gl-game"><div><strong>${esc(name)}</strong><span class="gl-tag play">Play now</span><p>${esc(blurb)}</p>${key && stats[key]() ? `<small>${esc(stats[key]())}</small>` : ""}</div><a class="btn primary" href="${file}">Play</a></li>`
+  : `<li class="gl-game soon"><div><strong>${esc(name)}</strong><span class="gl-tag">Coming soon</span><p>${esc(blurb)}</p></div></li>`;
+document.getElementById("list").innerHTML =
+  `<section class="gl-section"><h3>🎁 For every feeling</h3><ul class="gl-list"><li class="gl-game"><div><strong>Punch Box</strong><span class="gl-tag play">Play now</span><p>Punch through the paper to find gifts and notes made for how you feel. Finish a box to win a prize and a new box. Find it on any feeling's page.</p></div><a class="btn" href="index.html">Pick a feeling</a></li></ul></section>` +
+  FEELINGS.map(([k, title, games]) => `<section class="gl-section"><h3>${title}</h3><ul class="gl-list">${games.map(card).join("")}</ul>${games.some(g => g[2]) ? "" : `<p class="g-stat">Play the Punch Box for this feeling while the games are being made.</p>`}</section>`).join("");

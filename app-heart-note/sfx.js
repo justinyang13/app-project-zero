@@ -152,6 +152,11 @@ const Sfx = (() => {
 
   // fallback sounds for gifts without their own recipe: preset(name, pitch)
   const presets = {
+    // very gentle sounds for the calmest games (Joy Jar): one soft bell, a quiet hush, a low hum
+    softbell: f => tone(f || 784, 0, 1.4, { vol: 0.06 }),
+    twin: f => { tone(f || 784, 0, 1.3, { vol: 0.05 }); tone((f || 784) * 1.25, 0.16, 1.3, { vol: 0.045 }); },
+    hush: () => noise(0, 0.7, { f: 500, to: 900, type: "lowpass", q: 0.4, vol: 0.05 }),
+    hum: f => tone(f || 196, 0, 2.2, { type: "sine", vol: 0.035 }),
     bark: f => rep(2, 0.2, t => tone(f, t, 0.14, { type: "sawtooth", vol: 0.12, to: f * 0.6 })),
     crackle: f => rep(9, 0.07, () => noise(Math.random() * 0.5, 0.04, { f: f * (0.6 + Math.random() * 0.8), q: 2, vol: 0.2 })),
     creak: f => tone(f, 0, 0.55, { type: "sawtooth", vol: 0.07, to: f * 1.6, vib: 16 }),
@@ -174,6 +179,8 @@ const Sfx = (() => {
     splash: f => { noise(0, 0.35, { f, to: f / 3, type: "lowpass", vol: 0.35 }); tone(300, 0, 0.15, { vol: 0.1, to: 120 }); }
   };
   return {
+    // a short music-box phrase: soft bell notes in a row (used by Lullaby Lights, one phrase per star)
+    melody(freqs, gap = 0.17) { try { freqs.forEach((f, i) => { tone(f, i * gap, 1.3, { vol: 0.075 }); tone(f * 2, i * gap, 0.7, { vol: 0.018 }); tone(f * 3, i * gap, 0.35, { vol: 0.008 }); }); } catch {} },
     preset(name, f) { try { (presets[name] || presets.ding)(f || 880); } catch {} },
     has(name) { return name in sounds; },
     play(name) { try { (sounds[name] || (() => {}))(); } catch {} },

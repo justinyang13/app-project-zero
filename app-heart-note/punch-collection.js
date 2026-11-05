@@ -52,7 +52,7 @@ function withNotes(rec) {
   rec.gifts.forEach((g, i) => {
     if (g.text) return;
     if (g.kind === "scroll") { const pool = TIPS[rec.feeling] || DEFAULT_TIPS; g.text = pool[((g.variant || 0) + i) % pool.length]; }
-    else g.text = THEMED[g.kind] ? THEMED[g.kind].note : noteFor(g.kind, gi++);
+    else g.text = THEMED[g.kind] ? themedNote(g.kind) : noteFor(g.kind, gi++);
   });
   return rec;
 }

@@ -28,7 +28,22 @@ const EMOTIONS = {
     tips: ["Pause and savor it for 30 seconds. Notice where you feel it.", "Share it with someone.", "Write down what made it happen so you can return to it later.", "Do something kind for someone else to carry the feeling further."] },
   grateful: { emoji: "🙏", label: "Hopeful / Grateful",
     validate: "Gratitude and hope are powerful anchors. Hold onto them.",
-    tips: ["Write down three things you're thankful for today.", "Tell someone you appreciate them.", "Set one small goal that moves you toward what you're hopeful about."] }
+    tips: ["Write down three things you're thankful for today.", "Tell someone you appreciate them.", "Set one small goal that moves you toward what you're hopeful about."] },
+  scared: { emoji: "😨", label: "Scared / Afraid",
+    validate: "Fear is your mind's alarm system. It's trying to keep you safe, even when the danger is small or only imagined. Feeling scared doesn't make you weak.",
+    tips: ["Name what you're scared of, out loud or on paper. Fear shrinks when it has a name.", "Ask: is this happening right now, or am I imagining what might happen?", "Look around and find three safe things: a person, a light, a favorite object.", "Tell someone you trust. You don't have to be brave alone."] },
+  disappointed: { emoji: "😞", label: "Disappointed",
+    validate: "Disappointment hurts because you hoped for something, and that hope was a good thing. It's okay to feel the let-down.",
+    tips: ["Let yourself be sad about it for a little while before trying to fix it.", "Ask what you were hoping for underneath. Maybe there's another way to get some of it.", "Do something small and kind for yourself today.", "One plan not working doesn't mean the next one won't."] },
+  jealous: { emoji: "😒", label: "Jealous / Envious",
+    validate: "Jealousy often points at something you want or are afraid of missing out on. It's a signal, not a flaw, and almost everyone feels it.",
+    tips: ["Ask what you actually want when you see that person's thing.", "Remember you only see their highlights, not their whole story.", "Write down three things you're proud of in your own life.", "If you can, say something kind to them. It lightens the feeling."] },
+  embarrassed: { emoji: "😳", label: "Embarrassed",
+    validate: "Embarrassment feels enormous in the moment, but most people forget small slips quickly, and everyone has them.",
+    tips: ["Take a slow breath and let your face cool down.", "Imagine a friend did the same thing. How would you feel about them?", "Laugh at it if you can. Shared laughs shrink embarrassment.", "It was a moment, not who you are."] },
+  excited: { emoji: "🤩", label: "Excited",
+    validate: "Excitement is energy looking for somewhere to go. It's wonderful, and it's also okay if it feels a little jittery.",
+    tips: ["Move your body: jump, dance or shake it out.", "Take three slow breaths so you can enjoy it without being swept away.", "Tell someone what you're excited about. Sharing doubles it.", "Write down your plan so your mind can relax and enjoy the wait."] }
 };
 
 const nav = document.getElementById("emotions");
@@ -48,7 +63,11 @@ for (const [key, e] of Object.entries(EMOTIONS)) {
 // a calm game made for some feelings (more are coming)
 const GAMES = {
   anxious: ["worry-boat.html", "Worry Boat"], lonely: ["lantern-friends.html", "Lantern Friends"],
-  tired: ["lullaby-lights.html", "Lullaby Lights"], happy: ["joy-jar.html", "Joy Jar"]
+  tired: ["lullaby-lights.html", "Lullaby Lights"], happy: ["joy-jar.html", "Joy Jar"],
+  sad: ["rain-rainbow.html", "Rain to Rainbow"], angry: ["dragon-whisperer.html", "Dragon Whisperer"], stressed: ["sort-bubbles.html", "Sort the Bubbles"],
+  overwhelmed: ["one-thing-jar.html", "One Thing Jar"], guilty: ["golden-mend.html", "Golden Mend"], grateful: ["gratitude-garden.html", "Gratitude Garden"],
+  scared: ["brave-light.html", "Brave Light"], disappointed: ["silver-lining.html", "Silver Lining"], jealous: ["my-own-garden.html", "My Own Garden"],
+  embarrassed: ["zoom-out.html", "Zoom Out"], excited: ["firework-show.html", "Firework Show"]
 };
 function gameButton(key) {
   const g = GAMES[key];

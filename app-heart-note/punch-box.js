@@ -167,7 +167,7 @@ function build(saved = null) {
   let gi = 0;
   gifts = saved ? saved.gifts : shuffle([
     ...Array.from({ length: SCROLLS }, (_, i) => ({ kind: "scroll", variant: i, text: tipOrder[i % tipOrder.length] })),
-    ...kindOrder.map(kind => ({ kind, text: THEMED[kind] ? THEMED[kind].note : noteFor(kind, gi++) }))
+    ...kindOrder.map(kind => ({ kind, text: THEMED[kind] ? themedNote(kind) : noteFor(kind, gi++) }))
   ]);
   gifts.forEach(g => {
     const cell = document.createElement("div");
